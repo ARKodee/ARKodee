@@ -1,0 +1,137 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-id"
+}
+
+/// ==========================================
+/// TIER 1: IDENTITY & AUTHENTICATION (Lean)
+/// ==========================================
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          Role     @default(STUDENT)
+  isVerified    Boolean  @default(false) @map("is_verified")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relational Links
+  stats         UserStats? // 1-to-1 link to competitive profiles
+  submissions   Submission[] // 1-to-many link to historical solution code
+  createdTeams  Team[]       @relation("TeamCreator") // Teams this user managed
+
+  @@map("users") // Explicitly names physical table lowercase "users"
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+/// ==========================================
+/// TIER 2: COMPETITIVE PROFILES & GAME STATUS
+/// ==========================================
+
+model UserStats {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  eloRating    Int      @default(1200) @map("elo_rating")
+  totalWins    Int      @default(0) @map("total_wins")
+  totalLosses  Int      @default(0) @map("total_losses")
+  currentStreak Int     @default(0) @map("current_streak")
+  medalsEarned String[] @default([]) @map("medals_earned") // Gamified achievements arrays
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_stats")
+}
+
+/// ==========================================
+/// TIER 3: DSA PROBLEM BANK & SUBMISSIONS
+/// ==========================================
+
+model Problem {
+  id          String     @id @default(uuid()) @db.Uuid
+  title       String
+  description String     @db.Text
+  difficulty  Difficulty @default(EASY)
+  testCases   Json       @map("test_cases") 
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  // Relational Links
+  submissions Submission[]
+
+  @@map("problems")
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model Submission {
+  id            String           @id @default(uuid()) @db.Uuid
+  problemId     String           @map("problem_id") @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  finalStatus   SubmissionStatus @map("final_status")
+  submittedCode String           @map("submitted_code") @db.Text
+  timestamp     DateTime         @default(now())
+
+  // Relationships
+  problem       Problem          @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("submissions")
+}
+
+enum SubmissionStatus {
+  PASS
+  FAIL
+}
+
+/// ==========================================
+/// TIER 4: TOURNAMENTS & GROUPINGS
+/// ==========================================
+
+model Team {
+  id        String   @id @default(uuid()) @db.Uuid
+  teamName  String   @map("team_name")
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relationships
+  creator   User     @relation("TeamCreator", fields: [createdBy], references: [id])
+
+  @@map("teams")
+}
+
+model Contest {
+  id          String      @id @default(uuid()) @db.Uuid
+  title       String
+  type        ContestType @default(ONE_VS_ONE)
+  startTime   DateTime    @map("start_time")
+  endTime     DateTime    @map("end_time")
+  accessCode  String?     @map("access_code") // Used by Teachers to lock down a Private Class vs Class room
+  
+  // Stores structural match boundaries before initializing the Mongo Chaos Engine
+  // e.g. { spike_timer_seconds: 45, allowed_sabotages: ["BLUR", "KEY_LOCK"] }
+  settings    Json        
+
+  @@map("contests")
+}
+
+enum ContestType {
+  ONE_VS_ONE
+  TWO_VS_TWO
+  CLASS_VS_CLASS
+}
