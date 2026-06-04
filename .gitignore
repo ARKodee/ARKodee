@@ -1,0 +1,26 @@
+# Node
+node_modules/
+/package-lock.json
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Django
+*.sqlite3
+media/
+staticfiles/
+
+# Environment
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+.vscode/
