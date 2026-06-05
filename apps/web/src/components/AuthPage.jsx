@@ -1,37 +1,37 @@
-import React, { useState } from 'react';
-import { useAuthFlow } from '../hooks/useAuthFlow';
-import { loginUser, registerUser } from '../lib/auth';
+import React, { useState } from 'react'
+import { useAuthFlow } from '../hooks/userAuthFlow'
+import { loginUser, registerUser } from '../lib/auth'
 
 export function AuthPage() {
-  const { step, isLoading, error, handleCheckEmail } = useAuthFlow();
+  const { step, isLoading, error, handleCheckEmail } = useAuthFlow()
   
   // Form states
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
 
   // When user clicks "Get Started" or submits the final form
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault()
     
     if (step === 'EMAIL') {
-      await handleCheckEmail(email);
+      await handleCheckEmail(email)
     } 
     else if (step === 'LOGIN') {
       // Execute login sequence
       try {
-        await loginUser(email, password);
-        alert('Welcome back! 🎉');
-      } catch (err) { alert('Wrong password!'); }
+        await loginUser(email, password)
+        alert('Welcome back! 🎉')
+      } catch (err) { alert('Wrong password!') }
     } 
     else if (step === 'REGISTER') {
       // Execute register sequence
       try {
-        await registerUser({ email, password, fullName });
-        alert('Account created! 🚀');
-      } catch (err) { alert('Registration failed.'); }
+        await registerUser({ email, password, fullName })
+        alert('Account created! 🚀')
+      } catch (err) { alert('Registration failed.') }
     }
-  };
+  }
 
 
 // NOTE: Temporary UI.
