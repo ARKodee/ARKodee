@@ -25,21 +25,10 @@ export const checkEmailExists = async (email) => {
  * 4. Save token to localStorage
  */
 export const loginUser = async (email, password) => {
-  const response = await apiClient('/auth/login', {
+  return apiClient('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
-
-  // ✅ Save token to localStorage after successful login
-  if (response.token) {
-    localStorage.setItem('authToken', response.token);
-    // Optionally save user info too
-    if (response.user) {
-      localStorage.setItem('user', JSON.stringify(response.user));
-    }
-  }
-
-  return response;
 };
 
 /**
@@ -54,21 +43,10 @@ export const loginUser = async (email, password) => {
  * 4. Save token to localStorage
  */
 export const registerUser = async (userData) => {
-  const response = await apiClient('/auth/register', {
+  return apiClient('/auth/register', {
     method: 'POST',
     body: JSON.stringify(userData),
   });
-
-  // ✅ Save token to localStorage after successful registration
-  if (response.token) {
-    localStorage.setItem('authToken', response.token);
-    // Optionally save user info too
-    if (response.user) {
-      localStorage.setItem('user', JSON.stringify(response.user));
-    }
-  }
-
-  return response;
 };
 
 /**
@@ -93,7 +71,7 @@ export const logoutUser = async () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
     // Redirect to login
-    window.location.href = '/login';
+    window.location.href = '/auth';
   }
 };
 

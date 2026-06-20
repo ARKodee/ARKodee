@@ -24,7 +24,7 @@ const clearAuth = () => {
   localStorage.removeItem('authToken');
   localStorage.removeItem('user');
   // Redirect to login page
-  window.location.href = '/login';
+  window.location.href = '/auth';
 };
 
 /**

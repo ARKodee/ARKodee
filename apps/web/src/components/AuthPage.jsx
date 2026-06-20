@@ -1,8 +1,12 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthFlow } from '../hooks/userAuthFlow'
 import { loginUser, registerUser } from '../lib/auth'
+import { useAuth } from '../store/AuthContext'
 
 export function AuthPage() {
+  const { setAuth } = useAuth()
+  const navigate = useNavigate()
   const { step, isLoading, error, handleCheckEmail } = useAuthFlow()
   
   // Form states
@@ -18,18 +22,22 @@ export function AuthPage() {
       await handleCheckEmail(email)
     } 
     else if (step === 'LOGIN') {
-      // Execute login sequence
       try {
-        await loginUser(email, password)
-        alert('Welcome back! 🎉')
-      } catch (err) { alert('Wrong password!') }
-    } 
+        const response = await loginUser(email, password)
+        setAuth(response.token, response.user)
+        navigate('/')
+      } catch (err) {
+        alert('Wrong password!')
+      }
+    }
     else if (step === 'REGISTER') {
-      // Execute register sequence
       try {
-        await registerUser({ email, password, fullName })
-        alert('Account created! 🚀')
-      } catch (err) { alert('Registration failed.') }
+        const response = await registerUser({ email, password, fullName })
+        setAuth(response.token, response.user)
+        navigate('/')
+      } catch (err) {
+        alert('Registration failed.')
+      }
     }
   }
 
