@@ -7,7 +7,7 @@ import { apiClient, getTokenStatus } from './apiClient'
  * Django DRF will return: { exists: true/false }
  */
 export const checkEmailExists = async (email) => {
-  return apiClient('/auth/check-email', {
+  return apiClient('/auth/check-email/', {
     method: 'POST',
     body: JSON.stringify({ email }),
   })
@@ -25,7 +25,7 @@ export const checkEmailExists = async (email) => {
  * 4. Save token to localStorage
  */
 export const loginUser = async (email, password) => {
-  return apiClient('/auth/login', {
+  return apiClient('/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
@@ -43,7 +43,7 @@ export const loginUser = async (email, password) => {
  * 4. Save token to localStorage
  */
 export const registerUser = async (userData) => {
-  return apiClient('/auth/register', {
+  return apiClient('/auth/register/', {
     method: 'POST',
     body: JSON.stringify(userData),
   });
@@ -61,7 +61,7 @@ export const logoutUser = async () => {
   try {
     // Optional: Notify backend that user is logging out
     // This requires token, so apiClient will add it automatically
-    await apiClient('/auth/logout', {
+    await apiClient('/auth/logout/', {
       method: 'POST',
     });
   } catch (error) {
@@ -85,7 +85,7 @@ export const logoutUser = async () => {
  * 3. apiClient catches 401 & clears auth
  */
 export const getUserProfile = async () => {
-  return apiClient('/auth/profile', {
+  return apiClient('/auth/profile/', {
     method: 'GET',
   });
 };
