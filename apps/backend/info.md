@@ -1,0 +1,4 @@
+auth_custom (or accounts): Controls the gatekeeper logic. It handles the initial email scanning, password verification, registration database entry, and token signing.
+users: Manages competitive attributes and accounts. It tracks ELO ratings, global rankings, daily usage streaks, match history metrics, and the leaderboard table.
+problems: Manages the entire storage bank of coding challenges. It houses the LeetCode-style descriptions, base code starter templates, and dynamic test case configurations.
+contests: Manages gameplay frameworks, scheduling structures, matchmaking variables, and settings rules (such as spike durations or allowable sabotages).
