@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from .env
+# Load environment variables from .env in backend and monorepo root
 load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR.parent.parent / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "1").lower() in {"1", "true", "yes"}
@@ -26,6 +27,7 @@ INSTALLED_APPS = [
     "apps.auth.apps.AuthConfig",
     "apps.problems.apps.ProblemsConfig",
     "apps.contests.apps.ContestsConfig",
+    "apps.users.apps.UsersConfig",
 ]
 
 
@@ -126,5 +128,3 @@ CACHES = {
         }
     }
 }
-
-

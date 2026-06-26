@@ -1,7 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { AuthPage } from '../components/AuthPage'
-import { Dashboard } from '../pages/Dashboard'
+import { AuthForm } from '../components/auth/AuthForm'
 import { useAuth } from '../store/AuthContext'
+import { Dashboard } from '../pages/Dashboard'
 
 function RequireAuth() {
   const { isAuthenticated } = useAuth()
@@ -10,18 +10,19 @@ function RequireAuth() {
 
 function RequireGuest() {
   const { isAuthenticated } = useAuth()
-  return isAuthenticated ? <Navigate to="/" replace /> : <Outlet />
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Outlet />
 }
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route element={<RequireGuest />}>
-        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/auth" element={<AuthForm />} />
       </Route>
 
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Route>
     </Routes>
   )

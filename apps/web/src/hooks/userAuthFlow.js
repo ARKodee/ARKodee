@@ -11,8 +11,8 @@ export function useAuthFlow() {
     setError(null)
 
     try {
-      const exists = await checkEmailExists(email)
-      setStep(exists ? 'LOGIN' : 'REGISTER')
+      const response = await checkEmailExists(email)
+      setStep(response.exists ? 'LOGIN' : 'REGISTER')
     } catch (err) {
       setError('Failed to check email. Please try again.');
     } finally {
