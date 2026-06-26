@@ -24,3 +24,6 @@ staticfiles/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Local Data / Seed Files
+nihar's files/
