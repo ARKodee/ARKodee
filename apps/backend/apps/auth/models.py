@@ -16,7 +16,8 @@ class UserStats(models.Model):
         on_delete=models.CASCADE,
         related_name="stats"
     )
-    elo_rating = models.IntegerField(default=1200)
+    contest_rating = models.IntegerField(default=1200)
+    duel_rating = models.IntegerField(default=1200)
     ROLE_CHOICES = [
         ("competitor", "Competitor"),
         ("moderator", "Moderator / Problem Setter"),
@@ -42,7 +43,7 @@ class UserStats(models.Model):
         db_table = "user_stats"
 
     def __str__(self):
-        return f"{self.user.username}'s Stats (ELO: {self.elo_rating})"
+        return f"{self.user.username}'s Stats (Contest ELO: {self.contest_rating}, Duel ELO: {self.duel_rating})"
 
 
 # ==========================================
