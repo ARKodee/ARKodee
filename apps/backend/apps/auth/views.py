@@ -119,3 +119,4 @@ def profile_view(request):
 @permission_classes([AllowAny])
 def health_check(request):
     return Response({"status": "ok"})
+
