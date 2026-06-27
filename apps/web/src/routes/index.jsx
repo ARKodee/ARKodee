@@ -1,6 +1,8 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthPage } from '../components/AuthPage'
 import { Dashboard } from '../pages/Dashboard'
+import { PracticeDashboard } from '../pages/PracticeDashboard'
+import { ProblemWorkspace } from '../pages/ProblemWorkspace'
 import { useAuth } from '../store/AuthContext'
 
 function RequireAuth() {
@@ -22,7 +24,10 @@ export function AppRoutes() {
 
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/practice" element={<PracticeDashboard />} />
+        <Route path="/practice/problems/:slug" element={<ProblemWorkspace />} />
       </Route>
     </Routes>
   )
 }
+
