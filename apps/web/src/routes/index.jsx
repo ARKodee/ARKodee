@@ -2,6 +2,8 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthForm } from '../components/auth/AuthForm'
 import { useAuth } from '../store/AuthContext'
 import { Dashboard } from '../pages/Dashboard'
+import { PracticeDashboard } from '../pages/PracticeDashboard'
+import { ProblemWorkspace } from '../pages/ProblemWorkspace'
 
 function RequireAuth() {
   const { isAuthenticated } = useAuth()
@@ -23,7 +25,11 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/practice" element={<PracticeDashboard />} />
+        <Route path="/practice/problems/:slug" element={<ProblemWorkspace />} />
       </Route>
     </Routes>
   )
 }
+
+
