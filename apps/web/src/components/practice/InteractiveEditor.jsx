@@ -60,9 +60,18 @@ const ARKODEE_DARK_THEME = {
  *  - setCode {Function}         State mutator function for code updates.
  *  - selectedLanguage {string}  Active language identifier string.
  */
-export function InteractiveEditor({ code, setCode, selectedLanguage }) {
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
-  const [terminalOutput, setTerminalOutput] = useState('');
+export function InteractiveEditor({
+  code,
+  setCode,
+  selectedLanguage,
+  isRunning = false,
+  isSubmitting = false,
+  terminalOutput = '',
+  isTerminalOpen = false,
+  setIsTerminalOpen = () => {},
+  onRun = () => {},
+  onSubmit = () => {}
+}) {
   const editorRef = useRef(null);
 
   const fileName = FILE_NAMES[selectedLanguage] ?? 'main.py';
@@ -76,22 +85,6 @@ export function InteractiveEditor({ code, setCode, selectedLanguage }) {
     editorRef.current = editor;
     monaco.editor.defineTheme('arkodee-dark', ARKODEE_DARK_THEME);
     monaco.editor.setTheme('arkodee-dark');
-  };
-
-  /**
-   * handleRunCode — Placeholder for future code execution integration.
-   */
-  const handleRunCode = () => {
-    setIsTerminalOpen(true);
-    setTerminalOutput('⏳ Running code... (execution service not yet connected)');
-  };
-
-  /**
-   * handleSubmitCode — Placeholder for future submission integration.
-   */
-  const handleSubmitCode = () => {
-    setIsTerminalOpen(true);
-    setTerminalOutput('⏳ Submitting solution... (submission service not yet connected)');
   };
 
   return (
@@ -161,23 +154,25 @@ export function InteractiveEditor({ code, setCode, selectedLanguage }) {
         <div className="ie-action-buttons">
           <button
             className="ie-btn ie-btn--ghost"
-            onClick={handleRunCode}
+            onClick={onRun}
+            disabled={isRunning || isSubmitting}
             id="btn-run-code"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polygon points="5 3 19 12 5 21 5 3" />
             </svg>
-            Run Code
+            {isRunning ? 'Running...' : 'Run Code'}
           </button>
           <button
             className="ie-btn ie-btn--primary"
-            onClick={handleSubmitCode}
+            onClick={onSubmit}
+            disabled={isRunning || isSubmitting}
             id="btn-submit-code"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            Submit
+            {isSubmitting ? 'Submitting...' : 'Submit'}
           </button>
         </div>
       </div>

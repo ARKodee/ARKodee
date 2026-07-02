@@ -1580,6 +1580,169 @@ a {
   opacity: 0.4;
 }
 
+/* Submissions History Styles */
+.submissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
+}
+
+.submission-card {
+  background: var(--color-surface);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.submission-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+
+.submission-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.submission-badge-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.submission-status-badge {
+  padding: var(--space-1) var(--space-3);
+  border-radius: 9999px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.submission-status-badge--ac {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.submission-status-badge--wa {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.submission-status-badge--tle {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.submission-status-badge--re,
+.submission-status-badge--ce {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.submission-lang-badge {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.submission-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.submission-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.submission-testcases {
+  font-weight: 500;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.submission-view-code-btn {
+  background: transparent;
+  color: var(--color-primary-text);
+  border: none;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.submission-view-code-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+}
+
+.submission-code-block {
+  background: var(--color-base) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  margin-top: var(--space-2);
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+/* Skeleton Loading Pulse */
+.submission-skeleton-card {
+  background: var(--color-surface);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.submission-skeleton-line {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    INTERACTIVE EDITOR  (ie-*)
    ─────────────────────────────────────────────────────────────────────────── */

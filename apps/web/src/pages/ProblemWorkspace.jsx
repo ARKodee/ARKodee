@@ -95,6 +95,15 @@ export function ProblemWorkspace() {
     setCode,
     selectedLanguage,
     setSelectedLanguage,
+    isRunning,
+    isSubmitting,
+    terminalOutput,
+    isTerminalOpen,
+    setIsTerminalOpen,
+    runCode,
+    submitCode,
+    submissions,
+    loadingSubmissions,
   } = useProblemDetails(slug);
 
   const handleBack = () => {
@@ -165,7 +174,11 @@ export function ProblemWorkspace() {
             className="pw-pane-left"
             aria-label="Problem description"
           >
-            <ProblemDescription problem={problem} />
+            <ProblemDescription
+              problem={problem}
+              submissions={submissions}
+              loadingSubmissions={loadingSubmissions}
+            />
           </section>
 
           {/* Right Pane — Interactive Editor */}
@@ -177,6 +190,13 @@ export function ProblemWorkspace() {
               code={code}
               setCode={setCode}
               selectedLanguage={selectedLanguage}
+              isRunning={isRunning}
+              isSubmitting={isSubmitting}
+              terminalOutput={terminalOutput}
+              isTerminalOpen={isTerminalOpen}
+              setIsTerminalOpen={setIsTerminalOpen}
+              onRun={runCode}
+              onSubmit={submitCode}
             />
           </section>
         </div>
