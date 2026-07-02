@@ -10,7 +10,7 @@ class CheckEmailSerializer(serializers.Serializer):
     Validates request body for progressive discovery check.
     Expects: { "email": "user@example.com" }
     """
-    email = serializers.EmailField()
+    email = serializers.EmailField(required=True)
 
 
 # ==========================================
@@ -21,8 +21,8 @@ class LoginSerializer(serializers.Serializer):
     Validates credentials for user login.
     Expects: { "email": "user@example.com", "password": "securepassword" }
     """
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
 
 
 # ==========================================
@@ -33,14 +33,14 @@ class RegisterSerializer(serializers.Serializer):
     Validates sign-up details and registers a new User in the DB.
     Expects: { "email": "user@example.com", "password": "...", "fullName": "..." }
     """
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
     fullName = serializers.CharField(required=False, allow_blank=True)
 
     def validate_email(self, value):
         # ❌ Validate if email already exists in the system
         if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
+            raise serializers.ValidationError("User with this email already exists.")
         return value
 
     def create(self, validated_data):
@@ -48,17 +48,12 @@ class RegisterSerializer(serializers.Serializer):
         password = validated_data["password"]
         full_name = validated_data.get("fullName", "")
 
-        # ⚙️ Auto-generate a unique username (Django requirement)
-        username = email.replace("@", "_").replace(".", "_")
-        base_username = username
-        counter = 1
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username}_{counter}"
-            counter += 1
+        # Use email as username since Django User model requires username and email is unique
+        username = email
 
         # ⚙️ Split Full Name into First and Last Name
-        name_parts = full_name.strip().split(" ", 1)
-        first_name = name_parts[0]
+        name_parts = full_name.strip().split(" ", 1) if full_name else []
+        first_name = name_parts[0] if len(name_parts) > 0 else ""
         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
         # 💾 Create and save the new User
@@ -70,3 +65,21 @@ class RegisterSerializer(serializers.Serializer):
             last_name=last_name
         )
         return user
+
+
+# ==========================================
+# 4. User Serializer (Public & Protected Flow)
+# ==========================================
+class UserSerializer(serializers.ModelSerializer):
+    """
+    Serializes basic user metadata for API responses.
+    """
+    fullName = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["email", "fullName"]
+
+    def get_fullName(self, obj):
+        full_name = f"{obj.first_name} {obj.last_name}".strip()
+        return full_name if full_name else (obj.first_name or "User")
