@@ -142,3 +142,124 @@ class SeedProblemsCsvTests(TestCase):
         self.assertEqual(tc.input, "in")
         self.assertEqual(tc.expected_output, "out")
         self.assertTrue(tc.is_sample)
+
+
+from rest_framework.test import APITestCase
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from apps.problems.models import Submission, UserProblemStats
+
+User = get_user_model()
+
+class ProblemsApiTests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testcoder",
+            email="coder@test.com",
+            password="testpassword123"
+        )
+        self.client.force_authenticate(user=self.user)
+        
+        self.problem = Problem.objects.create(
+            title="Addition Problem",
+            slug="addition-problem",
+            description="Add A and B.",
+            difficulty="easy",
+            constraints="A, B >= 0",
+            input_format="A B",
+            output_format="A+B",
+            sample_input="2 3",
+            sample_output="5",
+            status="approved"
+        )
+        
+        self.sample_case = DbTestCase.objects.create(
+            problem=self.problem,
+            input="2 3",
+            expected_output="5",
+            is_sample=True,
+            order_index=0
+        )
+        
+        self.hidden_case = DbTestCase.objects.create(
+            problem=self.problem,
+            input="10 20",
+            expected_output="30",
+            is_sample=False,
+            order_index=1
+        )
+
+    def test_problems_list_api(self):
+        url = reverse("problems_list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["title"], "Addition Problem")
+        self.assertEqual(response.data[0]["difficulty"], "EASY")
+        self.assertEqual(response.data[0]["is_solved"], False)
+        
+    def test_problem_detail_api(self):
+        url = reverse("problem_detail", kwargs={"problem_slug": "addition-problem"})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["title"], "Addition Problem")
+        self.assertEqual(response.data["sample_input"], ["2 3"])
+        self.assertEqual(response.data["sample_output"], ["5"])
+
+    def test_run_code_api_python_ac(self):
+        url = reverse("run_code", kwargs={"problem_slug": "addition-problem"})
+        code = "import sys\nline = sys.stdin.read().strip()\na, b = map(int, line.split())\nprint(a + b)"
+        response = self.client.post(url, {"code": code, "language": "python"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["verdict"], "AC")
+        self.assertTrue(response.data["results"][0]["passed"])
+
+    def test_run_code_api_python_wa(self):
+        url = reverse("run_code", kwargs={"problem_slug": "addition-problem"})
+        code = "import sys\nprint(999)"
+        response = self.client.post(url, {"code": code, "language": "python"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["verdict"], "WA")
+        self.assertFalse(response.data["results"][0]["passed"])
+
+    def test_submit_code_api_ac(self):
+        url = reverse("submit_code", kwargs={"problem_slug": "addition-problem"})
+        code = "import sys\nline = sys.stdin.read().strip()\na, b = map(int, line.split())\nprint(a + b)"
+        response = self.client.post(url, {"code": code, "language": "python"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["verdict"], "AC")
+        self.assertEqual(response.data["passed_count"], 2)
+        
+        # Verify stats updated
+        stats = UserProblemStats.objects.get(user=self.user, problem=self.problem)
+        self.assertEqual(stats.status, "solved")
+        self.assertEqual(stats.attempts_count, 1)
+        
+        # Verify calendar has the submission
+        cal_url = reverse("submission_calendar")
+        cal_resp = self.client.get(cal_url)
+        self.assertEqual(cal_resp.status_code, 200)
+        self.assertTrue(len(cal_resp.data) > 0)
+
+    def test_problem_submissions_api(self):
+        # Create a submission for testing
+        Submission.objects.create(
+            user=self.user,
+            problem=self.problem,
+            language="python",
+            code="print(5)",
+            verdict="AC",
+            test_cases_passed=2,
+            total_test_cases=2
+        )
+        url = reverse("problem_submissions", kwargs={"problem_slug": "addition-problem"})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["verdict"], "AC")
+        self.assertEqual(response.data[0]["language"], "python")
+        self.assertEqual(response.data[0]["code"], "print(5)")
+        self.assertEqual(response.data[0]["test_cases_passed"], 2)
+
+
