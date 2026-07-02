@@ -33,49 +33,30 @@ export function useProblems() {
   // Internal debounce ref — stores the pending timer ID across renders.
   const debounceTimer = useRef(null);
 
-  // ─── Effect 1: Initial Parallel Data Sync ────────────────────────────────────
-  // Fires once on mount to simultaneously fetch the problem list and the
-  // user's submission calendar, preventing waterfall requests.
+  // ─── Effect 1: Initial Calendar Data Sync ────────────────────────────────────
+  // Fires once on mount to fetch the user's submission activity calendar.
   useEffect(() => {
     let isMounted = true;
 
-    const syncInitialData = async () => {
-      // Run both fetches in parallel
-      const [problemsResult, calendarResult] = await Promise.allSettled([
-        getProblemsList({ difficulty: activeDifficulty }),
-        getSubmissionCalendar(),
-      ]);
-
-      if (!isMounted) return;
-
-      // Resolve problems
-      if (problemsResult.status === 'fulfilled') {
-        // Support both paginated { results: [] } and plain array responses
-        const data = problemsResult.value;
-        setProblems(Array.isArray(data) ? data : (data?.results ?? []));
-        setProblemsError(null);
-      } else {
-        setProblemsError(problemsResult.reason?.message ?? 'Failed to load problems.');
-        setProblems([]);
-      }
-      setIsLoadingProblems(false);
-
-      // Resolve calendar
-      if (calendarResult.status === 'fulfilled') {
-        setSubmissionCalendar(calendarResult.value ?? {});
+    const fetchCalendarData = async () => {
+      setIsLoadingCalendar(true);
+      try {
+        const data = await getSubmissionCalendar();
+        if (!isMounted) return;
+        setSubmissionCalendar(data ?? {});
         setCalendarError(null);
-      } else {
-        setCalendarError(calendarResult.reason?.message ?? 'Failed to load calendar.');
+      } catch (err) {
+        if (!isMounted) return;
+        setCalendarError(err.message ?? 'Failed to load calendar.');
         setSubmissionCalendar({});
+      } finally {
+        if (isMounted) setIsLoadingCalendar(false);
       }
-      setIsLoadingCalendar(false);
     };
 
-    syncInitialData();
+    fetchCalendarData();
 
     return () => { isMounted = false; };
-    // Intentionally empty dep array — runs once on mount only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Effect 2: Reactive Filter Refetch with Debounce ─────────────────────────

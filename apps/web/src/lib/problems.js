@@ -50,3 +50,30 @@ export const getSubmissionCalendar = async () => {
 export const getProblemDetails = async (slug) => {
   return apiClient(`/problems/${slug}/`, { method: 'GET' });
 };
+
+/**
+ * Run solution code against sample test cases.
+ */
+export const runProblemCode = async (slug, code, language) => {
+  return apiClient(`/problems/${slug}/run/`, {
+    method: 'POST',
+    body: JSON.stringify({ code, language }),
+  });
+};
+
+/**
+ * Submit solution code for complete evaluation.
+ */
+export const submitProblemCode = async (slug, code, language) => {
+  return apiClient(`/problems/${slug}/submit/`, {
+    method: 'POST',
+    body: JSON.stringify({ code, language }),
+  });
+};
+
+/**
+ * Fetch the authenticated user's submission history for a specific problem.
+ */
+export const getProblemSubmissions = async (slug) => {
+  return apiClient(`/problems/${slug}/submissions/`, { method: 'GET' });
+};

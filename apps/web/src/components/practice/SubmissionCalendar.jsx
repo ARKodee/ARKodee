@@ -57,7 +57,11 @@ function buildCalendarGrid(calendarData) {
       const unixTs = Math.floor(cellDate.getTime() / 1000);
 
       // Look up by exact unix timestamp OR by ISO date string (flexible)
-      const isoKey = cellDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+      // Format locally to prevent timezone offsets from shifting dates back to the previous day
+      const year = cellDate.getFullYear();
+      const month = String(cellDate.getMonth() + 1).padStart(2, '0');
+      const dayStr = String(cellDate.getDate()).padStart(2, '0');
+      const isoKey = `${year}-${month}-${dayStr}`;
       const count = calendarData[unixTs] ?? calendarData[isoKey] ?? 0;
 
       if (count > maxCount) maxCount = count;
