@@ -12,6 +12,110 @@ from utils.mongo import get_collection, get_mongo_client
 # Increase field limit to handle huge fields in CSV
 csv.field_size_limit(sys.maxsize)
 
+def map_type(py_type, target_lang):
+    t = py_type.strip().replace(" ", "")
+    if t.startswith("Optional[") and t.endswith("]"):
+        t = t[9:-1]
+        
+    mappings = {
+        "int": {"java": "int", "cpp": "int", "js": "number"},
+        "str": {"java": "String", "cpp": "string", "js": "string"},
+        "bool": {"java": "boolean", "cpp": "bool", "js": "boolean"},
+        "float": {"java": "double", "cpp": "double", "js": "number"},
+        "List[int]": {"java": "int[]", "cpp": "vector<int>&", "js": "array"},
+        "List[str]": {"java": "String[]", "cpp": "vector<string>&", "js": "array"},
+        "List[float]": {"java": "double[]", "cpp": "vector<double>&", "js": "array"},
+        "List[bool]": {"java": "boolean[]", "cpp": "vector<bool>&", "js": "array"},
+        "List[List[int]]": {"java": "int[][]", "cpp": "vector<vector<int>>&", "js": "array"},
+        "List[List[str]]": {"java": "String[][]", "cpp": "vector<vector<string>>&", "js": "array"},
+        "ListNode": {"java": "ListNode", "cpp": "ListNode*", "js": "ListNode"},
+        "TreeNode": {"java": "TreeNode", "cpp": "TreeNode*", "js": "TreeNode"},
+    }
+    
+    if t in mappings:
+        return mappings[t][target_lang]
+        
+    if t.startswith("List[") and t.endswith("]"):
+        inner = t[5:-1]
+        inner_mapped = map_type(inner, target_lang)
+        if target_lang == "java":
+            return f"{inner_mapped}[]"
+        elif target_lang == "cpp":
+            return f"vector<{inner_mapped.replace('&', '')}>&"
+        else:
+            return "array"
+            
+    return "int" if target_lang != "js" else "any"
+
+def translate_python_starter_code(py_code):
+    try:
+        code_to_parse = py_code.strip()
+        # Append pass body if it ends at the colon to make it a valid block
+        if code_to_parse.endswith(':'):
+            code_to_parse += '\n        pass'
+        elif not (code_to_parse.endswith('pass') or code_to_parse.endswith('...')):
+            code_to_parse += '\n        pass'
+            
+        tree = ast.parse(code_to_parse)
+        class_node = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                class_node = node
+                break
+                
+        if not class_node:
+            func_node = None
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    func_node = node
+                    break
+        else:
+            func_node = None
+            for node in class_node.body:
+                if isinstance(node, ast.FunctionDef):
+                    func_node = node
+                    break
+                    
+        if not func_node:
+            return None
+            
+        func_name = func_node.name
+        params = []
+        for arg in func_node.args.args:
+            if arg.arg == 'self':
+                continue
+            annot = ast.unparse(arg.annotation) if arg.annotation else 'int'
+            params.append((arg.arg, annot))
+            
+        ret_type = ast.unparse(func_node.returns) if func_node.returns else 'int'
+        
+        java_ret = map_type(ret_type, "java")
+        java_args = ", ".join([f"{map_type(p[1], 'java')} {p[0]}" for p in params])
+        java_code = f"class Solution {{\n    public {java_ret} {func_name}({java_args}) {{\n        // Write your solution here\n    }}\n}}"
+        
+        cpp_ret = map_type(ret_type, "cpp")
+        cpp_args = ", ".join([f"{map_type(p[1], 'cpp')} {p[0]}" for p in params])
+        cpp_code = f"class Solution {{\npublic:\n    {cpp_ret} {func_name}({cpp_args}) {{\n        \n    }}\n}};"
+        
+        js_args = ", ".join([p[0] for p in params])
+        js_code = "/**\n"
+        for p in params:
+            js_code += f" * @param {{{map_type(p[1], 'js')}}} {p[0]}\n"
+        js_code += f" * @return {{{map_type(ret_type, 'js')}}}\n */\n"
+        js_code += f"var {func_name} = function({js_args}) {{\n    \n}};"
+        
+        py_args_str = ", ".join([f"{p[0]}: {p[1]}" for p in params])
+        py_code_wrapped = f"class Solution:\n    def {func_name}(self, {py_args_str}) -> {ret_type}:\n        pass"
+            
+        return {
+            "python": py_code_wrapped,
+            "cpp": cpp_code,
+            "java": java_code,
+            "javascript": js_code
+        }
+    except Exception:
+        return None
+
 class Command(BaseCommand):
     help = "Seed problems and test cases from output.csv into PostgreSQL and starter codes into MongoDB"
 
@@ -131,6 +235,10 @@ class Command(BaseCommand):
             m2m_relations_to_create = []
             mongo_templates_to_create = []
             
+            # Fetch existing slugs in this batch's context to avoid duplicate insert errors
+            slugs_in_batch = [slugify(row.get("task_id", "")) for row in batch_rows if row.get("task_id")]
+            existing_slugs = set(Problem.objects.filter(slug__in=slugs_in_batch).values_list("slug", flat=True))
+            
             for row in batch_rows:
                 task_id = row.get("task_id")
                 if not task_id:
@@ -138,6 +246,9 @@ class Command(BaseCommand):
                 
                 # Generate clean slug and title
                 slug = slugify(task_id)
+                if slug in existing_slugs:
+                    continue
+                    
                 title = task_id.replace("-", " ").title()
                 
                 # Generate ELO difficulty category default values
@@ -203,11 +314,15 @@ class Command(BaseCommand):
                 except Exception:
                     pass
                 
-                # Handle MongoDB Template
+                # Handle MongoDB Template (Generate LeetCode-style templates for all 4 languages)
                 if starter_code:
+                    templates_dict = translate_python_starter_code(starter_code)
+                    if not templates_dict:
+                        # Fallback if parsing fails
+                        templates_dict = {"python": starter_code}
                     mongo_templates_to_create.append({
                         "problem_id": str(problem_id),
-                        "templates": {"python": starter_code}
+                        "templates": templates_dict
                     })
             
             # Execute database operations inside an atomic transaction per batch
