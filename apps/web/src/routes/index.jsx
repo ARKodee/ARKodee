@@ -1,4 +1,9 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { AuthPage } from '../components/AuthPage'
+import { Dashboard } from '../pages/Dashboard'
+import { ContestsDashboard } from '../pages/ContestsDashboard'
+import { ContestDetailsPage } from '../pages/ContestDetailsPage'
+import { ContestArenaPage } from '../pages/ContestArenaPage'
 import { AuthForm } from '../components/auth/AuthForm'
 import { useAuth } from '../store/AuthContext'
 import { Dashboard } from '../pages/Dashboard'
@@ -23,6 +28,10 @@ export function AppRoutes() {
       </Route>
 
       <Route element={<RequireAuth />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/contests" element={<ContestsDashboard />} />
+        <Route path="/contests/:slug" element={<ContestDetailsPage />} />
+        <Route path="/contests/:slug/arena" element={<ContestArenaPage />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/practice" element={<PracticeDashboard />} />
@@ -31,5 +40,3 @@ export function AppRoutes() {
     </Routes>
   )
 }
-
-
