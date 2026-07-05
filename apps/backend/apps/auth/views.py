@@ -6,14 +6,22 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 
+from .serializers import (
+    CheckEmailSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+    UserSerializer,
+)
+
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def check_email_view(request):
-    email = request.data.get("email")
-    if not email:
+    serializer = CheckEmailSerializer(data=request.data)
+    if not serializer.is_valid():
         return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
     
+    email = serializer.validated_data["email"]
     exists = User.objects.filter(email=email).exists()
     return Response({"exists": exists})
 
@@ -21,52 +29,36 @@ def check_email_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register_view(request):
-    email = request.data.get("email")
-    password = request.data.get("password")
-    full_name = request.data.get("fullName", "")
-    
-    if not email or not password:
-        return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = RegisterSerializer(data=request.data)
+    if not serializer.is_valid():
+        errors = serializer.errors
+        if "email" in errors:
+            detail_msg = errors["email"][0]
+        elif "password" in errors:
+            detail_msg = errors["password"][0]
+        else:
+            detail_msg = "Email and password are required."
+        return Response({"detail": detail_msg}, status=status.HTTP_400_BAD_REQUEST)
         
-    if User.objects.filter(email=email).exists():
-        return Response({"detail": "User with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
-        
-    # Use email as username since Django User model requires username and email is unique
-    username = email
-    
-    # Split full name into first and last name if possible
-    name_parts = full_name.split(" ", 1)
-    first_name = name_parts[0]
-    last_name = name_parts[1] if len(name_parts) > 1 else ""
-    
-    user = User.objects.create_user(
-        username=username,
-        email=email,
-        password=password,
-        first_name=first_name,
-        last_name=last_name
-    )
-    
+    user = serializer.save()
     token, _ = Token.objects.get_or_create(user=user)
     
     return Response({
         "token": token.key,
-        "user": {
-            "email": user.email,
-            "fullName": full_name or user.first_name
-        }
+        "user": UserSerializer(user).data
     }, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
-    email = request.data.get("email")
-    password = request.data.get("password")
-    
-    if not email or not password:
+    serializer = LoginSerializer(data=request.data)
+    if not serializer.is_valid():
         return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
         
+    email = serializer.validated_data["email"]
+    password = serializer.validated_data["password"]
+    
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
@@ -76,17 +68,10 @@ def login_view(request):
     
     if authenticated_user is not None:
         token, _ = Token.objects.get_or_create(user=authenticated_user)
-        full_name = f"{authenticated_user.first_name} {authenticated_user.last_name}".strip()
-        if not full_name:
-            full_name = authenticated_user.first_name or "User"
-            
         return Response({
             "token": token.key,
-            "user": {
-                "email": authenticated_user.email,
-                "fullName": full_name
-            }
-        })
+            "user": UserSerializer(authenticated_user).data
+        }, status=status.HTTP_200_OK)
     else:
         return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -104,15 +89,7 @@ def logout_view(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def profile_view(request):
-    user = request.user
-    full_name = f"{user.first_name} {user.last_name}".strip()
-    if not full_name:
-        full_name = user.first_name or "User"
-        
-    return Response({
-        "email": user.email,
-        "fullName": full_name
-    })
+    return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
