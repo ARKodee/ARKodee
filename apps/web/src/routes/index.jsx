@@ -1,6 +1,9 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthPage } from '../components/AuthPage'
 import { Dashboard } from '../pages/Dashboard'
+import { ContestsDashboard } from '../pages/ContestsDashboard'
+import { ContestDetailsPage } from '../pages/ContestDetailsPage'
+import { ContestArenaPage } from '../pages/ContestArenaPage'
 import { useAuth } from '../store/AuthContext'
 
 function RequireAuth() {
@@ -22,7 +25,11 @@ export function AppRoutes() {
 
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/contests" element={<ContestsDashboard />} />
+        <Route path="/contests/:slug" element={<ContestDetailsPage />} />
+        <Route path="/contests/:slug/arena" element={<ContestArenaPage />} />
       </Route>
     </Routes>
   )
 }
+
