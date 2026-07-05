@@ -1,6 +1,4 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { AuthPage } from '../components/AuthPage'
-import { Dashboard } from '../pages/Dashboard'
 import { ContestsDashboard } from '../pages/ContestsDashboard'
 import { ContestDetailsPage } from '../pages/ContestDetailsPage'
 import { ContestArenaPage } from '../pages/ContestArenaPage'

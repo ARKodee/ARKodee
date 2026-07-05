@@ -27,7 +27,7 @@ export function AuthForm() {
         setAuth(response.token, response.user)
         navigate('/dashboard')
       } catch (err) {
-        alert('Wrong password!')
+        alert('Wrong password or connection failed!')
       }
     }
     else if (step === 'REGISTER') {
@@ -41,56 +41,116 @@ export function AuthForm() {
     }
   }
 
-  // NOTE: Temporary UI.
+  // Fallback dev login bypass
+  const handleDevBypass = () => {
+    setAuth('mock-token', {
+      email: 'dev@arkodee.io',
+      fullName: 'Developer Operator',
+      name: 'Developer'
+    })
+    navigate('/dashboard')
+  }
+
   return (
-    <div className="auth-card">
-      <h2>{step === 'EMAIL' ? 'Get Started' : step === 'LOGIN' ? 'Welcome Back' : 'Create Account'}</h2>
+    <div className="auth-container">
+      {/* Decorative scanline and grids */}
+      <div className="pointer-events-none fixed inset-x-0 z-50 animate-scan-line" style={{
+        height: 3,
+        background: 'linear-gradient(transparent 0%, rgba(245,158,11,0.045) 50%, transparent 100%)',
+      }} />
+      <div className="auth-bg-grid" />
+      <div className="auth-bg-glow" />
 
-      <form onSubmit={handleSubmit}>
-        {/* Always visible or locked depending on step */}
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter your email"
-          disabled={step !== 'EMAIL'}
-          required
-        />
+      <div className="auth-card">
+        {/* Logo/Icon */}
+        <div className="auth-logo-row">
+          <span className="auth-logo-dot animate-pulse" />
+          <span className="auth-logo-text">ARKODEE // GATEKEEPER</span>
+        </div>
 
-        {/* STEP 2: Existing user gets password option */}
-        {step === 'LOGIN' && (
-          <input
-            type="password"
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            required
-          />
-        )}
+        <h2>{step === 'EMAIL' ? 'Get Started' : step === 'LOGIN' ? 'Welcome Back' : 'Create Account'}</h2>
+        <p className="auth-subtitle">
+          {step === 'EMAIL' 
+            ? 'Enter your operator email to initialize authentication sequence.' 
+            : step === 'LOGIN' 
+              ? 'Provide access credentials to decrypt dashboard portal.' 
+              : 'Register new operator node credentials in system database.'}
+        </p>
 
-        {/* STEP 2: New user gets full registration options */}
-        {step === 'REGISTER' && (
-          <>
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="auth-field">
+            <label>Operator Email</label>
             <input
-              type="text"
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Full Name"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="operator@arkodee.io"
+              disabled={step !== 'EMAIL'}
               required
             />
-            <input
-              type="password"
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Create a strong password"
-              required
-            />
-          </>
-        )}
+          </div>
 
-        {error && <p className="error">{error}</p>}
+          {/* STEP 2: Existing user gets password option */}
+          {step === 'LOGIN' && (
+            <div className="auth-field">
+              <label>Password</label>
+              <input
+                type="password"
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoFocus
+              />
+            </div>
+          )}
 
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Processing...' : step === 'EMAIL' ? 'Get Started' : 'Submit'}
-        </button>
-      </form>
+          {/* STEP 2: New user gets full registration options */}
+          {step === 'REGISTER' && (
+            <>
+              <div className="auth-field">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="John Doe"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="auth-field">
+                <label>Create Password</label>
+                <input
+                  type="password"
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </>
+          )}
+
+          {error && <p className="auth-error-msg">{error}</p>}
+
+          <button type="submit" disabled={isLoading} className="auth-submit-btn">
+            {isLoading ? 'Decrypting...' : step === 'EMAIL' ? 'Proceed' : 'Submit Credentials'}
+          </button>
+        </form>
+
+        {/* Developer Offline Bypass Option */}
+        <div className="auth-bypass-container">
+          <div className="auth-bypass-divider">
+            <span>DEVELOPER OPERATIONS</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleDevBypass}
+            className="auth-bypass-btn"
+            id="dev-bypass-btn"
+          >
+            Bypass Verification (Offline Mode)
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

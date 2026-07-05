@@ -1,17 +1,42 @@
 // src/components/dashboard/TacticalNav.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const TABS = ['PROBLEMS', 'CONTESTS', 'DASHBOARD', 'MATCH HISTORY', 'BUG SQUASH'];
 
 export function TacticalNav() {
-  const [activeTab, setActiveTab] = useState('DASHBOARD');
+  const navigate = useNavigate();
+  const location = useLocation();
   const [ping, setPing] = useState(14);
 
   // Simulate live ping jitter
   useEffect(() => {
-    const id = setInterval(() => setwebkit - scrollbar(Math.floor(Math.random() * 9) + 10), 3500);
+    const id = setInterval(() => setPing(Math.floor(Math.random() * 9) + 10), 3500);
     return () => clearInterval(id);
   }, []);
+
+  // Compute active tab from route
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.startsWith('/practice')) return 'PROBLEMS';
+    if (path.startsWith('/contests')) return 'CONTESTS';
+    if (path === '/dashboard' || path === '/') return 'DASHBOARD';
+    return 'DASHBOARD'; // Default fallback
+  };
+
+  const activeTab = getActiveTab();
+
+  const handleTabClick = (tab) => {
+    if (tab === 'PROBLEMS') {
+      navigate('/practice');
+    } else if (tab === 'CONTESTS') {
+      navigate('/contests');
+    } else if (tab === 'DASHBOARD') {
+      navigate('/dashboard');
+    } else {
+      alert(`${tab} mode is currently locked. Complete active campaigns to unlock!`);
+    }
+  };
 
   const pingColor =
     ping < 20 ? '#10b981' :
@@ -36,7 +61,7 @@ export function TacticalNav() {
             <button
               key={tab}
               id={`nav-tab-${tab.replace(/\s+/g, '-').toLowerCase()}`}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => handleTabClick(tab)}
               className="relative px-3 py-1.5 rounded text-[10px] font-mono font-semibold
                          uppercase tracking-widest transition-all duration-200"
               style={{
