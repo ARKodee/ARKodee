@@ -170,7 +170,7 @@ export function PracticeDashboard() {
 
             {/* Problem Table */}
             <ProblemTable
-              problems={problems}
+              problems={problems.slice(0, 50)}
               isLoading={isLoadingProblems}
             />
           </section>

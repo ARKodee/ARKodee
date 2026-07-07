@@ -20,6 +20,18 @@ from .serializers import (
     SubmissionHistorySerializer,
     CodeExecutionRequestSerializer,
 )
+from django.core.exceptions import ValidationError
+
+def get_problem_by_identifier(identifier):
+    """
+    Robust lookup helper that resolves a Problem by either its UUID id or slug string.
+    """
+    queryset = Problem.objects.filter(status="approved")
+    try:
+        return queryset.get(id=identifier)
+    except (ValidationError, Problem.DoesNotExist, ValueError):
+        pass
+    return get_object_or_404(queryset, slug=identifier)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -73,7 +85,7 @@ def submission_calendar(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def problem_detail(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     try:
         templates = get_problem_templates(problem.id)
     except Exception:
@@ -719,6 +731,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                         "passed": False,
                         "verdict": "RE"
                     })
+                    break
                 else:
                     # Strip all spaces to make comparisons formatting-agnostic (e.g. [0, 1] vs [0,1])
                     user_output = proc.stdout.strip().replace(" ", "")
@@ -732,8 +745,9 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                         "passed": passed,
                         "verdict": "AC" if passed else "WA"
                     })
-                    if not passed and verdict == "AC":
+                    if not passed:
                         verdict = "WA"
+                        break
                         
             except subprocess.TimeoutExpired:
                 verdict = "TLE"
@@ -745,6 +759,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                     "passed": False,
                     "verdict": "TLE"
                 })
+                break
             except Exception as e:
                 verdict = "RE"
                 results.append({
@@ -755,6 +770,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                     "passed": False,
                     "verdict": "RE"
                 })
+                break
                 
     return verdict, results
 
@@ -762,7 +778,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def run_code(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     
     req_serializer = CodeExecutionRequestSerializer(data=request.data)
     if not req_serializer.is_valid():
@@ -794,7 +810,7 @@ def run_code(request, problem_slug):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def submit_code(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     
     req_serializer = CodeExecutionRequestSerializer(data=request.data)
     if not req_serializer.is_valid():
@@ -819,20 +835,18 @@ def submit_code(request, problem_slug):
     
     # Calculate passed test cases count
     passed_count = sum(1 for r in results if r["passed"])
-    total_count = len(results)
+    total_count = len(all_cases)
     
-    # Create submission record
-    submission = Submission.objects.create(
-        user=request.user,
-        problem=problem,
-        language=language,
-        code=code,
-        verdict=verdict,
-        test_cases_passed=passed_count,
-        total_test_cases=total_count,
-    )
-    
-    # Update UserProblemStats
+    contest_identifier = request.data.get("contest_id") or request.data.get("contest_slug")
+    contest_obj = None
+    if contest_identifier:
+        try:
+            from apps.contests.models import Contest
+            contest_obj = Contest.objects.filter(id=contest_identifier).first() or Contest.objects.filter(slug=contest_identifier).first()
+        except Exception:
+            pass
+
+    # Update UserProblemStats using the base verdict
     stats, created = UserProblemStats.objects.get_or_create(
         user=request.user,
         problem=problem,
@@ -844,10 +858,27 @@ def submit_code(request, problem_slug):
     elif stats.status != "solved":
         stats.status = "attempted"
     stats.save()
+
+    # Format verdict on failure for the HTTP response to show failed testcase (1-based index)
+    formatted_verdict = verdict
+    if verdict != "AC":
+        formatted_verdict = f"{verdict} on Testcase {passed_count + 1}"
+
+    # Create submission record with standard max_length-compliant verdict code
+    submission = Submission.objects.create(
+        user=request.user,
+        problem=problem,
+        contest=contest_obj,
+        language=language,
+        code=code,
+        verdict=verdict,
+        test_cases_passed=passed_count,
+        total_test_cases=total_count,
+    )
     
     return Response({
         "submission_id": str(submission.id),
-        "verdict": verdict,
+        "verdict": formatted_verdict,
         "passed_count": passed_count,
         "total_count": total_count,
         "results": results[:3] # Send first 3 results to frontend for feedback
@@ -857,7 +888,7 @@ def submit_code(request, problem_slug):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def problem_submissions(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     # Fetch all submissions for this problem by the authenticated user, newest first
     submissions = Submission.objects.filter(problem=problem, user=request.user).order_by("-submitted_at")
     serializer = SubmissionHistorySerializer(submissions, many=True)
