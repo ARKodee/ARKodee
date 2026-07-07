@@ -793,6 +793,15 @@ export function ContestArenaPage() {
                                 <pre className="px-3 py-2 rounded-xl bg-rose-950/20 border border-rose-800/30 text-xs text-rose-300/80 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto scrollbar-thin">{runResult.stderr}</pre>
                               </div>
                             )}
+
+                            {runResult.results && runResult.results.length > 0 && runResult.results[0].error && (
+                              <div>
+                                <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Error Details</p>
+                                <pre className="px-3 py-2 rounded-xl bg-rose-950/20 border border-rose-800/30 text-xs text-rose-300/80 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto scrollbar-thin">
+                                  {runResult.results[0].error}
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         )}
 
