@@ -1,6 +1,5 @@
-// apps/web/src/hooks/useContestData.js
 import { useState, useEffect, useCallback } from 'react'
-import { getContestsList, registerForContest, getContestLeaderboard } from '../lib/contests'
+import { getContestsList, registerForContest, getContestLeaderboard, getGlobalLeaderboard } from '../lib/contests'
 
 /**
  * Compute runtime status from contest time bounds
@@ -20,14 +19,13 @@ const computeRuntimeStatus = (startTime, endTime) => {
 
 /**
  * Unified custom hook for contest state lifecycle
- * Manages contests list, leaderboard, filters, loading, and error states
+ * Manages contests list, leaderboard, loading, and error states
  */
-export function useContestData() {
+export function useContestData(activeFilter = 'all') {
   const [contests, setContests] = useState([])
   const [leaderboard, setLeaderboard] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [activeFilter, setActiveFilter] = useState('live')
 
   // Fetch contests whenever the active filter changes
   useEffect(() => {
@@ -64,27 +62,32 @@ export function useContestData() {
   }, [activeFilter])
 
   // Register for a contest
-  const handleRegister = useCallback(async (contestId) => {
+  const handleRegister = useCallback(async (contestId, accessCode = '') => {
     try {
-      await registerForContest(contestId)
+      // Pass optional access code to register API
+      await registerForContest(contestId, accessCode)
       // Optimistically update the registered state in local list
       setContests((prev) =>
         prev.map((c) =>
-          c.id === contestId ? { ...c, is_registered: true } : c
+          (c.id === contestId || c.slug === contestId) ? { ...c, is_registered: true } : c
         )
       )
+      return { success: true }
     } catch (err) {
-      setError(err.message || 'Registration failed.')
+      throw new Error(err.message || 'Registration failed.')
     }
   }, [])
 
   // Fetch leaderboard for a specific contest (or global)
   const fetchLeaderboard = useCallback(async (contestId) => {
     try {
-      const data = await getContestLeaderboard(contestId)
+      const data = contestId === 'global'
+        ? await getGlobalLeaderboard()
+        : await getContestLeaderboard(contestId)
       setLeaderboard(data.results || data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load leaderboard.')
+      // Silent catch: Do not set master dashboard error if ELO leaderboard loading fails
+      console.warn('Failed to load standings:', err)
     }
   }, [])
 
@@ -93,8 +96,6 @@ export function useContestData() {
     leaderboard,
     loading,
     error,
-    activeFilter,
-    setActiveFilter,
     handleRegister,
     fetchLeaderboard,
   }

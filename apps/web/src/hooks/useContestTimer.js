@@ -30,20 +30,9 @@ const decompose = (totalSec) => {
  *
  * @param {string|null} endTime   - ISO 8601 datetime string for contest end
  * @param {Function}    onExpire  - Callback invoked exactly once when timer hits 0
- *
- * @returns {{
- *   hours: number,
- *   minutes: number,
- *   seconds: number,
- *   totalSeconds: number,
- *   isExpired: boolean,
- *   isWarning: boolean,
- *   isCritical: boolean,
- *   formatted: string,
- * }}
  */
 export function useContestTimer(endTime, onExpire) {
-  // Compute initial remaining seconds
+  // Compute remaining seconds helper
   const computeRemaining = useCallback(() => {
     if (!endTime) return 0
     const diff = new Date(endTime).getTime() - Date.now()
@@ -51,7 +40,10 @@ export function useContestTimer(endTime, onExpire) {
   }, [endTime])
 
   const [totalSeconds, setTotalSeconds] = useState(computeRemaining)
-  const [isExpired, setIsExpired] = useState(() => computeRemaining() <= 0)
+  const [isExpired, setIsExpired] = useState(() => {
+    const init = computeRemaining()
+    return init <= 0
+  })
 
   // Stable ref for the onExpire callback to avoid re-creating intervals
   const onExpireRef = useRef(onExpire)
@@ -62,38 +54,40 @@ export function useContestTimer(endTime, onExpire) {
   // Track whether we've already fired the expiry callback
   const hasFiredRef = useRef(false)
 
-  // Reset when endTime changes
+  // Combined tick interval & initial setter (eliminates race condition)
   useEffect(() => {
-    const remaining = computeRemaining()
-    setTotalSeconds(remaining)
-    setIsExpired(remaining <= 0)
-    hasFiredRef.current = remaining <= 0
-  }, [computeRemaining])
-
-  // Core tick interval
-  useEffect(() => {
-    if (!endTime || isExpired) return
+    if (!endTime) {
+      setTotalSeconds(0)
+      setIsExpired(true)
+      hasFiredRef.current = true
+      return
+    }
 
     const tick = () => {
       const remaining = computeRemaining()
       setTotalSeconds(remaining)
 
-      if (remaining <= 0 && !hasFiredRef.current) {
-        hasFiredRef.current = true
+      if (remaining <= 0) {
         setIsExpired(true)
-        // Fire the expiry callback exactly once
-        if (typeof onExpireRef.current === 'function') {
-          onExpireRef.current()
+        if (!hasFiredRef.current) {
+          hasFiredRef.current = true
+          // Fire the expiry callback exactly once
+          if (typeof onExpireRef.current === 'function') {
+            onExpireRef.current()
+          }
         }
+      } else {
+        setIsExpired(false)
+        hasFiredRef.current = false
       }
     }
 
-    // Tick immediately on mount, then every 1s
+    // Tick immediately on mount or update, then every 1s
     tick()
     const intervalId = setInterval(tick, 1000)
 
     return () => clearInterval(intervalId)
-  }, [endTime, isExpired, computeRemaining])
+  }, [endTime, computeRemaining])
 
   // Derived state
   const { hours, minutes, seconds } = decompose(totalSeconds)

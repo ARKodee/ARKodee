@@ -17,9 +17,11 @@ export const getContestsList = async (filterType) => {
  * @param {string|number} contestId - The contest ID
  * @returns {Promise<Object>} Registration confirmation
  */
-export const registerForContest = async (contestId) => {
+export const registerForContest = async (contestId, accessCode = '') => {
+  const payload = accessCode ? { access_code: accessCode } : {}
   return apiClient(`/contests/${contestId}/register/`, {
     method: 'POST',
+    body: JSON.stringify(payload),
   })
 }
 
@@ -30,6 +32,16 @@ export const registerForContest = async (contestId) => {
  */
 export const getContestLeaderboard = async (contestId) => {
   return apiClient(`/contests/${contestId}/leaderboard/`, {
+    method: 'GET',
+  })
+}
+
+/**
+ * Fetch global competitive standings (top ELO ratings)
+ * @returns {Promise<Array>} List of global rankings
+ */
+export const getGlobalLeaderboard = async () => {
+  return apiClient('/leaderboard/global/', {
     method: 'GET',
   })
 }
@@ -52,10 +64,14 @@ export const getContestDetails = async (slug) => {
  * @param {{ language: string, code: string }} payload - Submission data
  * @returns {Promise<Object>} Submission result with verdict
  */
-export const submitContestSolution = async (contestId, problemId, payload) => {
-  return apiClient(`/contests/${contestId}/problems/${problemId}/submit/`, {
+export const submitContestSolution = async (contestSlug, problemSlug, { language, code }) => {
+  return apiClient(`/problems/${problemSlug}/submit/`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      code,
+      language,
+      contest_slug: contestSlug,
+    }),
   })
 }
 
@@ -70,5 +86,16 @@ export const runContestCode = async (contestId, problemId, payload) => {
   return apiClient(`/contests/${contestId}/problems/${problemId}/run/`, {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Start a virtual practice session for an ended contest
+ * @param {string} slug - Contest slug
+ * @returns {Promise<Object>} Session details
+ */
+export const startVirtualContest = async (slug) => {
+  return apiClient(`/contests/${slug}/start-virtual/`, {
+    method: 'POST',
   })
 }
