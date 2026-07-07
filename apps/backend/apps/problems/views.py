@@ -98,11 +98,52 @@ def problem_detail(request, problem_slug):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+def split_assignments_by_comma(line):
+    """
+    Splits a comma-separated assignments line by commas, ignoring commas
+    that are nested inside brackets [], parentheses (), curly braces {}, or quotes.
+    """
+    parts = []
+    current = []
+    bracket_depth = 0
+    in_quotes = False
+    quote_char = None
+    
+    for char in line:
+        if char in ['"', "'"]:
+            if not in_quotes:
+                in_quotes = True
+                quote_char = char
+            elif char == quote_char:
+                in_quotes = False
+                quote_char = None
+            current.append(char)
+        elif not in_quotes and char in ['[', '(', '{']:
+            bracket_depth += 1
+            current.append(char)
+        elif not in_quotes and char in [']', ')', '}']:
+            bracket_depth = max(0, bracket_depth - 1)
+            current.append(char)
+        elif char == ',' and bracket_depth == 0 and not in_quotes:
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+            
+    if current:
+        parts.append("".join(current).strip())
+    return [p for p in parts if p]
+
+
 def format_input_for_sandbox(raw_input):
     if not raw_input:
         return ""
         
-    lines = raw_input.strip().splitlines()
+    raw_lines = raw_input.strip().splitlines()
+    lines = []
+    for rl in raw_lines:
+        lines.extend(split_assignments_by_comma(rl))
+        
     formatted_parts = []
     
     # Check if this looks like a variable assignment input block (LeetCode-style)
@@ -256,7 +297,7 @@ def generate_java_driver(func_name, params, ret_type):
             java_read_lines.append(f"String {p_name} = sc.next();")
             call_args.append(p_name)
         elif p_type_norm in ["bool", "boolean"]:
-            java_read_lines.append(f"boolean {p_name} = sc.nextBoolean();")
+            java_read_lines.append(f"boolean {p_name} = sc.next().equals(\"1\");")
             call_args.append(p_name)
         elif p_type_norm in ["float", "double"]:
             java_read_lines.append(f"double {p_name} = sc.nextDouble();")
@@ -876,12 +917,28 @@ def submit_code(request, problem_slug):
         total_test_cases=total_count,
     )
     
+    # Strip testcase inputs/outputs for contest submissions to prevent inspecting hidden testcases
+    if contest_obj is not None:
+        stripped_results = []
+        for r in results[:3]:
+            stripped_r = {
+                "passed": r.get("passed", False),
+                "verdict": r.get("verdict", ""),
+            }
+            # Only keep error log if it is a compile error or runtime exception (no input/expected mismatch details)
+            if r.get("verdict") in ["CE", "RE"]:
+                stripped_r["error"] = r.get("error", "")
+            stripped_results.append(stripped_r)
+        response_results = stripped_results
+    else:
+        response_results = results[:3]
+
     return Response({
         "submission_id": str(submission.id),
         "verdict": formatted_verdict,
         "passed_count": passed_count,
         "total_count": total_count,
-        "results": results[:3] # Send first 3 results to frontend for feedback
+        "results": response_results
     }, status=status.HTTP_200_OK)
 
 

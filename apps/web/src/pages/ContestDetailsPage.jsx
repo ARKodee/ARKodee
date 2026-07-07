@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Trophy,
 } from 'lucide-react'
-import { getContestDetails, startVirtualContest } from '../lib/contests'
+import { getContestDetails, startVirtualContest, getContestLeaderboard } from '../lib/contests'
+import { Leaderboard } from '../components/contests/Leaderboard'
 
 /**
  * Format an ISO date string for display
@@ -61,6 +62,28 @@ export function ContestDetailsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [virtualLoading, setVirtualLoading] = useState(false)
+  const [leaderboard, setLeaderboard] = useState([])
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('problems')
+
+  useEffect(() => {
+    if (activeTab === 'standings' && leaderboard.length === 0) {
+      let cancelled = false
+      const fetchLeaderboard = async () => {
+        setLeaderboardLoading(true)
+        try {
+          const data = await getContestLeaderboard(slug)
+          if (!cancelled) setLeaderboard(data || [])
+        } catch (err) {
+          console.warn('Failed to load standings:', err)
+        } finally {
+          if (!cancelled) setLeaderboardLoading(false)
+        }
+      }
+      fetchLeaderboard()
+      return () => { cancelled = true }
+    }
+  }, [activeTab, slug, leaderboard.length])
 
   useEffect(() => {
     let cancelled = false
@@ -257,66 +280,108 @@ export function ContestDetailsPage() {
               </div>
             )}
 
-            <div className="rounded-xl border border-zinc-800/80 bg-[#111113]/60 backdrop-blur-sm overflow-hidden sticky top-20">
-              {/* Problem set header */}
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800/60 bg-[#0e0e11]/80">
-                <Hash className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-sm font-semibold text-zinc-200">
+            {timeInfo.status === 'ended' && (
+              <div className="flex gap-2 mb-4 p-1 rounded-xl bg-[#111113]/60 border border-zinc-800/60 backdrop-blur-sm">
+                <button
+                  onClick={() => setActiveTab('problems')}
+                  className={`flex-grow py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                    activeTab === 'problems'
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.08)]'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
                   Problems
-                  <span className="ml-2 text-xs font-normal text-zinc-600">
-                    {problems.length} {problems.length === 1 ? 'problem' : 'problems'}
-                  </span>
-                </h3>
+                </button>
+                <button
+                  onClick={() => setActiveTab('standings')}
+                  className={`flex-grow py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                    activeTab === 'standings'
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.08)]'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  Standings
+                </button>
               </div>
+            )}
 
-              {/* Column headers */}
-              <div className="grid grid-cols-[40px_1fr_64px] gap-2 px-4 py-2.5 text-[11px] font-medium text-zinc-600 uppercase tracking-wider border-b border-zinc-800/40">
-                <span>#</span>
-                <span>Title</span>
-                <span className="text-right">Points</span>
-              </div>
-
-              {/* Problem rows */}
-              {problems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
-                  <Hash className="w-8 h-8 mb-2 text-zinc-700" />
-                  <p className="text-xs">Problems are only visible during active matches</p>
-                </div>
-              ) : (
-                problems.map((problem, idx) => (
-                  <div
-                    key={problem.id || idx}
-                    onClick={() => {
-                      if (timeInfo.status === 'ended') {
-                        // For ended contests, clicking a problem takes them directly to standard practice workspace or virtual arena
-                        navigate(`/practice/problems/${problem.slug}`)
-                      }
-                    }}
-                    className={`group grid grid-cols-[40px_1fr_64px] gap-2 items-center px-4 py-3 border-b border-zinc-800/30 last:border-b-0 transition-all duration-150 ${timeInfo.status === 'ended' ? 'cursor-pointer hover:bg-indigo-500/[0.04]' : 'cursor-not-allowed opacity-50'}`}
-                  >
-                    {/* Index */}
-                    <span className="text-xs font-semibold text-zinc-600 group-hover:text-indigo-400 transition-colors">
-                      {problem.order_index != null ? String.fromCharCode(65 + problem.order_index) : String.fromCharCode(65 + idx)}
+            {activeTab === 'problems' ? (
+              <div className="rounded-xl border border-zinc-800/80 bg-[#111113]/60 backdrop-blur-sm overflow-hidden sticky top-20">
+                {/* Problem set header */}
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800/60 bg-[#0e0e11]/80">
+                  <Hash className="w-4 h-4 text-indigo-400" />
+                  <h3 className="text-sm font-semibold text-zinc-200">
+                    Problems
+                    <span className="ml-2 text-xs font-normal text-zinc-600">
+                      {problems.length} {problems.length === 1 ? 'problem' : 'problems'}
                     </span>
+                  </h3>
+                </div>
 
-                    {/* Title */}
-                    <div className="flex items-center gap-2 min-w-0">
-                      <p className="text-sm text-zinc-300 group-hover:text-white truncate transition-colors">
-                        {problem.title}
-                      </p>
-                      {timeInfo.status === 'ended' && (
-                        <ChevronRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0" />
-                      )}
-                    </div>
+                {/* Column headers */}
+                <div className="grid grid-cols-[40px_1fr_64px] gap-2 px-4 py-2.5 text-[11px] font-medium text-zinc-600 uppercase tracking-wider border-b border-zinc-800/40">
+                  <span>#</span>
+                  <span>Title</span>
+                  <span className="text-right">Points</span>
+                </div>
 
-                    {/* Points */}
-                    <p className="text-xs font-semibold text-emerald-400 text-right tabular-nums">
-                      {problem.points ?? '—'}
-                    </p>
+                {/* Problem rows */}
+                {problems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
+                    <Hash className="w-8 h-8 mb-2 text-zinc-700" />
+                    <p className="text-xs">Problems are only visible during active matches</p>
                   </div>
-                ))
-              )}
-            </div>
+                ) : (
+                  problems.map((problem, idx) => (
+                    <div
+                      key={problem.id || idx}
+                      onClick={() => {
+                        if (timeInfo.status === 'ended') {
+                          navigate(`/practice/problems/${problem.slug}`)
+                        }
+                      }}
+                      className={`group grid grid-cols-[40px_1fr_64px] gap-2 items-center px-4 py-3 border-b border-zinc-800/30 last:border-b-0 transition-all duration-150 ${timeInfo.status === 'ended' ? 'cursor-pointer hover:bg-indigo-500/[0.04]' : 'cursor-not-allowed opacity-50'}`}
+                    >
+                      <span className="text-xs font-semibold text-zinc-600 group-hover:text-indigo-400 transition-colors">
+                        {problem.order_index != null ? String.fromCharCode(65 + problem.order_index) : String.fromCharCode(65 + idx)}
+                      </span>
+
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="text-sm text-zinc-300 group-hover:text-white truncate transition-colors">
+                          {problem.title}
+                        </p>
+                        {timeInfo.status === 'ended' && (
+                          <ChevronRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0" />
+                        )}
+                      </div>
+
+                      <p className="text-xs font-semibold text-emerald-400 text-right tabular-nums">
+                        {problem.points ?? '—'}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="sticky top-20">
+                {leaderboardLoading ? (
+                  <div className="flex items-center justify-center py-20 bg-[#111113]/40 border border-zinc-800 rounded-2xl">
+                    <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+                  </div>
+                ) : (
+                  <Leaderboard
+                    leaderboard={leaderboard.map((entry) => ({
+                      username: entry.username,
+                      score: entry.total_score,
+                      penalty: entry.penalty_minutes,
+                      rank: entry.rank,
+                      elo_shift: entry.elo_change,
+                    }))}
+                    title="Contest Leaderboard"
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
