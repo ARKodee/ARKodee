@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from rest_framework.authtoken.models import Token
+from unittest.mock import patch
 
 
 class AuthTests(APITestCase):
@@ -10,6 +10,7 @@ class AuthTests(APITestCase):
         self.check_email_url = reverse("auth:check-email")
         self.register_url = reverse("auth:register")
         self.login_url = reverse("auth:login")
+        self.google_login_url = reverse("auth:google-login")
         self.logout_url = reverse("auth:logout")
         self.profile_url = reverse("auth:profile")
         
@@ -80,3 +81,53 @@ class AuthTests(APITestCase):
         self.client.credentials()  # clear credentials
         response_profile_after = self.client.get(self.profile_url)
         self.assertEqual(response_profile_after.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("apps.auth.views.id_token.verify_oauth2_token")
+    @patch("apps.auth.views.settings.GOOGLE_OAUTH_CLIENT_ID", "test-google-client-id")
+    def test_google_login_creates_new_user(self, mock_verify):
+        mock_verify.return_value = {
+            "email": "googleuser@example.com",
+            "email_verified": True,
+            "name": "Google User",
+        }
+
+        response = self.client.post(self.google_login_url, {"id_token": "valid-token"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("token", response.data)
+        self.assertEqual(response.data["user"]["email"], "googleuser@example.com")
+        self.assertTrue(User.objects.filter(email="googleuser@example.com").exists())
+
+    @patch("apps.auth.views.id_token.verify_oauth2_token")
+    @patch("apps.auth.views.settings.GOOGLE_OAUTH_CLIENT_ID", "test-google-client-id")
+    def test_google_login_existing_user(self, mock_verify):
+        user = User.objects.create_user(
+            username="existing@example.com",
+            email="existing@example.com",
+            password="strongpassword123",
+            first_name="Existing",
+            last_name="User",
+        )
+
+        mock_verify.return_value = {
+            "email": "existing@example.com",
+            "email_verified": True,
+            "name": "Existing User",
+        }
+
+        response = self.client.post(self.google_login_url, {"id_token": "valid-token"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("token", response.data)
+        self.assertEqual(response.data["user"]["email"], "existing@example.com")
+        self.assertEqual(User.objects.filter(email="existing@example.com").count(), 1)
+        self.assertEqual(response.data["user"]["fullName"], "Existing User")
+
+    @patch("apps.auth.views.id_token.verify_oauth2_token")
+    @patch("apps.auth.views.settings.GOOGLE_OAUTH_CLIENT_ID", "test-google-client-id")
+    def test_google_login_invalid_token(self, mock_verify):
+        mock_verify.side_effect = ValueError("invalid")
+
+        response = self.client.post(self.google_login_url, {"id_token": "bad-token"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

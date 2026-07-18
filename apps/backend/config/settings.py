@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import sys
 import dj_database_url
 from dotenv import load_dotenv
 
@@ -62,19 +63,31 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-# Database Configuration (Production-Grade, 12-Factor App)
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    from django.core.exceptions import ImproperlyConfigured
-    raise ImproperlyConfigured("DATABASE_URL environment variable is missing! A valid PostgreSQL URL is required.")
+# Database Configuration
+RUNNING_TESTS = "test" in sys.argv
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=DATABASE_URL,
-        conn_max_age=600,
-        ssl_require=True,
-    )
-}
+if RUNNING_TESTS:
+    # Use local SQLite for deterministic tests and to avoid remote DB side effects.
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "test_db.sqlite3",
+        }
+    }
+else:
+    # Production-Grade, 12-Factor App
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("DATABASE_URL environment variable is missing! A valid PostgreSQL URL is required.")
+
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=True,
+        )
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -110,6 +123,9 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ],
 }
+
+# Required for verifying Google Sign-In tokens on the backend
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 
 # MongoDB Configuration
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
