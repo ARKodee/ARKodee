@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   LayoutGrid,
   Shield,
+  AlertTriangle,
 } from 'lucide-react'
 import { getContestDetails, submitContestSolution } from '../lib/contests'
 import { getProblemDetails } from '../lib/problems'
@@ -201,6 +202,7 @@ export function ContestArenaPage() {
     return localStorage.getItem('preferredLanguage') || 'python'
   })
   const [consoleOpen, setConsoleOpen] = useState(true)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
 
   // ─── Active Code State ────────────────────────────────────────────────
   const [code, setCode] = useState('')
@@ -288,11 +290,53 @@ export function ContestArenaPage() {
       const virtualEndTime = parseInt(startTimeStr, 10) + durationMs
       return new Date(virtualEndTime).toISOString()
     }
+    
+    // Sync countdown timer with server time to adjust for any client-server clock drift
+    if (contest.server_time) {
+      const clientNow = Date.now()
+      const serverNow = new Date(contest.server_time).getTime()
+      const driftOffset = serverNow - clientNow
+      const adjustedEndTime = new Date(contest.end_time).getTime() - driftOffset
+      return new Date(adjustedEndTime).toISOString()
+    }
     return contest.end_time
   }
 
   const computedEndTime = getTargetEndTime()
   const timer = useContestTimer(computedEndTime, handleTimerExpire)
+
+  // Block back/forward navigation using history popstate for active virtual contests
+  useEffect(() => {
+    if (!isVirtual || timer.isExpired) return
+
+    const handlePopState = (e) => {
+      // Re-push a dummy state to block the browser from actually moving back
+      window.history.pushState(null, '', window.location.href)
+      setShowExitConfirm(true)
+    }
+
+    // Push state so we have a local history record to intercept
+    window.history.pushState(null, '', window.location.href)
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [isVirtual, timer.isExpired])
+
+  // Reset virtual contest helper to wipe timer and drafted solutions
+  const resetVirtualContestData = useCallback((contestSlug, contestProblems) => {
+    if (!contestSlug) return
+    localStorage.removeItem(`virtual_start_${contestSlug}`)
+    const languagesList = ['python', 'cpp', 'java', 'javascript']
+    if (contestProblems && Array.isArray(contestProblems)) {
+      contestProblems.forEach((p) => {
+        languagesList.forEach((lang) => {
+          localStorage.removeItem(`contest_draft_${contestSlug}_${p.slug}_${lang}`)
+        })
+      })
+    }
+  }, [])
 
   // Exit prompt handler for virtual mode
   useEffect(() => {
@@ -473,7 +517,13 @@ export function ContestArenaPage() {
       <header className="shrink-0 h-12 flex items-center justify-between px-4 border-b border-zinc-900 bg-[#0a0a0d] z-20">
         <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={() => navigate('/contests')}
+            onClick={() => {
+              if (isVirtual && !timer.isExpired) {
+                setShowExitConfirm(true)
+              } else {
+                navigate('/contests')
+              }
+            }}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-700/40 transition-all duration-200"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -820,6 +870,52 @@ export function ContestArenaPage() {
           )}
         </div>
       </div>
+
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020205]/85 backdrop-blur-md p-4 font-mono">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0e0e12]/95 p-6 shadow-2xl relative overflow-hidden">
+            {/* Decorative corner glow */}
+            <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-rose-600/10 border border-rose-500/20 text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Exit Virtual Simulation?
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Exiting will **terminate your active simulation session**, reset the timer, and **permanently delete** your drafted solutions for this contest. 
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-2 italic">
+                  Note: If you want to keep your progress and return later, close the browser tab directly without clicking exit.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 bg-[#1e1e24] hover:bg-zinc-800 transition-all border border-zinc-700/40 cursor-pointer"
+              >
+                Stay and Code
+              </button>
+              <button
+                onClick={() => {
+                  resetVirtualContestData(contest?.slug, problems)
+                  setShowExitConfirm(false)
+                  navigate('/contests')
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition-all shadow-lg cursor-pointer"
+              >
+                Confirm Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
