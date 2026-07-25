@@ -7,6 +7,8 @@ import { useAuth } from '../store/AuthContext'
 import { Dashboard } from '../pages/Dashboard'
 import { PracticeDashboard } from '../pages/PracticeDashboard'
 import { ProblemWorkspace } from '../pages/ProblemWorkspace'
+import { MatchmakingArena } from '../pages/MatchmakingArena'
+import { Arena1v1Page } from '../pages/Arena1v1Page'
 
 function RequireAuth() {
   const { isAuthenticated } = useAuth()
@@ -43,6 +45,11 @@ export function AppRoutes() {
         <Route path="/contests" element={<ContestsDashboard />} />
         <Route path="/contests/:slug" element={<ContestDetailsPage />} />
         <Route path="/contests/:slug/arena" element={<ContestArenaPage />} />
+        <Route path="/matchmaking" element={<MatchmakingArena />} />
+        <Route path="/arena/:matchId" element={<Arena1v1Page />} />
+        <Route path="/arena" element={<Arena1v1Page />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/practice" element={<PracticeDashboard />} />
         <Route path="/practice/problems/:slug" element={<ProblemWorkspace />} />
       </Route>
