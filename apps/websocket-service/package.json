@@ -1,0 +1,19 @@
+{
+  "name": "websocket-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch --experimental-specifier-resolution=node src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "redis": "^4.6.13",
+    "socket.io": "^4.8.3",
+    "ws": "^8.16.0"
+  }
+}
