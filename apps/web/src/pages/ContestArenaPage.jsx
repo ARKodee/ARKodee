@@ -1,5 +1,5 @@
 // apps/web/src/pages/ContestArenaPage.jsx
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import ReactMarkdown from 'react-markdown'
@@ -9,7 +9,6 @@ import {
   ChevronDown,
   Trophy,
   FileText,
-  Play,
   Send,
   Check,
   X,
@@ -17,22 +16,26 @@ import {
   Loader2,
   AlertCircle,
   Terminal,
-  FlaskConical,
   ChevronUp,
   Copy,
   CheckCheck,
   Circle,
   CircleDot,
   CheckCircle2,
+  LayoutGrid,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react'
-import { getContestDetails, getContestLeaderboard, submitContestSolution, runContestCode } from '../lib/contests'
+import { getContestDetails, submitContestSolution } from '../lib/contests'
+import { getProblemDetails } from '../lib/problems'
 import { useContestTimer } from '../hooks/useContestTimer'
 
 // ─── Language Configuration ────────────────────────────────────────────────────
 const LANGUAGES = [
   { id: 'python', label: 'Python 3', monaco: 'python', template: '# Write your solution here\n\n' },
-  { id: 'cpp', label: 'C++ 17', monaco: 'cpp', template: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    \n    return 0;\n}\n' },
-  { id: 'java', label: 'Java', monaco: 'java', template: 'import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        \n    }\n}\n' },
+  { id: 'cpp', label: 'C++ 17', monaco: 'cpp', template: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    return 0;\n}\n' },
+  { id: 'java', label: 'Java', monaco: 'java', template: 'import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n        Scanner sc = new Scanner(System.in);\n    }\n}\n' },
+  { id: 'javascript', label: 'JavaScript', monaco: 'javascript', template: '// Write your solution here\n\n' },
 ]
 
 // ─── Difficulty Color Map ──────────────────────────────────────────────────────
@@ -182,84 +185,31 @@ function ProblemStatusIcon({ status }) {
   return <Circle className="w-4 h-4 text-zinc-700" />
 }
 
-// ─── Compact Arena Leaderboard ─────────────────────────────────────────────────
-function ArenaLeaderboard({ leaderboard, loading }) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
-      </div>
-    )
-  }
-
-  if (!leaderboard || leaderboard.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
-        <Trophy className="w-8 h-8 mb-2 text-zinc-700" />
-        <p className="text-xs">No standings yet</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="overflow-y-auto flex-1">
-      {/* Column headers */}
-      <div className="grid grid-cols-[32px_1fr_52px_52px] gap-1.5 px-3 py-2 text-[10px] font-medium text-zinc-600 uppercase tracking-wider border-b border-zinc-800/40 sticky top-0 bg-[#0e0e11]">
-        <span>#</span>
-        <span>User</span>
-        <span className="text-right">Score</span>
-        <span className="text-right">Pen.</span>
-      </div>
-
-      {leaderboard.slice(0, 50).map((entry, idx) => {
-        const rank = entry.rank || idx + 1
-        return (
-          <div
-            key={entry.username || idx}
-            className="grid grid-cols-[32px_1fr_52px_52px] gap-1.5 items-center px-3 py-2 text-xs border-b border-zinc-800/20 last:border-b-0 hover:bg-indigo-500/[0.03] transition-colors"
-          >
-            <span className={`font-semibold tabular-nums ${rank <= 3 ? 'text-amber-400' : 'text-zinc-600'}`}>{rank}</span>
-            <span className="text-zinc-400 truncate">{entry.username}</span>
-            <span className="text-right text-emerald-400 font-semibold tabular-nums">{entry.score ?? 0}</span>
-            <span className="text-right text-zinc-500 tabular-nums">{entry.penalty ?? 0}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// MAIN COMPONENT — ContestArenaPage
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 export function ContestArenaPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const isVirtual = new URLSearchParams(window.location.search).get('virtual') === 'true'
 
   // ─── Core Data State ───────────────────────────────────────────────────
   const [contest, setContest] = useState(null)
   const [problems, setProblems] = useState([])
-  const [leaderboard, setLeaderboard] = useState([])
   const [loading, setLoading] = useState(true)
-  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
   const [error, setError] = useState(null)
 
   // ─── Workspace State ───────────────────────────────────────────────────
-  const [activeProblemIdx, setActiveProblemIdx] = useState(0)
-  const [activeLeftTab, setActiveLeftTab] = useState('problems') // 'problems' | 'standings'
-  const [language, setLanguage] = useState('python')
+  const [activeProblemIdx, setActiveProblemIdx] = useState(null)
+  const [language, setLanguage] = useState(() => {
+    return localStorage.getItem('preferredLanguage') || 'python'
+  })
   const [consoleOpen, setConsoleOpen] = useState(true)
-  const [consoleTab, setConsoleTab] = useState('testcases') // 'testcases' | 'output'
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
 
-  // ─── Editor Code Buffers (per-problem, per-language) ───────────────────
-  const [codeBuffers, setCodeBuffers] = useState({})
+  // ─── Active Code State ────────────────────────────────────────────────
+  const [code, setCode] = useState('')
 
   // ─── Execution State ───────────────────────────────────────────────────
   const [runResult, setRunResult] = useState(null)
   const [submitting, setSubmitting] = useState(false)
-  const [running, setRunning] = useState(false)
-  const [customInput, setCustomInput] = useState('')
 
   // ─── Problem Solve Status Tracking ─────────────────────────────────────
   const [problemStatuses, setProblemStatuses] = useState({})
@@ -269,17 +219,36 @@ export function ContestArenaPage() {
 
   const editorRef = useRef(null)
 
-  // ─── Derived Values ────────────────────────────────────────────────────
-  const activeProblem = problems[activeProblemIdx] || null
+  // Derived values
+  const activeProblem = activeProblemIdx !== null ? problems[activeProblemIdx] || null : null
   const langConfig = LANGUAGES.find((l) => l.id === language) || LANGUAGES[0]
 
-  // Build a unique buffer key for current problem + language
-  const bufferKey = activeProblem ? `${activeProblem.id || activeProblemIdx}__${language}` : null
+  // Sync / Load code draft from localStorage
+  useEffect(() => {
+    if (!contest || activeProblemIdx === null) return
+    const currentProb = problems[activeProblemIdx]
+    if (!currentProb) return
 
-  // Get current code from buffer, or initialize with template
-  const currentCode = bufferKey
-    ? (codeBuffers[bufferKey] ?? langConfig.template)
-    : langConfig.template
+    const draftKey = `contest_draft_${contest.slug}_${currentProb.slug}_${language}`
+    const savedDraft = localStorage.getItem(draftKey)
+
+    if (savedDraft !== null) {
+      setCode(savedDraft)
+    } else {
+      const template =
+        currentProb.boilerplate?.[language] ||
+        LANGUAGES.find((l) => l.id === language)?.template ||
+        '# Write your solution here\n'
+      setCode(template)
+    }
+  }, [activeProblemIdx, language, contest, problems])
+
+  const handleLanguageChange = useCallback((newLang) => {
+    setLanguage(newLang)
+    localStorage.setItem('preferredLanguage', newLang)
+  }, [])
+
+  const currentCode = code
 
   // ─── Toast Helper ──────────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'info', duration = 4000) => {
@@ -289,7 +258,6 @@ export function ContestArenaPage() {
 
   // ─── Timer Expiry Handler ──────────────────────────────────────────────
   const handleTimerExpire = useCallback(async () => {
-    // Capture current editor buffer
     const code = editorRef.current?.getValue?.() || currentCode
 
     if (activeProblem && code.trim()) {
@@ -299,21 +267,90 @@ export function ContestArenaPage() {
           activeProblem.id || activeProblem.slug,
           { language, code }
         )
-      } catch {
-        // Silent fail — we still want to redirect
-      }
+      } catch { /* noop */ }
     }
 
-    showToast("⏰ Time's up! Your solution has been auto-submitted.", 'warning', 5000)
-
-    // Redirect after short delay
+    showToast("⏰ Match session ended! Standings will update shortly.", 'warning', 5000)
     setTimeout(() => {
       navigate('/contests', { replace: true })
-    }, 2500)
+    }, 3000)
   }, [activeProblem, contest, slug, language, currentCode, navigate, showToast])
 
-  // ─── Timer Hook ────────────────────────────────────────────────────────
-  const timer = useContestTimer(contest?.end_time || null, handleTimerExpire)
+  // Resolve absolute countdown end target dynamically (local simulation for Virtual practice)
+  const getTargetEndTime = () => {
+    if (!contest) return null
+    if (isVirtual) {
+      const durationMs = new Date(contest.end_time).getTime() - new Date(contest.start_time).getTime()
+      const storageKey = `virtual_start_${contest.slug}`
+      let startTimeStr = localStorage.getItem(storageKey)
+      if (!startTimeStr) {
+        startTimeStr = String(Date.now())
+        localStorage.setItem(storageKey, startTimeStr)
+      }
+      const virtualEndTime = parseInt(startTimeStr, 10) + durationMs
+      return new Date(virtualEndTime).toISOString()
+    }
+    
+    // Sync countdown timer with server time to adjust for any client-server clock drift
+    if (contest.server_time) {
+      const clientNow = Date.now()
+      const serverNow = new Date(contest.server_time).getTime()
+      const driftOffset = serverNow - clientNow
+      const adjustedEndTime = new Date(contest.end_time).getTime() - driftOffset
+      return new Date(adjustedEndTime).toISOString()
+    }
+    return contest.end_time
+  }
+
+  const computedEndTime = getTargetEndTime()
+  const timer = useContestTimer(computedEndTime, handleTimerExpire)
+
+  // Block back/forward navigation using history popstate for active virtual contests
+  useEffect(() => {
+    if (!isVirtual || timer.isExpired) return
+
+    const handlePopState = (e) => {
+      // Re-push a dummy state to block the browser from actually moving back
+      window.history.pushState(null, '', window.location.href)
+      setShowExitConfirm(true)
+    }
+
+    // Push state so we have a local history record to intercept
+    window.history.pushState(null, '', window.location.href)
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [isVirtual, timer.isExpired])
+
+  // Reset virtual contest helper to wipe timer and drafted solutions
+  const resetVirtualContestData = useCallback((contestSlug, contestProblems) => {
+    if (!contestSlug) return
+    localStorage.removeItem(`virtual_start_${contestSlug}`)
+    const languagesList = ['python', 'cpp', 'java', 'javascript']
+    if (contestProblems && Array.isArray(contestProblems)) {
+      contestProblems.forEach((p) => {
+        languagesList.forEach((lang) => {
+          localStorage.removeItem(`contest_draft_${contestSlug}_${p.slug}_${lang}`)
+        })
+      })
+    }
+  }, [])
+
+  // Exit prompt handler for virtual mode
+  useEffect(() => {
+    if (!isVirtual) return
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault()
+      e.returnValue = 'Are you sure you want to exit the virtual contest? Timer continues ticking.'
+      return e.returnValue
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isVirtual])
 
   // ─── Fetch Contest Data ────────────────────────────────────────────────
   useEffect(() => {
@@ -327,11 +364,30 @@ export function ContestArenaPage() {
         const data = await getContestDetails(slug)
         if (cancelled) return
 
+        const runtimeStatus = data.status_label || 'ended'
+
+        // Guard: Prevent entering upcoming matches
+        if (runtimeStatus === 'upcoming') {
+          navigate(`/contests/${slug}`)
+          return
+        }
+
+        // Guard: Live contest requires registration
+        if (runtimeStatus === 'live' && !data.is_registered) {
+          navigate(`/contests/${slug}`)
+          return
+        }
+
+        // Guard: Virtual mode is only for past contests
+        if (isVirtual && runtimeStatus !== 'past' && runtimeStatus !== 'ended') {
+          navigate(`/contests/${slug}`)
+          return
+        }
+
         setContest(data)
         const contestProblems = data.problems || []
         setProblems(contestProblems)
 
-        // Initialize status tracking
         const statuses = {}
         contestProblems.forEach((p) => {
           statuses[p.id || p.slug] = p.user_status || 'untouched'
@@ -346,71 +402,30 @@ export function ContestArenaPage() {
 
     fetchData()
     return () => { cancelled = true }
-  }, [slug])
+  }, [slug, isVirtual, navigate])
 
-  // ─── Fetch Leaderboard ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!contest) return
-
-    let cancelled = false
-    const fetchLB = async () => {
-      setLeaderboardLoading(true)
-      try {
-        const data = await getContestLeaderboard(contest.id || slug)
-        if (!cancelled) setLeaderboard(data.results || data || [])
-      } catch {
-        // Non-critical — don't set error
-      } finally {
-        if (!cancelled) setLeaderboardLoading(false)
-      }
-    }
-
-    fetchLB()
-    // Refresh leaderboard every 60s during live contest
-    const interval = setInterval(fetchLB, 60000)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [contest, slug])
-
-  // ─── Code Buffer Management ────────────────────────────────────────────
   const handleCodeChange = useCallback((value) => {
-    if (!bufferKey) return
-    setCodeBuffers((prev) => ({ ...prev, [bufferKey]: value || '' }))
-  }, [bufferKey])
+    setCode(value || '')
+    if (!contest || activeProblemIdx === null) return
+    const currentProb = problems[activeProblemIdx]
+    if (!currentProb) return
 
-  // ─── Editor Mount ──────────────────────────────────────────────────────
+    const draftKey = `contest_draft_${contest.slug}_${currentProb.slug}_${language}`
+    localStorage.setItem(draftKey, value || '')
+  }, [contest, activeProblemIdx, problems, language])
+
   const handleEditorMount = useCallback((editor) => {
     editorRef.current = editor
   }, [])
 
-  // ─── Run Code ──────────────────────────────────────────────────────────
-  const handleRunCode = useCallback(async () => {
-    if (!activeProblem || timer.isExpired) return
-    setRunning(true)
-    setConsoleTab('output')
-    setConsoleOpen(true)
-    setRunResult(null)
-
-    try {
-      const code = editorRef.current?.getValue?.() || currentCode
-      const result = await runContestCode(
-        contest?.slug || slug,
-        activeProblem.id || activeProblem.slug,
-        { language, code, input: customInput || undefined }
-      )
-      setRunResult(result)
-    } catch (err) {
-      setRunResult({ error: true, stderr: err.message || 'Execution failed.' })
-    } finally {
-      setRunning(false)
-    }
-  }, [activeProblem, timer.isExpired, currentCode, contest, slug, language, customInput])
-
-  // ─── Submit Code ───────────────────────────────────────────────────────
+  // ─── Non-blocking Queued Submissions ────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!activeProblem || timer.isExpired) return
     setSubmitting(true)
-    setConsoleTab('output')
     setConsoleOpen(true)
+
+    showToast('Submitted — Queued for Evaluation.', 'info')
+    const problemKey = activeProblem.id || activeProblem.slug
 
     try {
       const code = editorRef.current?.getValue?.() || currentCode
@@ -419,11 +434,10 @@ export function ContestArenaPage() {
         activeProblem.id || activeProblem.slug,
         { language, code }
       )
+
       setRunResult(result)
 
-      // Update problem status
-      const problemKey = activeProblem.id || activeProblem.slug
-      if (result.verdict === 'accepted' || result.status === 'accepted') {
+      if (result.verdict === 'accepted' || result.status === 'accepted' || result.verdict === 'AC') {
         setProblemStatuses((prev) => ({ ...prev, [problemKey]: 'solved' }))
         showToast('Accepted! Solution passed all test cases.', 'success')
       } else {
@@ -432,35 +446,47 @@ export function ContestArenaPage() {
       }
     } catch (err) {
       setRunResult({ error: true, stderr: err.message || 'Submission failed.' })
-      showToast('Submission failed. Please try again.', 'error')
+      setProblemStatuses((prev) => ({ ...prev, [problemKey]: 'attempted' }))
+      showToast('Evaluation updated with error.', 'error')
     } finally {
       setSubmitting(false)
     }
   }, [activeProblem, timer.isExpired, currentCode, contest, slug, language, showToast])
 
-  // ─── Problem Selection ─────────────────────────────────────────────────
-  const handleSelectProblem = useCallback((idx) => {
+  // Dynamically load detailed description, constraints, and samples on problem selection
+  const handleSelectProblem = useCallback(async (idx) => {
     setActiveProblemIdx(idx)
     setRunResult(null)
-    setConsoleTab('testcases')
-  }, [])
 
-  // ─── Loading State ─────────────────────────────────────────────────────
+    const selected = problems[idx]
+    if (selected && !selected.description) {
+      try {
+        const details = await getProblemDetails(selected.slug)
+        setProblems((prev) => {
+          const next = [...prev]
+          next[idx] = { ...selected, ...details }
+          return next
+        })
+      } catch (err) {
+        console.warn('Failed to load problem details:', err)
+      }
+    }
+  }, [problems])
+
   if (loading) {
     return (
-      <div className="h-screen bg-[#0a0a0c] flex items-center justify-center">
+      <div className="h-screen bg-[#020617] flex items-center justify-center font-mono">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-7 h-7 text-indigo-400 animate-spin" />
-          <p className="text-xs text-zinc-500 font-medium">Loading arena…</p>
+          <p className="text-xs text-zinc-500 font-medium">Entering arena…</p>
         </div>
       </div>
     )
   }
 
-  // ─── Error State ───────────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="h-screen bg-[#0a0a0c] flex items-center justify-center">
+      <div className="h-screen bg-[#020617] flex items-center justify-center font-mono">
         <div className="text-center">
           <AlertCircle className="w-8 h-8 text-rose-400 mx-auto mb-3" />
           <p className="text-sm text-rose-400 font-medium">{error}</p>
@@ -475,16 +501,11 @@ export function ContestArenaPage() {
     )
   }
 
-  // ─── Sample I/O from active problem ────────────────────────────────────
   const sampleInputs = activeProblem?.sample_input || activeProblem?.examples?.map((e) => e.input) || []
   const sampleOutputs = activeProblem?.sample_output || activeProblem?.examples?.map((e) => e.output) || []
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // RENDER
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   return (
-    <div className="h-screen flex flex-col bg-[#0a0a0c] overflow-hidden">
-      {/* ─── Toast ──────────────────────────────────────────────────────── */}
+    <div className="h-screen flex flex-col bg-[#08080c] text-white font-mono overflow-hidden">
       <Toast
         message={toast.message}
         type={toast.type}
@@ -492,376 +513,409 @@ export function ContestArenaPage() {
         onDismiss={() => setToast((t) => ({ ...t, visible: false }))}
       />
 
-      {/* ═══ TOP HEADER RIBBON HUD ══════════════════════════════════════ */}
-      <header className="shrink-0 h-12 flex items-center justify-between px-4 border-b border-zinc-800/60 bg-[#0a0a0c]/90 backdrop-blur-md z-20">
-        {/* Left cluster */}
+      {/* TOP HEADER RIBBON HUD */}
+      <header className="shrink-0 h-12 flex items-center justify-between px-4 border-b border-zinc-900 bg-[#0a0a0d] z-20">
         <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={() => navigate('/contests')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-zinc-900/60 hover:bg-zinc-800/60 border border-zinc-800/60 hover:border-zinc-700 transition-all duration-200"
+            onClick={() => {
+              if (isVirtual && !timer.isExpired) {
+                setShowExitConfirm(true)
+              } else {
+                navigate('/contests')
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-700/40 transition-all duration-200"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Exit</span>
+            <span>Exit</span>
           </button>
 
-          <div className="h-4 w-px bg-zinc-800/60" />
+          <div className="h-4 w-px bg-zinc-800" />
 
-          <h1 className="text-[13px] font-bold text-zinc-200 truncate max-w-[280px]">
-            {contest?.title || 'Contest Arena'}
+          <h1 className="text-xs font-bold text-zinc-300 truncate max-w-[200px]">
+            {contest?.title}
           </h1>
+
+          {/* Dynamic Switcher in Top Bar when a problem is selected */}
+          {activeProblemIdx !== null && (
+            <div className="hidden md:flex items-center gap-1 bg-[#121216] border border-zinc-800/80 p-0.5 rounded-lg ml-2">
+              <button
+                onClick={() => setActiveProblemIdx(null)}
+                className="px-2.5 py-1 rounded-md text-[10px] font-bold text-zinc-500 hover:text-zinc-300 transition-all"
+              >
+                Overview
+              </button>
+              {problems.map((p, idx) => (
+                <button
+                  key={p.id || idx}
+                  onClick={() => handleSelectProblem(idx)}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                    idx === activeProblemIdx
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {p.index || String.fromCharCode(65 + idx)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Right cluster */}
+        {/* Right HUD info */}
         <div className="flex items-center gap-3">
-          <LanguageSelect
-            selectedId={language}
-            onChange={setLanguage}
-            disabled={timer.isExpired}
-          />
+          {activeProblemIdx !== null && (
+            <LanguageSelect
+              selectedId={language}
+              onChange={handleLanguageChange}
+              disabled={timer.isExpired}
+            />
+          )}
           <CountdownClock timer={timer} />
         </div>
       </header>
 
-      {/* ═══ MAIN SPLIT WORKSPACE ═══════════════════════════════════════ */}
+      {/* WORKSPACE AREA */}
       <div className="flex-1 flex min-h-0">
-
-        {/* ─── LEFT PANE (45%) ────────────────────────────────────────── */}
-        <div className="w-[45%] shrink-0 flex flex-col border-r border-zinc-800/60 min-h-0">
-          {/* Tab bar */}
-          <div className="shrink-0 flex border-b border-zinc-800/50 bg-[#0c0c0f]">
+        
+        {/* LEFT NAV PANEL (List of problems, points) */}
+        <div className="w-64 shrink-0 flex flex-col border-r border-zinc-800/60 bg-[#0a0a0d]/40 min-h-0">
+          <div className="shrink-0 p-3 border-b border-zinc-900 bg-[#0a0a0d]/80 flex items-center justify-between">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-500">Problem List</span>
             <button
-              onClick={() => setActiveLeftTab('problems')}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-all duration-200 border-b-2 ${
-                activeLeftTab === 'problems'
-                  ? 'text-indigo-400 border-indigo-500'
-                  : 'text-zinc-500 border-transparent hover:text-zinc-400'
-              }`}
+              onClick={() => setActiveProblemIdx(null)}
+              className={`p-1 rounded hover:bg-zinc-800/40 text-zinc-500 hover:text-zinc-300 transition-all ${activeProblemIdx === null ? 'text-indigo-400 bg-indigo-500/10' : ''}`}
+              title="Overview"
             >
-              <FileText className="w-3.5 h-3.5" />
-              Problems
-            </button>
-            <button
-              onClick={() => setActiveLeftTab('standings')}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-all duration-200 border-b-2 ${
-                activeLeftTab === 'standings'
-                  ? 'text-indigo-400 border-indigo-500'
-                  : 'text-zinc-500 border-transparent hover:text-zinc-400'
-              }`}
-            >
-              <Trophy className="w-3.5 h-3.5" />
-              Standings
+              <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Tab content */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {activeLeftTab === 'standings' ? (
-              <div className="h-full flex flex-col bg-[#0e0e11]">
-                <ArenaLeaderboard leaderboard={leaderboard} loading={leaderboardLoading} />
-              </div>
-            ) : (
-              <div className="h-full flex flex-col">
-                {/* Problem index list */}
-                <div className="shrink-0 border-b border-zinc-800/40 bg-[#0c0c0f]">
-                  <div className="flex flex-wrap gap-1 p-2">
-                    {problems.map((problem, idx) => {
-                      const key = problem.id || problem.slug
-                      const status = problemStatuses[key] || 'untouched'
-                      const isActive = idx === activeProblemIdx
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
+            {problems.map((prob, idx) => {
+              const key = prob.id || prob.slug
+              const status = problemStatuses[key] || 'untouched'
+              const isActive = idx === activeProblemIdx
 
-                      return (
-                        <button
-                          key={key || idx}
-                          onClick={() => handleSelectProblem(idx)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                            isActive
-                              ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                              : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 border border-transparent'
-                          }`}
-                        >
-                          <ProblemStatusIcon status={status} />
-                          <span>{problem.index || String.fromCharCode(65 + idx)}</span>
-                        </button>
-                      )
-                    })}
+              return (
+                <button
+                  key={key || idx}
+                  onClick={() => handleSelectProblem(idx)}
+                  className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                    isActive
+                      ? 'bg-indigo-600/10 border-indigo-500/40 text-white'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <ProblemStatusIcon status={status} />
+                    <span className="text-xs font-bold font-mono">
+                      {String.fromCharCode(65 + idx)}. {prob.title}
+                    </span>
                   </div>
+                  <span className="text-[10px] font-semibold text-emerald-400 shrink-0 font-mono">
+                    {prob.points} pt
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* MAIN PANEL CONTENT */}
+        <div className="flex-1 flex flex-col min-h-0 bg-[#020205]">
+          {activeProblemIdx === null ? (
+            /* 1. LOBBY LANDING SCREEN OVERVIEW */
+            <div className="flex-1 overflow-y-auto p-8 space-y-6 max-w-3xl mx-auto scrollbar-thin">
+              <div className="space-y-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-500/20">
+                  {isVirtual ? 'Virtual Simulation Mode' : 'Live Contest Hub'}
+                </span>
+                <h2 className="text-xl font-extrabold text-white mt-1.5">{contest?.title}</h2>
+                <p className="text-xs text-zinc-500 leading-relaxed font-mono mt-1">
+                  Time bounds: {new Date(contest?.start_time).toLocaleString()} to {new Date(contest?.end_time).toLocaleString()}
+                </p>
+              </div>
+
+              {contest?.description && (
+                <div className="p-5 rounded-2xl border border-zinc-800 bg-[#0e0e12]/60 leading-relaxed">
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Contest Overview</h3>
+                  <p className="text-xs text-zinc-400 font-mono whitespace-pre-wrap">{contest.description}</p>
                 </div>
+              )}
 
-                {/* Problem description panel */}
-                <div className="flex-1 overflow-y-auto p-4 arena-scrollbar">
-                  {activeProblem ? (
-                    <div className="space-y-4">
-                      {/* Title + difficulty */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl border border-zinc-800/60 bg-[#0e0e12]/40 space-y-2">
+                  <h4 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-amber-500" />
+                    Interactive Instructions
+                  </h4>
+                  <ul className="text-xs text-zinc-500 space-y-1.5 list-disc pl-4 font-mono">
+                    <li>Select problems from the left-hand navigation list to begin.</li>
+                    <li>No previous draft/history is loaded. You start completely fresh.</li>
+                    <li>Direct submissions are queued instantly on clicking "Submit".</li>
+                  </ul>
+                </div>
+                <div className="p-4 rounded-xl border border-zinc-800/60 bg-[#0e0e12]/40 space-y-2">
+                  <h4 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Trophy className="w-4 h-4 text-indigo-400" />
+                    Standings Gating
+                  </h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed font-mono">
+                    To maintain maximum focus during competition, live standings are locked. Results and ratings adjustments will be processed and published shortly after the contest has ended.
+                  </p>
+                </div>
+              </div>
+
+              {/* Call to action to open first problem */}
+              <div className="flex justify-center pt-4">
+                <button
+                  onClick={() => handleSelectProblem(0)}
+                  className="px-6 py-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-all shadow-lg hover:shadow-indigo-600/10"
+                >
+                  Start Coding Problems
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* 2. SPLIT LAYOUT WORKSPACE FOR SELECTED PROBLEM */
+            <div className="flex-1 flex min-h-0">
+              
+              {/* Left problem description */}
+              <div className="w-[45%] shrink-0 flex flex-col border-r border-zinc-800/60 min-h-0 bg-[#0a0a0d]/20">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-thin">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h2 className="text-sm font-extrabold text-zinc-100">
+                        {String.fromCharCode(65 + activeProblemIdx)}. {activeProblem?.title}
+                      </h2>
+                      {activeProblem?.difficulty && (
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${DIFFICULTY_COLORS[activeProblem.difficulty?.toLowerCase()] || DIFFICULTY_COLORS.medium}`}>
+                          {activeProblem.difficulty}
+                        </span>
+                      )}
+                    </div>
+                    {activeProblem?.points != null && (
+                      <p className="text-xs text-emerald-400 font-semibold">{activeProblem.points} Points</p>
+                    )}
+                  </div>
+
+                  {/* Problem details description */}
+                  <div className="prose prose-invert prose-sm max-w-none text-zinc-400 leading-relaxed text-[13px] font-mono">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {activeProblem?.description || 'Loading challenge specifications...'}
+                    </ReactMarkdown>
+                  </div>
+
+                  {activeProblem?.constraints && (
+                    <div className="rounded-xl border border-zinc-800/40 bg-zinc-900/10 p-4">
+                      <h3 className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2 font-mono">Constraints</h3>
+                      <div className="text-[11px] text-zinc-500 leading-relaxed font-mono">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {activeProblem.constraints}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sample test cases info */}
+                  {sampleInputs.length > 0 && sampleInputs.map((input, i) => (
+                    <div key={i} className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 p-4 space-y-3">
+                      <h3 className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
+                        Sample Input/Output {i + 1}
+                      </h3>
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h2 className="text-base font-bold text-zinc-100">
-                            {activeProblem.index || String.fromCharCode(65 + activeProblemIdx)}. {activeProblem.title}
-                          </h2>
-                          {activeProblem.difficulty && (
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${DIFFICULTY_COLORS[activeProblem.difficulty?.toLowerCase()] || DIFFICULTY_COLORS.medium}`}>
-                              {activeProblem.difficulty}
-                            </span>
-                          )}
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider font-mono">Input</span>
+                          <CopyButton text={String(input)} />
                         </div>
-                        {activeProblem.points != null && (
-                          <p className="text-xs text-emerald-400 font-medium mt-1">{activeProblem.points} pts</p>
-                        )}
+                        <pre className="px-3 py-2 rounded-xl bg-zinc-950/80 border border-zinc-800/40 text-xs text-zinc-300 font-mono overflow-x-auto whitespace-pre">{String(input)}</pre>
                       </div>
-
-                      {/* Description (Markdown) */}
-                      <div className="rounded-lg border border-zinc-800/50 bg-[#111113]/60 p-4">
-                        <div className="prose prose-invert prose-sm max-w-none text-zinc-400 leading-relaxed text-[13px] arena-markdown">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {activeProblem.description || 'No description provided.'}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-
-                      {/* Constraints */}
-                      {activeProblem.constraints && (
-                        <div className="rounded-lg border border-zinc-800/50 bg-[#111113]/60 p-4">
-                          <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">Constraints</h3>
-                          <div className="prose prose-invert prose-sm max-w-none text-zinc-500 text-[12px] leading-relaxed">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {activeProblem.constraints}
-                            </ReactMarkdown>
+                      {sampleOutputs[i] && (
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider font-mono">Output</span>
+                            <CopyButton text={String(sampleOutputs[i])} />
                           </div>
+                          <pre className="px-3 py-2 rounded-xl bg-zinc-950/80 border border-zinc-800/40 text-xs text-emerald-400/80 font-mono overflow-x-auto whitespace-pre">
+                            {String(sampleOutputs[i])}
+                          </pre>
                         </div>
                       )}
-
-                      {/* Sample I/O */}
-                      {(Array.isArray(sampleInputs) ? sampleInputs : [sampleInputs]).filter(Boolean).map((input, i) => (
-                        <div key={i} className="rounded-lg border border-zinc-800/50 bg-[#111113]/60 p-4 space-y-3">
-                          <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                            Sample {i + 1}
-                          </h3>
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider">Input</span>
-                              <CopyButton text={String(input)} />
-                            </div>
-                            <pre className="px-3 py-2 rounded bg-zinc-950/60 border border-zinc-800/30 text-xs text-zinc-300 font-mono overflow-x-auto whitespace-pre">{String(input)}</pre>
-                          </div>
-                          {(Array.isArray(sampleOutputs) ? sampleOutputs[i] : sampleOutputs) && (
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider">Output</span>
-                                <CopyButton text={String(Array.isArray(sampleOutputs) ? sampleOutputs[i] : sampleOutputs)} />
-                              </div>
-                              <pre className="px-3 py-2 rounded bg-zinc-950/60 border border-zinc-800/30 text-xs text-emerald-300/80 font-mono overflow-x-auto whitespace-pre">
-                                {String(Array.isArray(sampleOutputs) ? sampleOutputs[i] : sampleOutputs)}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
-                      ))}
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-zinc-600">
-                      <FileText className="w-8 h-8 mb-2 text-zinc-700" />
-                      <p className="text-xs">Select a problem to view</p>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right editor & terminal console */}
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 min-h-0 border-b border-zinc-850">
+                  <Editor
+                    height="100%"
+                    language={langConfig.monaco}
+                    value={currentCode}
+                    onChange={handleCodeChange}
+                    onMount={handleEditorMount}
+                    theme="vs-dark"
+                    options={{
+                      readOnly: timer.isExpired,
+                      fontSize: 13,
+                      fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, monospace",
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      padding: { top: 12, bottom: 12 },
+                      lineNumbers: 'on',
+                      renderLineHighlight: 'line',
+                      cursorBlinking: 'smooth',
+                      cursorSmoothCaretAnimation: 'on',
+                      tabSize: 4,
+                      wordWrap: 'off',
+                      automaticLayout: true,
+                      suggest: { showKeywords: true },
+                    }}
+                  />
+                </div>
+
+                {/* Console tabs and action buttons */}
+                <div className={`shrink-0 flex flex-col bg-[#07070a] transition-all duration-300 ${consoleOpen ? 'h-[240px]' : 'h-10'}`}>
+                  <div className="shrink-0 flex items-center justify-between px-3 h-10 border-t border-zinc-800/50">
+                    <div className="flex items-center gap-1">
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 rounded">
+                        <Terminal className="w-3.5 h-3.5" />
+                        Submission Status
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSubmit}
+                        disabled={timer.isExpired || submitting || !activeProblem}
+                        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold text-emerald-300 bg-emerald-600/10 border border-emerald-500/40 hover:bg-emerald-600/20 hover:border-emerald-400/60 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        Submit
+                      </button>
+
+                      <button
+                        onClick={() => setConsoleOpen(!consoleOpen)}
+                        className="p-1 rounded text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/40 transition-all"
+                      >
+                        {consoleOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {consoleOpen && (
+                    <div className="flex-1 overflow-y-auto px-4 pb-4 scrollbar-thin">
+                      <div className="pt-3">
+                        {submitting && (
+                          <div className="flex items-center gap-2 py-6">
+                            <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                            <span className="text-xs text-zinc-500 font-mono">Submitting solution asynchronously...</span>
+                          </div>
+                        )}
+
+                        {runResult && !submitting && (
+                          <div className="space-y-3 font-mono">
+                            {(runResult.verdict || runResult.status) && (
+                              <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                                ['accepted', 'AC'].includes(runResult.verdict || runResult.status)
+                                  ? 'bg-emerald-600/10 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-rose-600/10 text-rose-400 border-rose-500/30'
+                              }`}>
+                                {['accepted', 'AC'].includes(runResult.verdict || runResult.status)
+                                  ? <Check className="w-3.5 h-3.5" />
+                                  : <X className="w-3.5 h-3.5" />}
+                                Verdict: {runResult.verdict || runResult.status}
+                              </div>
+                            )}
+
+                            {runResult.stdout && (
+                              <div>
+                                <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Stdout</p>
+                                <pre className="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-900 text-xs text-zinc-300 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto scrollbar-thin">{runResult.stdout}</pre>
+                              </div>
+                            )}
+
+                            {runResult.stderr && (
+                              <div>
+                                <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Stderr</p>
+                                <pre className="px-3 py-2 rounded-xl bg-rose-950/20 border border-rose-800/30 text-xs text-rose-300/80 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto scrollbar-thin">{runResult.stderr}</pre>
+                              </div>
+                            )}
+
+                            {runResult.results && runResult.results.length > 0 && runResult.results[0].error && (
+                              <div>
+                                <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Error Details</p>
+                                <pre className="px-3 py-2 rounded-xl bg-rose-950/20 border border-rose-800/30 text-xs text-rose-300/80 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto scrollbar-thin">
+                                  {runResult.results[0].error}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {!runResult && !submitting && (
+                          <div className="flex flex-col items-center justify-center py-8 text-zinc-600">
+                            <Terminal className="w-6 h-6 mb-2 text-zinc-700" />
+                            <p className="text-xs">Submit code to see evaluation results</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* ─── RIGHT PANE (55%) ───────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col min-h-0">
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020205]/85 backdrop-blur-md p-4 font-mono">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0e0e12]/95 p-6 shadow-2xl relative overflow-hidden">
+            {/* Decorative corner glow */}
+            <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
 
-          {/* Monaco Editor Container */}
-          <div className="flex-1 min-h-0 border-b border-zinc-800/40">
-            <Editor
-              height="100%"
-              language={langConfig.monaco}
-              value={currentCode}
-              onChange={handleCodeChange}
-              onMount={handleEditorMount}
-              theme="vs-dark"
-              options={{
-                readOnly: timer.isExpired,
-                fontSize: 13.5,
-                fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
-                fontLigatures: true,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                padding: { top: 12, bottom: 12 },
-                lineNumbers: 'on',
-                renderLineHighlight: 'line',
-                cursorBlinking: 'smooth',
-                cursorSmoothCaretAnimation: 'on',
-                smoothScrolling: true,
-                tabSize: 4,
-                wordWrap: 'off',
-                automaticLayout: true,
-                bracketPairColorization: { enabled: true },
-                guides: { bracketPairs: true },
-                suggest: { showKeywords: true },
-              }}
-            />
-          </div>
-
-          {/* ─── Evaluation Console ─────────────────────────────────── */}
-          <div className={`shrink-0 flex flex-col bg-[#0c0c0f] transition-all duration-300 ${consoleOpen ? 'h-[240px]' : 'h-10'}`}>
-            {/* Console header bar */}
-            <div className="shrink-0 flex items-center justify-between px-3 h-10 border-t border-zinc-800/50">
-              {/* Left — tabs */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => { setConsoleTab('testcases'); setConsoleOpen(true) }}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                    consoleTab === 'testcases' && consoleOpen
-                      ? 'text-indigo-400 bg-indigo-500/10'
-                      : 'text-zinc-500 hover:text-zinc-400'
-                  }`}
-                >
-                  <FlaskConical className="w-3 h-3" />
-                  Test Cases
-                </button>
-                <button
-                  onClick={() => { setConsoleTab('output'); setConsoleOpen(true) }}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                    consoleTab === 'output' && consoleOpen
-                      ? 'text-indigo-400 bg-indigo-500/10'
-                      : 'text-zinc-500 hover:text-zinc-400'
-                  }`}
-                >
-                  <Terminal className="w-3 h-3" />
-                  Console
-                </button>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-rose-600/10 border border-rose-500/20 text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
               </div>
-
-              {/* Right — action buttons */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleRunCode}
-                  disabled={timer.isExpired || running || !activeProblem}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-zinc-300 bg-zinc-800/60 border border-zinc-700/60 hover:bg-zinc-700/60 hover:text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-                  Run
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={timer.isExpired || submitting || !activeProblem}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[11px] font-semibold text-emerald-300 bg-emerald-600/10 border border-emerald-500/40 hover:bg-emerald-600/20 hover:border-emerald-400/60 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                  Submit
-                </button>
-
-                {/* Collapse toggle */}
-                <button
-                  onClick={() => setConsoleOpen(!consoleOpen)}
-                  className="p-1 rounded text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/40 transition-all"
-                >
-                  {consoleOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                </button>
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Exit Virtual Simulation?
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Exiting will **terminate your active simulation session**, reset the timer, and **permanently delete** your drafted solutions for this contest. 
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-2 italic">
+                  Note: If you want to keep your progress and return later, close the browser tab directly without clicking exit.
+                </p>
               </div>
             </div>
 
-            {/* Console body */}
-            {consoleOpen && (
-              <div className="flex-1 overflow-y-auto px-3 pb-3 arena-scrollbar">
-                {consoleTab === 'testcases' ? (
-                  <div className="space-y-3 pt-2">
-                    {/* Custom input */}
-                    <div>
-                      <label className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider mb-1 block">
-                        Custom Input
-                      </label>
-                      <textarea
-                        value={customInput}
-                        onChange={(e) => setCustomInput(e.target.value)}
-                        disabled={timer.isExpired}
-                        placeholder="Enter custom input…"
-                        className="w-full h-20 px-3 py-2 rounded-lg bg-zinc-950/60 border border-zinc-800/40 text-xs text-zinc-300 font-mono placeholder-zinc-700 resize-none focus:outline-none focus:border-zinc-600 transition-colors disabled:opacity-50"
-                      />
-                    </div>
-
-                    {/* Sample test cases */}
-                    {(Array.isArray(sampleInputs) ? sampleInputs : [sampleInputs]).filter(Boolean).map((input, i) => (
-                      <div key={i} className="flex items-start gap-3 p-2 rounded-lg bg-zinc-950/40 border border-zinc-800/20">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider mb-1">Case {i + 1} — Input</p>
-                          <pre className="text-xs text-zinc-400 font-mono truncate">{String(input).substring(0, 80)}</pre>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider mb-1">Expected</p>
-                          <pre className="text-xs text-emerald-400/70 font-mono truncate">
-                            {String(Array.isArray(sampleOutputs) ? sampleOutputs[i] : sampleOutputs || '').substring(0, 80)}
-                          </pre>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  /* Output tab */
-                  <div className="pt-2">
-                    {(running || submitting) && (
-                      <div className="flex items-center gap-2 py-6">
-                        <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
-                        <span className="text-xs text-zinc-500">{submitting ? 'Submitting…' : 'Running…'}</span>
-                      </div>
-                    )}
-
-                    {runResult && !running && !submitting && (
-                      <div className="space-y-3">
-                        {/* Verdict */}
-                        {(runResult.verdict || runResult.status) && (
-                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                            ['accepted', 'AC'].includes(runResult.verdict || runResult.status)
-                              ? 'bg-emerald-600/10 text-emerald-400 border-emerald-500/30'
-                              : 'bg-rose-600/10 text-rose-400 border-rose-500/30'
-                          }`}>
-                            {['accepted', 'AC'].includes(runResult.verdict || runResult.status)
-                              ? <Check className="w-3.5 h-3.5" />
-                              : <X className="w-3.5 h-3.5" />}
-                            {runResult.verdict || runResult.status}
-                          </div>
-                        )}
-
-                        {/* Stdout */}
-                        {runResult.stdout && (
-                          <div>
-                            <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider mb-1">Output</p>
-                            <pre className="px-3 py-2 rounded-lg bg-zinc-950/60 border border-zinc-800/30 text-xs text-zinc-300 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto arena-scrollbar">{runResult.stdout}</pre>
-                          </div>
-                        )}
-
-                        {/* Stderr */}
-                        {runResult.stderr && (
-                          <div>
-                            <p className="text-[10px] font-medium text-rose-500/80 uppercase tracking-wider mb-1">Error</p>
-                            <pre className="px-3 py-2 rounded-lg bg-rose-950/20 border border-rose-800/30 text-xs text-rose-300/80 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto arena-scrollbar">{runResult.stderr}</pre>
-                          </div>
-                        )}
-
-                        {/* Execution time / memory */}
-                        {(runResult.time != null || runResult.memory != null) && (
-                          <div className="flex items-center gap-4 text-[11px] text-zinc-500">
-                            {runResult.time != null && <span>Runtime: <strong className="text-zinc-400">{runResult.time}ms</strong></span>}
-                            {runResult.memory != null && <span>Memory: <strong className="text-zinc-400">{runResult.memory}KB</strong></span>}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {!runResult && !running && !submitting && (
-                      <div className="flex flex-col items-center justify-center py-8 text-zinc-600">
-                        <Terminal className="w-6 h-6 mb-2 text-zinc-700" />
-                        <p className="text-xs">Run or submit code to see output</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 bg-[#1e1e24] hover:bg-zinc-800 transition-all border border-zinc-700/40 cursor-pointer"
+              >
+                Stay and Code
+              </button>
+              <button
+                onClick={() => {
+                  resetVirtualContestData(contest?.slug, problems)
+                  setShowExitConfirm(false)
+                  navigate('/contests')
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition-all shadow-lg cursor-pointer"
+              >
+                Confirm Exit
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

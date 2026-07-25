@@ -4,10 +4,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils.text import slugify
 from django.db import transaction
 from apps.problems.models import Problem, Tag, TestCase
-from apps.problems.mongo_models import save_problem_templates
+from apps.problems.template_helpers import save_problem_templates
 
 class Command(BaseCommand):
-    help = "Seed problems and test cases into PostgreSQL and code templates into MongoDB from a JSON file"
+    help = "Seed problems, test cases, and code templates into PostgreSQL from a JSON file"
 
     def add_arguments(self, parser):
         parser.add_argument("json_file", type=str, help="Path to the JSON file containing the problem set")
@@ -136,7 +136,7 @@ class Command(BaseCommand):
                                 order_index=order
                             )
 
-                # Save templates to MongoDB if we have any
+                # Save templates to PostgreSQL if we have any
                 templates = item.get("templates", {})
                 if templates:
                     save_problem_templates(problem.id, templates)

@@ -13,13 +13,25 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Problem, TestCase, Submission, UserProblemStats
-from .mongo_models import get_problem_templates
+from .template_helpers import get_problem_templates
 from .serializers import (
     ProblemListSerializer,
     ProblemDetailSerializer,
     SubmissionHistorySerializer,
     CodeExecutionRequestSerializer,
 )
+from django.core.exceptions import ValidationError
+
+def get_problem_by_identifier(identifier):
+    """
+    Robust lookup helper that resolves a Problem by either its UUID id or slug string.
+    """
+    queryset = Problem.objects.filter(status="approved")
+    try:
+        return queryset.get(id=identifier)
+    except (ValidationError, Problem.DoesNotExist, ValueError):
+        pass
+    return get_object_or_404(queryset, slug=identifier)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -73,7 +85,7 @@ def submission_calendar(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def problem_detail(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     try:
         templates = get_problem_templates(problem.id)
     except Exception:
@@ -86,11 +98,52 @@ def problem_detail(request, problem_slug):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+def split_assignments_by_comma(line):
+    """
+    Splits a comma-separated assignments line by commas, ignoring commas
+    that are nested inside brackets [], parentheses (), curly braces {}, or quotes.
+    """
+    parts = []
+    current = []
+    bracket_depth = 0
+    in_quotes = False
+    quote_char = None
+    
+    for char in line:
+        if char in ['"', "'"]:
+            if not in_quotes:
+                in_quotes = True
+                quote_char = char
+            elif char == quote_char:
+                in_quotes = False
+                quote_char = None
+            current.append(char)
+        elif not in_quotes and char in ['[', '(', '{']:
+            bracket_depth += 1
+            current.append(char)
+        elif not in_quotes and char in [']', ')', '}']:
+            bracket_depth = max(0, bracket_depth - 1)
+            current.append(char)
+        elif char == ',' and bracket_depth == 0 and not in_quotes:
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+            
+    if current:
+        parts.append("".join(current).strip())
+    return [p for p in parts if p]
+
+
 def format_input_for_sandbox(raw_input):
     if not raw_input:
         return ""
         
-    lines = raw_input.strip().splitlines()
+    raw_lines = raw_input.strip().splitlines()
+    lines = []
+    for rl in raw_lines:
+        lines.extend(split_assignments_by_comma(rl))
+        
     formatted_parts = []
     
     # Check if this looks like a variable assignment input block (LeetCode-style)
@@ -244,7 +297,7 @@ def generate_java_driver(func_name, params, ret_type):
             java_read_lines.append(f"String {p_name} = sc.next();")
             call_args.append(p_name)
         elif p_type_norm in ["bool", "boolean"]:
-            java_read_lines.append(f"boolean {p_name} = sc.nextBoolean();")
+            java_read_lines.append(f"boolean {p_name} = sc.next().equals(\"1\");")
             call_args.append(p_name)
         elif p_type_norm in ["float", "double"]:
             java_read_lines.append(f"double {p_name} = sc.nextDouble();")
@@ -719,6 +772,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                         "passed": False,
                         "verdict": "RE"
                     })
+                    break
                 else:
                     # Strip all spaces to make comparisons formatting-agnostic (e.g. [0, 1] vs [0,1])
                     user_output = proc.stdout.strip().replace(" ", "")
@@ -732,8 +786,9 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                         "passed": passed,
                         "verdict": "AC" if passed else "WA"
                     })
-                    if not passed and verdict == "AC":
+                    if not passed:
                         verdict = "WA"
+                        break
                         
             except subprocess.TimeoutExpired:
                 verdict = "TLE"
@@ -745,6 +800,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                     "passed": False,
                     "verdict": "TLE"
                 })
+                break
             except Exception as e:
                 verdict = "RE"
                 results.append({
@@ -755,6 +811,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                     "passed": False,
                     "verdict": "RE"
                 })
+                break
                 
     return verdict, results
 
@@ -762,7 +819,7 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def run_code(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     
     req_serializer = CodeExecutionRequestSerializer(data=request.data)
     if not req_serializer.is_valid():
@@ -775,7 +832,7 @@ def run_code(request, problem_slug):
     if not sample_cases.exists():
         return Response({"error": "No sample test cases defined for this problem."}, status=status.HTTP_400_BAD_REQUEST)
         
-    # Get Python signature templates from MongoDB to drive LeetCode-style run
+    # Get Python signature templates from PostgreSQL to drive LeetCode-style run
     templates = {}
     try:
         templates = get_problem_templates(str(problem.id))
@@ -794,7 +851,7 @@ def run_code(request, problem_slug):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def submit_code(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     
     req_serializer = CodeExecutionRequestSerializer(data=request.data)
     if not req_serializer.is_valid():
@@ -807,7 +864,7 @@ def submit_code(request, problem_slug):
     if not all_cases.exists():
         return Response({"error": "No test cases defined for this problem."}, status=status.HTTP_400_BAD_REQUEST)
         
-    # Get Python signature templates from MongoDB to drive LeetCode-style submit
+    # Get Python signature templates from PostgreSQL to drive LeetCode-style submit
     templates = {}
     try:
         templates = get_problem_templates(str(problem.id))
@@ -819,20 +876,18 @@ def submit_code(request, problem_slug):
     
     # Calculate passed test cases count
     passed_count = sum(1 for r in results if r["passed"])
-    total_count = len(results)
+    total_count = len(all_cases)
     
-    # Create submission record
-    submission = Submission.objects.create(
-        user=request.user,
-        problem=problem,
-        language=language,
-        code=code,
-        verdict=verdict,
-        test_cases_passed=passed_count,
-        total_test_cases=total_count,
-    )
-    
-    # Update UserProblemStats
+    contest_identifier = request.data.get("contest_id") or request.data.get("contest_slug")
+    contest_obj = None
+    if contest_identifier:
+        try:
+            from apps.contests.models import Contest
+            contest_obj = Contest.objects.filter(id=contest_identifier).first() or Contest.objects.filter(slug=contest_identifier).first()
+        except Exception:
+            pass
+
+    # Update UserProblemStats using the base verdict
     stats, created = UserProblemStats.objects.get_or_create(
         user=request.user,
         problem=problem,
@@ -844,20 +899,53 @@ def submit_code(request, problem_slug):
     elif stats.status != "solved":
         stats.status = "attempted"
     stats.save()
+
+    # Format verdict on failure for the HTTP response to show failed testcase (1-based index)
+    formatted_verdict = verdict
+    if verdict != "AC":
+        formatted_verdict = f"{verdict} on Testcase {passed_count + 1}"
+
+    # Create submission record with standard max_length-compliant verdict code
+    submission = Submission.objects.create(
+        user=request.user,
+        problem=problem,
+        contest=contest_obj,
+        language=language,
+        code=code,
+        verdict=verdict,
+        test_cases_passed=passed_count,
+        total_test_cases=total_count,
+    )
     
+    # Strip testcase inputs/outputs for contest submissions to prevent inspecting hidden testcases
+    if contest_obj is not None:
+        stripped_results = []
+        for r in results[:3]:
+            stripped_r = {
+                "passed": r.get("passed", False),
+                "verdict": r.get("verdict", ""),
+            }
+            # Only keep error log if it is a compile error or runtime exception (no input/expected mismatch details)
+            if r.get("verdict") in ["CE", "RE"]:
+                stripped_r["error"] = r.get("error", "")
+            stripped_results.append(stripped_r)
+        response_results = stripped_results
+    else:
+        response_results = results[:3]
+
     return Response({
         "submission_id": str(submission.id),
-        "verdict": verdict,
+        "verdict": formatted_verdict,
         "passed_count": passed_count,
         "total_count": total_count,
-        "results": results[:3] # Send first 3 results to frontend for feedback
+        "results": response_results
     }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def problem_submissions(request, problem_slug):
-    problem = get_object_or_404(Problem, slug=problem_slug, status="approved")
+    problem = get_problem_by_identifier(problem_slug)
     # Fetch all submissions for this problem by the authenticated user, newest first
     submissions = Submission.objects.filter(problem=problem, user=request.user).order_by("-submitted_at")
     serializer = SubmissionHistorySerializer(submissions, many=True)

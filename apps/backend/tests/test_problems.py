@@ -51,8 +51,7 @@ class SeedProblemsTests(TestCase):
         if os.path.exists(self.temp_file.name):
             os.remove(self.temp_file.name)
 
-    @mock.patch("apps.problems.management.commands.seed_problems.save_problem_templates")
-    def test_seed_problems_success(self, mock_save_templates):
+    def test_seed_problems_success(self):
         # Verify initial database is empty
         self.assertEqual(Problem.objects.count(), 0)
         self.assertEqual(Tag.objects.count(), 0)
@@ -86,11 +85,8 @@ class SeedProblemsTests(TestCase):
         self.assertEqual(samples.first().input, "[2,7,11,15]\n9")
         self.assertEqual(samples.first().expected_output, "[0,1]")
 
-        # Verify mongo template save was called with correct data
-        mock_save_templates.assert_called_once_with(
-            problem.id,
-            self.problem_data[0]["templates"]
-        )
+        # Verify templates were saved to Postgres
+        self.assertEqual(problem.templates, self.problem_data[0]["templates"])
 
 
 class SeedProblemsCsvTests(TestCase):
@@ -109,14 +105,7 @@ class SeedProblemsCsvTests(TestCase):
         if os.path.exists(self.temp_file.name):
             os.remove(self.temp_file.name)
 
-    @mock.patch("apps.problems.management.commands.seed_problems_csv.get_collection")
-    @mock.patch("apps.problems.management.commands.seed_problems_csv.get_mongo_client")
-    def test_seed_problems_csv_success(self, mock_get_client, mock_get_collection):
-        # Mock MongoDB client and commands to prevent connection errors
-        mock_client = mock.MagicMock()
-        mock_get_client.return_value = mock_client
-        mock_collection = mock.MagicMock()
-        mock_get_collection.return_value = mock_collection
+    def test_seed_problems_csv_success(self):
         
         # Verify initial database is empty
         self.assertEqual(Problem.objects.count(), 0)
@@ -142,6 +131,10 @@ class SeedProblemsCsvTests(TestCase):
         self.assertEqual(tc.input, "in")
         self.assertEqual(tc.expected_output, "out")
         self.assertTrue(tc.is_sample)
+
+        # Verify templates were generated and saved to Postgres
+        self.assertIn("python", problem.templates)
+        self.assertEqual(problem.templates.get("python"), "class Solution:\n    def solve(self) -> int:\n        pass")
 
 
 from rest_framework.test import APITestCase

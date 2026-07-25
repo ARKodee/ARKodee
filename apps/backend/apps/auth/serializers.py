@@ -68,6 +68,17 @@ class RegisterSerializer(serializers.Serializer):
 
 
 # ==========================================
+# 4. Google Login Serializer (Public Flow)
+# ==========================================
+class GoogleLoginSerializer(serializers.Serializer):
+    """
+    Validates Google Sign-In payload.
+    Expects: { "id_token": "<google-id-token>" }
+    """
+    id_token = serializers.CharField(required=True, allow_blank=False)
+
+
+# ==========================================
 # 4. User Serializer (Public & Protected Flow)
 # ==========================================
 class UserSerializer(serializers.ModelSerializer):
