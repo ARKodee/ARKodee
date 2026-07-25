@@ -44,6 +44,7 @@ class Problem(models.Model):
     sample_output = models.TextField(blank=True, null=True)
     time_limit_ms = models.IntegerField(default=2000)
     memory_limit_mb = models.IntegerField(default=256)
+    templates = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     STATUS_CHOICES = [
         ("pending", "Pending Approval"),

@@ -108,10 +108,37 @@ export function ContestDetailsPage() {
     return () => { cancelled = true }
   }, [slug])
 
+  const getVirtualSessionStatus = () => {
+    if (!contest) return { active: false }
+    const storageKey = `virtual_start_${slug}`
+    const startTimeStr = localStorage.getItem(storageKey)
+    if (!startTimeStr) return { active: false }
+
+    const startTime = parseInt(startTimeStr, 10)
+    const durationMs = new Date(contest.end_time).getTime() - new Date(contest.start_time).getTime()
+    const isExpired = startTime + durationMs <= Date.now()
+
+    return { active: !isExpired, startTime }
+  }
+
+  const sessionStatus = getVirtualSessionStatus()
+
   // Handles virtual practice triggers for past matches
   const handleStartVirtual = async () => {
     setVirtualLoading(true)
     try {
+      if (!sessionStatus.active) {
+        // Only reset the timer and clear drafts if starting a completely fresh simulation session!
+        localStorage.removeItem(`virtual_start_${slug}`)
+        const languagesList = ['python', 'cpp', 'java', 'javascript']
+        if (contest && contest.problems) {
+          contest.problems.forEach((p) => {
+            languagesList.forEach((lang) => {
+              localStorage.removeItem(`contest_draft_${slug}_${p.slug}_${lang}`)
+            })
+          })
+        }
+      }
       await startVirtualContest(slug)
       navigate(`/contests/${slug}/arena?virtual=true`)
     } catch (err) {
@@ -267,15 +294,19 @@ export function ContestDetailsPage() {
               <div className="mb-4 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col gap-2 shadow-[0_0_24px_rgba(245,158,11,0.03)]">
                 <div>
                   <h4 className="text-xs font-bold text-amber-300 uppercase tracking-widest">Virtual Practice Mode</h4>
-                  <p className="text-[11px] text-zinc-400 mt-1">This contest has ended. Start a virtual simulation to solve problems under simulated exam conditions (0 ELO impact).</p>
+                  <p className="text-[11px] text-zinc-400 mt-1">
+                    {sessionStatus.active 
+                      ? "You have an active virtual simulation running. Resume the contest to continue coding."
+                      : "This contest has ended. Start a virtual simulation to solve problems under simulated exam conditions (0 ELO impact)."}
+                  </p>
                 </div>
                 <button
                   onClick={handleStartVirtual}
                   disabled={virtualLoading}
-                  className="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 transition-all shadow-lg flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 transition-all shadow-lg flex items-center justify-center gap-1.5 cursor-pointer font-mono"
                 >
                   {virtualLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
-                  Start Virtual Contest
+                  {sessionStatus.active ? "Resume Virtual Contest" : "Start Virtual Contest"}
                 </button>
               </div>
             )}

@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Problem, TestCase, Submission, UserProblemStats
-from .mongo_models import get_problem_templates
+from .template_helpers import get_problem_templates
 from .serializers import (
     ProblemListSerializer,
     ProblemDetailSerializer,
@@ -832,7 +832,7 @@ def run_code(request, problem_slug):
     if not sample_cases.exists():
         return Response({"error": "No sample test cases defined for this problem."}, status=status.HTTP_400_BAD_REQUEST)
         
-    # Get Python signature templates from MongoDB to drive LeetCode-style run
+    # Get Python signature templates from PostgreSQL to drive LeetCode-style run
     templates = {}
     try:
         templates = get_problem_templates(str(problem.id))
@@ -864,7 +864,7 @@ def submit_code(request, problem_slug):
     if not all_cases.exists():
         return Response({"error": "No test cases defined for this problem."}, status=status.HTTP_400_BAD_REQUEST)
         
-    # Get Python signature templates from MongoDB to drive LeetCode-style submit
+    # Get Python signature templates from PostgreSQL to drive LeetCode-style submit
     templates = {}
     try:
         templates = get_problem_templates(str(problem.id))

@@ -6,8 +6,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils.text import slugify
 from django.db import transaction
 from apps.problems.models import Problem, Tag, TestCase
-from apps.problems.mongo_models import save_problem_templates
-from utils.mongo import get_collection, get_mongo_client
 
 # Increase field limit to handle huge fields in CSV
 csv.field_size_limit(sys.maxsize)
@@ -105,7 +103,10 @@ def translate_python_starter_code(py_code):
         js_code += f"var {func_name} = function({js_args}) {{\n    \n}};"
         
         py_args_str = ", ".join([f"{p[0]}: {p[1]}" for p in params])
-        py_code_wrapped = f"class Solution:\n    def {func_name}(self, {py_args_str}) -> {ret_type}:\n        pass"
+        if py_args_str:
+            py_code_wrapped = f"class Solution:\n    def {func_name}(self, {py_args_str}) -> {ret_type}:\n        pass"
+        else:
+            py_code_wrapped = f"class Solution:\n    def {func_name}(self) -> {ret_type}:\n        pass"
             
         return {
             "python": py_code_wrapped,
@@ -117,7 +118,7 @@ def translate_python_starter_code(py_code):
         return None
 
 class Command(BaseCommand):
-    help = "Seed problems and test cases from output.csv into PostgreSQL and starter codes into MongoDB"
+    help = "Seed problems, test cases, and templates from output.csv into PostgreSQL"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -149,36 +150,14 @@ class Command(BaseCommand):
         batch_size = options["batch_size"]
         limit = options["limit"]
 
-        # 1. Check MongoDB availability with a short timeout
-        mongo_available = False
-        try:
-            client = get_mongo_client()
-            # The ismaster command is cheap and fast, and will fail if the server is offline
-            client.admin.command('ismaster', serverSelectionTimeoutMS=1500)
-            mongo_available = True
-            self.stdout.write(self.style.SUCCESS("Connected to MongoDB successfully! Templates will be seeded."))
-        except Exception as e:
-            self.stdout.write(self.style.WARNING(
-                f"Could not connect to MongoDB: {e}\n"
-                "Continuing without seeding multi-language starter templates to MongoDB."
-            ))
-
-        # 2. Reset database tables if requested
+        # Reset database tables if requested
         if reset:
             self.stdout.write(self.style.WARNING("Clearing existing problems, test cases, and tags..."))
             TestCase.objects.all().delete()
             Problem.objects.all().delete()
-            # Keep tags unless we want a clean slate
             Tag.objects.all().delete()
-            if mongo_available:
-                try:
-                    collection = get_collection("problem_templates")
-                    collection.delete_many({})
-                    self.stdout.write(self.style.SUCCESS("Cleared problem templates collection in MongoDB."))
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Failed to clear MongoDB templates: {e}"))
 
-        # 3. Read and validate CSV file
+        # Read and validate CSV file
         try:
             f = open(csv_file_path, mode="r", encoding="utf-8")
             reader = csv.DictReader(f)
@@ -187,7 +166,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.NOTICE("First pass: caching all tags..."))
         
-        # 4. First pass: Collect all unique tags and bulk create them
+        # First pass: Collect all unique tags and bulk create them
         unique_tags = set()
         rows_to_process = []
         
@@ -226,14 +205,13 @@ class Command(BaseCommand):
         total_problems = len(rows_to_process)
         self.stdout.write(self.style.NOTICE(f"Processing {total_problems} problems for bulk insertion..."))
 
-        # 5. Process in batches
+        # Process in batches
         for i in range(0, total_problems, batch_size):
             batch_rows = rows_to_process[i:i + batch_size]
             
             problems_to_create = []
             testcases_to_create = []
             m2m_relations_to_create = []
-            mongo_templates_to_create = []
             
             # Fetch existing slugs in this batch's context to avoid duplicate insert errors
             slugs_in_batch = [slugify(row.get("task_id", "")) for row in batch_rows if row.get("task_id")]
@@ -259,6 +237,12 @@ class Command(BaseCommand):
                 description = row.get("problem_description", "")
                 starter_code = row.get("starter_code", "")
                 
+                templates_dict = {}
+                if starter_code:
+                    templates_dict = translate_python_starter_code(starter_code)
+                    if not templates_dict:
+                        templates_dict = {"python": starter_code}
+
                 # Pre-generate UUID for Problem
                 problem_id = uuid.uuid4()
                 
@@ -271,7 +255,8 @@ class Command(BaseCommand):
                     difficulty=difficulty,
                     status="approved",
                     time_limit_ms=2000,
-                    memory_limit_mb=256
+                    memory_limit_mb=256,
+                    templates=templates_dict
                 )
                 problems_to_create.append(prob_obj)
                 
@@ -299,7 +284,6 @@ class Command(BaseCommand):
                         for order, io_item in enumerate(io_list):
                             tc_input = str(io_item.get("input", ""))
                             tc_output = str(io_item.get("output", ""))
-                            # Make the first test case a sample, others hidden
                             is_sample = (order == 0)
                             
                             tc_obj = TestCase(
@@ -309,21 +293,10 @@ class Command(BaseCommand):
                                 expected_output=tc_output,
                                 is_sample=is_sample,
                                 order_index=order
-                            )
+                             )
                             testcases_to_create.append(tc_obj)
                 except Exception:
                     pass
-                
-                # Handle MongoDB Template (Generate LeetCode-style templates for all 4 languages)
-                if starter_code:
-                    templates_dict = translate_python_starter_code(starter_code)
-                    if not templates_dict:
-                        # Fallback if parsing fails
-                        templates_dict = {"python": starter_code}
-                    mongo_templates_to_create.append({
-                        "problem_id": str(problem_id),
-                        "templates": templates_dict
-                    })
             
             # Execute database operations inside an atomic transaction per batch
             try:
@@ -336,25 +309,6 @@ class Command(BaseCommand):
                     
                     # Bulk create Test Cases
                     TestCase.objects.bulk_create(testcases_to_create, ignore_conflicts=True)
-                
-                # Bulk insert into MongoDB if online
-                if mongo_available and mongo_templates_to_create:
-                    try:
-                        collection = get_collection("problem_templates")
-                        # Perform bulk write operations for MongoDB
-                        # We use upsert updates to avoid duplicates on multiple runs
-                        from pymongo import UpdateOne
-                        requests = [
-                            UpdateOne(
-                                {"problem_id": item["problem_id"]},
-                                {"$set": {"templates": item["templates"]}},
-                                upsert=True
-                            )
-                            for item in mongo_templates_to_create
-                        ]
-                        collection.bulk_write(requests)
-                    except Exception as me:
-                        self.stdout.write(self.style.ERROR(f"MongoDB batch write failed: {me}"))
                         
                 end_idx = min(i + batch_size, total_problems)
                 self.stdout.write(self.style.SUCCESS(f"Successfully batch seeded problems {i + 1} to {end_idx}"))
