@@ -50,6 +50,18 @@ export const registerUser = async (userData) => {
 };
 
 /**
+ * Google Sign-In login/register
+ * ✅ No token needed - PUBLIC endpoint
+ * Backend verifies Google token and returns app token + user payload.
+ */
+export const googleLoginUser = async (idToken) => {
+  return apiClient('/auth/google/', {
+    method: 'POST',
+    body: JSON.stringify({ id_token: idToken }),
+  });
+};
+
+/**
  * Logout: Clear token & user data
  * ✅ Can use token or without (depending on backend)
  * 

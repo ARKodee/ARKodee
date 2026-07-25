@@ -15,23 +15,34 @@ function RequireAuth() {
 
 function RequireGuest() {
   const { isAuthenticated } = useAuth()
+  // Prevent logged-in users from accessing the auth page
+  // If they are already authenticated, redirect them to the dashboard
   return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Outlet />
 }
 
 export function AppRoutes() {
   return (
     <Routes>
+      {/* 
+        Guest routes: Only accessible if NOT logged in.
+        By wrapping /auth in RequireGuest, we ensure logged-in users can't see the signup page.
+      */}
       <Route element={<RequireGuest />}>
         <Route path="/auth" element={<AuthForm />} />
       </Route>
 
+      {/* 
+        Protected routes: Only accessible if logged in.
+        If an unauthenticated user visits "/", RequireAuth will intercept and redirect them to "/auth".
+      */}
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<Dashboard />} />
+        {/* Redirect the root path to the dashboard */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/contests" element={<ContestsDashboard />} />
         <Route path="/contests/:slug" element={<ContestDetailsPage />} />
         <Route path="/contests/:slug/arena" element={<ContestArenaPage />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/practice" element={<PracticeDashboard />} />
         <Route path="/practice/problems/:slug" element={<ProblemWorkspace />} />
       </Route>

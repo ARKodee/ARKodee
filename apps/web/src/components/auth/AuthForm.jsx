@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { GoogleLogin } from '@react-oauth/google'
 import { useAuthFlow } from '../../hooks/userAuthFlow'
-import { loginUser, registerUser } from '../../lib/auth'
+import { googleLoginUser, loginUser, registerUser } from '../../lib/auth'
 import { useAuth } from '../../store/AuthContext'
 
 export function AuthForm() {
@@ -13,6 +14,10 @@ export function AuthForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [googleError, setGoogleError] = useState('')
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
   // When user clicks "Get Started" or submits the final form
   const handleSubmit = async (e) => {
@@ -39,6 +44,34 @@ export function AuthForm() {
         alert('Registration failed.')
       }
     }
+  }
+
+  // Handle successful Google Sign-In response from the Google SDK
+  const handleGoogleSuccess = async (credentialResponse) => {
+    const idToken = credentialResponse?.credential
+
+    if (!idToken) {
+      setGoogleError('Google sign-in did not return a valid credential.')
+      return
+    }
+
+    setIsGoogleLoading(true)
+    setGoogleError('')
+
+    try {
+      // Send the Google token to our backend for verification and user creation
+      const response = await googleLoginUser(idToken)
+      setAuth(response.token, response.user)
+      navigate('/dashboard')
+    } catch (err) {
+      setGoogleError(err?.message || 'Google sign-in failed. Please try again.')
+    } finally {
+      setIsGoogleLoading(false)
+    }
+  }
+
+  const handleGoogleError = () => {
+    setGoogleError('Google sign-in was cancelled or failed. Please try again.')
   }
 
   // Fallback dev login bypass
@@ -76,6 +109,35 @@ export function AuthForm() {
               ? 'Provide access credentials to decrypt dashboard portal.' 
               : 'Register new operator node credentials in system database.'}
         </p>
+
+        <div className="auth-google-wrap">
+          <p className="auth-method-title">Continue With Google</p>
+          {googleClientId ? (
+            <div className="auth-google-btn-shell">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                useOneTap={false}
+                theme="filled_black"
+                shape="pill"
+                text="continue_with"
+                size="large"
+                width="320"
+              />
+            </div>
+          ) : (
+            <p className="auth-google-config-msg">
+              Google login is unavailable. Set VITE_GOOGLE_CLIENT_ID in frontend env.
+            </p>
+          )}
+
+          {isGoogleLoading && <p className="auth-google-loading">Validating Google credentials...</p>}
+          {googleError && <p className="auth-error-msg">{googleError}</p>}
+        </div>
+
+        <div className="auth-divider">
+          <span>OR USE EMAIL + PASSWORD</span>
+        </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="auth-field">
