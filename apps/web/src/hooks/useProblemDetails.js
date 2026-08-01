@@ -6,10 +6,10 @@ import { getProblemDetails, runProblemCode, submitProblemCode, getProblemSubmiss
  * Used as fallback when the API response has no starter_code or boilerplate field.
  */
 const DEFAULT_TEMPLATES = {
-  python: `# Write your solution here\n\ndef solve():\n    pass\n\nif __name__ == "__main__":\n    solve()\n`,
-  cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    return 0;\n}\n`,
-  java: `import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n`,
-  javascript: `// Write your solution here\n\nfunction solve() {\n\n}\n\nsolve();\n`,
+  python: `class Solution:\n    def solve(self, nums: List[int], target: int) -> List[int]:\n        # Write your solution here\n        pass\n`,
+  cpp: `#include <iostream>\n#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> solve(vector<int>& nums, int target) {\n        // Write your solution here\n        return {};\n    }\n};\n`,
+  java: `import java.util.*;\n\nclass Solution {\n    public int[] solve(int[] nums, int target) {\n        // Write your solution here\n        return new int[]{};\n    }\n}\n`,
+  javascript: `/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar solve = function(nums, target) {\n    // Write your solution here\n};\n`,
 };
 
 /**
