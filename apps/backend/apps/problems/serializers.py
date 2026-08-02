@@ -51,6 +51,7 @@ class ProblemDetailSerializer(serializers.ModelSerializer):
     difficulty = serializers.SerializerMethodField()
     sample_input = serializers.SerializerMethodField()
     sample_output = serializers.SerializerMethodField()
+    sample_test_cases = serializers.SerializerMethodField()
     boilerplate = serializers.SerializerMethodField()
 
     class Meta:
@@ -66,6 +67,7 @@ class ProblemDetailSerializer(serializers.ModelSerializer):
             "output_format",
             "sample_input",
             "sample_output",
+            "sample_test_cases",
             "time_limit_ms",
             "memory_limit_mb",
             "boilerplate",
@@ -81,6 +83,20 @@ class ProblemDetailSerializer(serializers.ModelSerializer):
     def get_sample_output(self, obj):
         samples = obj.test_cases.filter(is_sample=True).order_by("order_index")
         return [s.expected_output for s in samples]
+
+    def get_sample_test_cases(self, obj):
+        samples = obj.test_cases.filter(is_sample=True).order_by("order_index")
+        if not samples.exists():
+            samples = obj.test_cases.all().order_by("order_index")
+        return [
+            {
+                "id": str(s.id),
+                "input": s.input,
+                "expected_output": s.expected_output,
+                "label": f"Case {idx + 1}",
+            }
+            for idx, s in enumerate(samples[:3])
+        ]
 
     def get_boilerplate(self, obj):
         return self.context.get("templates", {})

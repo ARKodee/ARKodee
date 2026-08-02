@@ -124,21 +124,28 @@ export function Leaderboard({ leaderboard, title = 'Global Standings' }) {
                 </div>
 
                 {/* Username + shift */}
-                <div className="min-w-0">
-                  <p className={`text-xs font-bold truncate ${
-                    rank === 1
-                      ? 'text-amber-400'
-                      : rank === 2
-                        ? 'text-zinc-350'
-                        : rank === 3
-                          ? 'text-amber-600'
-                          : 'text-zinc-300'
-                  }`}>
-                    {entry.username}
-                  </p>
-                  {entry.elo_shift !== undefined && (
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <EloShift shift={entry.elo_shift} />
+                <div className="min-w-0 flex flex-col justify-center">
+                  <div className="flex items-center gap-2">
+                    <p className={`text-xs font-bold truncate ${
+                      rank === 1
+                        ? 'text-amber-400'
+                        : rank === 2
+                          ? 'text-zinc-300'
+                          : rank === 3
+                            ? 'text-amber-600'
+                            : 'text-zinc-200'
+                    }`}>
+                      {entry.username}
+                    </p>
+                    {entry.badge_title && (
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${entry.badge_color_class || 'text-zinc-400 bg-zinc-900 border-zinc-700'}`}>
+                        {entry.badge_title}
+                      </span>
+                    )}
+                  </div>
+                  {(entry.elo_change !== undefined || entry.elo_shift !== undefined) && (
+                    <div className="mt-0.5">
+                      <EloShift shift={entry.elo_change ?? entry.elo_shift} />
                     </div>
                   )}
                 </div>
@@ -146,15 +153,15 @@ export function Leaderboard({ leaderboard, title = 'Global Standings' }) {
                 {/* Score / Rating columns */}
                 {isElo ? (
                   <p className="text-xs font-semibold text-indigo-400 text-right tabular-nums">
-                    {entry.elo_rating ?? 1500}
+                    {entry.elo_rating ?? entry.contest_rating ?? 1200}
                   </p>
                 ) : (
                   <>
                     <p className="text-xs font-semibold text-emerald-400 text-right tabular-nums">
-                      {entry.score ?? 0}
+                      {entry.total_score ?? entry.score ?? 0}
                     </p>
                     <p className="text-[11px] text-zinc-500 text-right tabular-nums">
-                      {entry.penalty ?? 0}m
+                      {entry.penalty_minutes ?? entry.penalty ?? 0}m
                     </p>
                   </>
                 )}
