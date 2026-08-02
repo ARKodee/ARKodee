@@ -54,10 +54,10 @@ export const getProblemDetails = async (slug) => {
 /**
  * Run solution code against sample test cases.
  */
-export const runProblemCode = async (slug, code, language) => {
+export const runProblemCode = async (slug, code, language, customCases = null) => {
   return apiClient(`/problems/${slug}/run/`, {
     method: 'POST',
-    body: JSON.stringify({ code, language }),
+    body: JSON.stringify({ code, language, custom_cases: customCases }),
   });
 };
 

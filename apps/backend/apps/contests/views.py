@@ -157,7 +157,7 @@ def contest_leaderboard_view(request, slug):
 @permission_classes([AllowAny])
 def global_leaderboard_view(request):
     """
-    Returns top platform accounts for sidebar display based on ELO rating.
+    Returns top platform accounts for sidebar display based on contest rating.
     """
     limit = request.query_params.get("limit", 10)
     try:
@@ -166,15 +166,20 @@ def global_leaderboard_view(request):
         limit = 10
         
     from apps.auth.models import UserStats
+    from .utils import get_rating_badge_info
     stats_list = UserStats.objects.select_related("user").filter(user__is_active=True).order_by("-contest_rating")[:limit]
     
     results = []
     for idx, stat in enumerate(stats_list):
+        badge_info = get_rating_badge_info(stat.contest_rating)
         results.append({
             "rank": idx + 1,
             "username": stat.user.username,
             "email": stat.user.email,
-            "elo_rating": stat.contest_rating
+            "elo_rating": stat.contest_rating,
+            "contest_rating": stat.contest_rating,
+            "badge_title": badge_info["badge_title"],
+            "badge_color_class": badge_info["badge_color_class"],
         })
         
     return Response(results, status=status.HTTP_200_OK)

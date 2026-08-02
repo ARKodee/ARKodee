@@ -114,9 +114,24 @@ def run_code(request, problem_slug):
     code = req_serializer.validated_data["code"]
     language = req_serializer.validated_data["language"]
     
-    sample_cases = problem.test_cases.filter(is_sample=True).order_by("order_index")
-    if not sample_cases.exists():
-        return Response({"error": "No sample test cases defined for this problem."}, status=status.HTTP_400_BAD_REQUEST)
+    custom_cases_data = request.data.get("custom_cases")
+    if custom_cases_data and isinstance(custom_cases_data, list) and len(custom_cases_data) > 0:
+        class SimpleTestCase:
+            def __init__(self, inp, exp):
+                self.input = inp
+                self.expected_output = exp
+        eval_cases = [
+            SimpleTestCase(tc.get("input", ""), tc.get("expected_output", tc.get("expected", "")))
+            for tc in custom_cases_data
+            if isinstance(tc, dict) and "input" in tc
+        ]
+    else:
+        eval_cases = list(problem.test_cases.filter(is_sample=True).order_by("order_index"))
+        if not eval_cases:
+            eval_cases = list(problem.test_cases.all().order_by("order_index")[:3])
+
+    if not eval_cases:
+        return Response({"error": "No test cases defined for this problem."}, status=status.HTTP_400_BAD_REQUEST)
         
     # Get Python signature templates from PostgreSQL to drive LeetCode-style run
     templates = {}
@@ -126,10 +141,11 @@ def run_code(request, problem_slug):
         pass
     starter_code = templates.get("python", "")
     
-    verdict, results = run_code_in_sandbox(code, language, sample_cases, problem.time_limit_ms, starter_code)
+    verdict, results, compile_error = run_code_in_sandbox(code, language, eval_cases, problem.time_limit_ms, starter_code)
     
     return Response({
         "verdict": verdict,
+        "compile_error": compile_error,
         "results": results
     }, status=status.HTTP_200_OK)
 
@@ -158,10 +174,10 @@ def submit_code(request, problem_slug):
         pass
     starter_code = templates.get("python", "")
     
-    verdict, results = run_code_in_sandbox(code, language, all_cases, problem.time_limit_ms, starter_code)
+    verdict, results, compile_error = run_code_in_sandbox(code, language, all_cases, problem.time_limit_ms, starter_code)
     
     # Calculate passed test cases count
-    passed_count = sum(1 for r in results if r["passed"])
+    passed_count = sum(1 for r in results if r.get("passed"))
     total_count = len(all_cases)
     
     contest_identifier = request.data.get("contest_id") or request.data.get("contest_slug")
@@ -186,12 +202,19 @@ def submit_code(request, problem_slug):
         stats.status = "attempted"
     stats.save()
 
-    # Format verdict on failure for the HTTP response to show failed testcase (1-based index)
-    formatted_verdict = verdict
-    if verdict != "AC":
-        formatted_verdict = f"{verdict} on Testcase {passed_count + 1}"
+    # Format verdict on failure for the HTTP response to show exact failed testcase (1-based index)
+    if verdict == "CE":
+        formatted_verdict = "Compilation Error"
+    elif verdict == "WA":
+        formatted_verdict = f"Wrong Answer on Testcase {passed_count + 1}"
+    elif verdict == "RE":
+        formatted_verdict = f"Runtime Error on Testcase {passed_count + 1}"
+    elif verdict == "TLE":
+        formatted_verdict = f"Time Limit Exceeded on Testcase {passed_count + 1}"
+    else:
+        formatted_verdict = "AC"
 
-    # Create submission record with standard max_length-compliant verdict code
+    # Create submission record
     submission = Submission.objects.create(
         user=request.user,
         problem=problem,
@@ -211,17 +234,17 @@ def submit_code(request, problem_slug):
                 "passed": r.get("passed", False),
                 "verdict": r.get("verdict", ""),
             }
-            # Only keep error log if it is a compile error or runtime exception (no input/expected mismatch details)
             if r.get("verdict") in ["CE", "RE"]:
                 stripped_r["error"] = r.get("error", "")
             stripped_results.append(stripped_r)
         response_results = stripped_results
     else:
-        response_results = results[:3]
+        response_results = results
 
     return Response({
         "submission_id": str(submission.id),
         "verdict": formatted_verdict,
+        "compile_error": compile_error,
         "passed_count": passed_count,
         "total_count": total_count,
         "results": response_results

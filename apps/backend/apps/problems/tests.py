@@ -27,7 +27,7 @@ class SandboxExecutionTests(TestCase):
         test_cases = [
             ProblemTestCase(input="nums = [2, 7, 11, 15], target = 9", expected_output="[0, 1]", is_sample=True, order_index=0)
         ]
-        verdict, results = run_code_in_sandbox(code, "python", test_cases, 2000)
+        verdict, results, compile_error = run_code_in_sandbox(code, "python", test_cases, 2000)
         self.assertEqual(verdict, "AC")
         self.assertTrue(results[0]["passed"])
 
@@ -40,8 +40,19 @@ class SandboxExecutionTests(TestCase):
         test_cases = [
             ProblemTestCase(input="nums = [2, 7, 11, 15], target = 9", expected_output="[0, 1]", is_sample=True, order_index=0)
         ]
-        verdict, results = run_code_in_sandbox(code, "python", test_cases, 2000)
+        verdict, results, compile_error = run_code_in_sandbox(code, "python", test_cases, 2000)
         self.assertEqual(verdict, "RE")
         self.assertFalse(results[0]["passed"])
         self.assertIn("ValueError: Invalid user argument", results[0]["error"])
         self.assertNotIn("/tmp/", results[0]["error"])
+
+    def test_run_code_missing_java_compiler_returns_friendly_ce(self):
+        code = "class Solution { public int solve() { return 0; } }"
+        test_cases = [
+            ProblemTestCase(input="1", expected_output="0", is_sample=True, order_index=0)
+        ]
+        verdict, results, compile_error = run_code_in_sandbox(code, "java", test_cases, 2000)
+        self.assertEqual(verdict, "CE")
+        self.assertEqual(len(results), 0)
+        self.assertIsNotNone(compile_error)
+        self.assertIn("Java", compile_error)
