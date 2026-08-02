@@ -12,6 +12,7 @@ import { ArenaShowcase }    from '../components/dashboard/ArenaShowcase';
 import { LiveActivityLog }  from '../components/dashboard/LiveActivityLog';
 import { GlobalLeaderboard} from '../components/dashboard/GlobalLeaderboard';
 import { MatchmakerPanel }  from '../components/dashboard/MatchmakerPanel';
+import { DailyBugCard }      from '../components/dashboard/DailyBugCard';
 
 /* ── Ambient decorative constants — pure visual, no state ── */
 const TICKER_ITEMS = [
@@ -111,8 +112,13 @@ export function Dashboard() {
             ━━━━━━━━━━━━━━━━━━━━ */}
         <main className="flex-1 grid grid-cols-12 gap-4 min-h-0">
 
-          {/* Left buffer — intentionally empty (breathing room) */}
-          <div className="col-span-3 hidden lg:block" aria-hidden="true" />
+          {/* Left column — Daily Bug Bounty Challenge */}
+          <aside
+            className="col-span-12 lg:col-span-3 min-h-0 flex flex-col justify-start"
+            aria-label="Daily Bug Bounty"
+          >
+            <DailyBugCard />
+          </aside>
 
           {/* Center showcase + live feed */}
           <section
