@@ -374,10 +374,45 @@ class SocketManager {
           room.winnerId = winnerId;
           setRoomDocument(room);
 
-          this.io.to(roomId).emit('match_finished', {
-            winnerId,
-            scores: room.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
-            reason: 'All problems solved by a contender.'
+          // Post to Python Django backend duels endpoint to persist result and calculate ELO
+          const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+          const postData = {
+            player_a_id: room.players[0].userId,
+            player_b_id: room.players[1] ? room.players[1].userId : room.players[0].userId,
+            winner_id: winnerId,
+            score_a: room.players[0].score || 0,
+            score_b: room.players[1] ? room.players[1].score : 0
+          };
+
+          fetch(`${backendUrl}/api/auth/duels/create/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(postData)
+          })
+          .then(res => res.json())
+          .then(data => {
+            logger.info(`[Duel Persistence] Saved match: ${data.match_id}, ELO delta A: ${data.elo_delta_a}, B: ${data.elo_delta_b}`);
+            
+            // Broadcast final results including real ELO changes from Python DB!
+            this.io.to(roomId).emit('match_finished', {
+              winnerId,
+              scores: room.players.map(p => ({
+                userId: p.userId,
+                username: p.username,
+                score: p.score,
+                eloDelta: p.userId === room.players[0].userId ? data.elo_delta_a : data.elo_delta_b
+              })),
+              reason: 'All problems solved by a contender.'
+            });
+          })
+          .catch(err => {
+            logger.error(`[Duel Persistence] Failed to save duel outcome:`, err);
+            // Fallback to broadcasting without ELO changes if API fails
+            this.io.to(roomId).emit('match_finished', {
+              winnerId,
+              scores: room.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
+              reason: 'All problems solved by a contender.'
+            });
           });
         }
       });

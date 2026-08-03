@@ -5,6 +5,7 @@ import { PastMatchesList } from '../components/arena/PastMatchesList';
 import { MatchmakerControls } from '../components/arena/MatchmakerControls';
 import { CustomRoomModal } from '../components/arena/CustomRoomModal';
 import { Swords, Trophy } from 'lucide-react';
+import { getDuelHistory, getUserProfile } from '../lib/auth';
 
 export function MatchmakingArena() {
   const { token, user } = useAuth();
@@ -15,15 +16,30 @@ export function MatchmakingArena() {
   // Socket reference
   const socketRef = useRef(null);
 
-  // Past matches data (will be fetched from API later)
-  const pastMatches = [
-    { id: 1, mode: '1v1 Ranked', status: 'Victory', eloDelta: '+18 ELO', date: '2026-07-09' },
-    { id: 2, mode: '1v1 Ranked', status: 'Defeat', eloDelta: '-15 ELO', date: '2026-07-08' },
-    { id: 3, mode: 'Custom Arena', status: 'Victory', eloDelta: '0 ELO (Unranked)', date: '2026-07-07' },
-    { id: 4, mode: '1v1 Ranked', status: 'Victory', eloDelta: '+22 ELO', date: '2026-07-05' },
-    { id: 5, mode: '1v1 Ranked', status: 'Victory', eloDelta: '+14 ELO', date: '2026-07-04' },
-    { id: 6, mode: '1v1 Ranked', status: 'Defeat', eloDelta: '-11 ELO', date: '2026-07-02' }
-  ];
+  // Past matches data (fetched from Python backend API)
+  const [pastMatches, setPastMatches] = useState([]);
+  const [eloRating, setEloRating] = useState(1200);
+
+  useEffect(() => {
+    getDuelHistory()
+      .then((data) => {
+        setPastMatches(data || []);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch duel history:', err);
+      });
+
+    getUserProfile()
+      .then((profile) => {
+        if (profile && profile.duelRating !== undefined) {
+          setEloRating(profile.duelRating);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch profile stats:', err);
+      });
+  }, []);
+
 
   // Initialize socket.io-client connection
   useEffect(() => {
@@ -81,7 +97,7 @@ export function MatchmakingArena() {
               Global ELO
             </span>
             <span className="text-xs font-black text-indigo-400 mt-0.5 block leading-none">
-              1,482 pts
+              {eloRating.toLocaleString()} pts
             </span>
           </div>
         </div>

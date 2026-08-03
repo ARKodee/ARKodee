@@ -110,3 +110,13 @@ export const isUserAuthenticated = () => {
   const { isAuthenticated } = getTokenStatus();
   return isAuthenticated;
 };
+
+/**
+ * Fetch authenticated user's 1v1 duel matches history.
+ * @returns {Promise<Array>} List of duel history entries.
+ */
+export const getDuelHistory = async () => {
+  return apiClient('/auth/duels/history/', {
+    method: 'GET',
+  });
+};

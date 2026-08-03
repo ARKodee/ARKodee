@@ -8,6 +8,7 @@ import { useMatchSocket, DEFAULT_ARENA_PROBLEMS } from '../hooks/useMatchSocket'
 import { ProblemDescription } from '../components/practice/ProblemDescription';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
 import { MatchInitOverlay } from '../components/arena/MatchInitOverlay';
+import { runProblemCode, submitProblemCode } from '../lib/problems';
 import './Arena1v1Page.css';
 import {
   Swords,
@@ -230,44 +231,71 @@ export function Arena1v1Page() {
     }));
   };
 
-  // Run Code logic (Always passes visible testcases)
-  const handleRunCode = () => {
+  // Run Code logic via Django backend sandbox
+  const handleRunCode = async () => {
     setIsRunning(true);
     setTerminalOutputMap((prev) => ({
       ...prev,
-      [currentProblemId]: `> Running test cases for ${activeProblem?.title || 'Problem'}...\n[PASS] Sample Test 1: Output matches expected.\n\nAll visible sample test cases passed successfully.`,
+      [currentProblemId]: `> Compiling and running code against sample test cases...`,
     }));
     setIsTerminalOpen(true);
-    setTimeout(() => {
+    try {
+      const res = await runProblemCode(activeProblem.slug, currentCode, currentLanguage);
+      if (res.verdict === 'CE' || res.compile_error) {
+        setTerminalOutputMap((prev) => ({
+          ...prev,
+          [currentProblemId]: `RESULT: COMPILATION ERROR\n\n${res.compile_error || 'An error occurred during compilation.'}`,
+        }));
+      } else if (res.verdict === 'AC') {
+        setTerminalOutputMap((prev) => ({
+          ...prev,
+          [currentProblemId]: `RESULT: ACCEPTED\n\nPassed all sample test cases.`,
+        }));
+        // Emit RUN_SUCCESS to get +20 AP milestone
+        sendSubmission(currentProblemId, 'RUN_SUCCESS', currentCode);
+      } else {
+        setTerminalOutputMap((prev) => ({
+          ...prev,
+          [currentProblemId]: `RESULT: ${res.verdict || 'FAILED'}\n(Failed sample test case)`,
+        }));
+      }
+    } catch (err) {
+      setTerminalOutputMap((prev) => ({
+        ...prev,
+        [currentProblemId]: `ERROR: Execution failed.\n${err.message || 'Unknown network error.'}`,
+      }));
+    } finally {
       setIsRunning(false);
-      sendSubmission(currentProblemId, 'RUN_SUCCESS', currentCode);
-    }, 1200);
+    }
   };
 
-  // Submit Code logic
-  const handleSubmitCode = () => {
+  // Submit Code logic via Django backend sandbox
+  const handleSubmitCode = async () => {
     setIsSubmitting(true);
+    setTerminalOutputMap((prev) => ({
+      ...prev,
+      [currentProblemId]: `> Submitting solution for complete evaluation...`,
+    }));
     setIsTerminalOpen(true);
 
     const isBlindfolded = activeSabotage === 'blindfold';
 
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const res = await submitProblemCode(activeProblem.slug, currentCode, currentLanguage);
+      const isCorrect = res.verdict === 'AC';
+      const finalVerdict = isCorrect ? 'ACCEPTED' : 'WRONG_ANSWER';
 
-      const isCorrect = Math.random() > 0.2;
-      const verdict = isCorrect ? 'ACCEPTED' : 'WRONG_ANSWER';
-
+      // Format visual output for console
       if (isCorrect) {
         setTerminalOutputMap((prev) => ({
           ...prev,
-          [currentProblemId]: `> Submitting solution for ${activeProblem?.title || 'Problem'}...\n[VERIFYING] Testcase 1/15... PASS\n[VERIFYING] Testcase 15/15... PASS\n\nRESULT: ACCEPTED (Time: 24ms, Memory: 14.1MB)`,
+          [currentProblemId]: `RESULT: ACCEPTED\nPassed all ${res.total_count} test cases successfully!`,
         }));
         sendSubmission(currentProblemId, 'ACCEPTED', currentCode);
       } else {
-        const failedIndex = Math.floor(Math.random() * 10) + 2;
         const terminalText = isBlindfolded
-          ? `> Submitting solution for ${activeProblem?.title || 'Problem'}...\n\nRESULT: WRONG ANSWER\n(Failed testcase number hidden by BLINDFOLD sabotage)`
-          : `> Submitting solution for ${activeProblem?.title || 'Problem'}...\n\nRESULT: WRONG ANSWER (Failed on ${failedIndex}th Testcase)`;
+          ? `RESULT: WRONG ANSWER\n(Failed testcase details hidden by BLINDFOLD sabotage)`
+          : `RESULT: ${res.verdict || 'WRONG ANSWER'}\nFailed on Testcase ${res.passed_count + 1} of ${res.total_count}`;
 
         setTerminalOutputMap((prev) => ({
           ...prev,
@@ -276,18 +304,26 @@ export function Arena1v1Page() {
         sendSubmission(currentProblemId, 'WRONG_ANSWER', currentCode);
       }
 
-      // Add to our submissions list
+      // Add to our left-panel submissions list
       const newSubmission = {
         id: `sub-${Date.now()}`,
         problemId: currentProblemId,
         problemTitle: activeProblem?.title || 'Problem',
-        verdict: verdict,
+        verdict: finalVerdict,
         timestamp: new Date().toLocaleTimeString(),
         code: currentCode,
         language: currentLanguage,
       };
       setSubmissionsList((prev) => [newSubmission, ...prev]);
-    }, 1500);
+
+    } catch (err) {
+      setTerminalOutputMap((prev) => ({
+        ...prev,
+        [currentProblemId]: `ERROR: Submission failed.\n${err.message || 'Unknown network error.'}`,
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Powerups & Sabotages Purchase triggers
@@ -384,6 +420,23 @@ export function Arena1v1Page() {
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-500 uppercase">Opponent Score:</span>
                 <span className="text-zinc-300 font-bold">{opponentScore} pts</span>
+              </div>
+              <div className="border-t border-zinc-900 my-1" />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-500 uppercase">ELO Adjustment:</span>
+                <span className={`font-bold ${
+                  (() => {
+                    const scoreObj = matchFinishedData.scores?.find(p => String(p.userId) === String(activeUserId));
+                    const delta = scoreObj ? scoreObj.eloDelta : 0;
+                    return delta >= 0 ? 'text-emerald-400' : 'text-red-400';
+                  })()
+                }`}>
+                  {(() => {
+                    const scoreObj = matchFinishedData.scores?.find(p => String(p.userId) === String(activeUserId));
+                    const delta = scoreObj ? scoreObj.eloDelta : 0;
+                    return delta >= 0 ? `+${delta} ELO` : `${delta} ELO`;
+                  })()}
+                </span>
               </div>
             </div>
 
