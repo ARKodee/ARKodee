@@ -4,20 +4,30 @@ from apps.problems.models import Submission
 from .models import ContestParticipant, ContestProblem
 
 
+def get_rating_badge_info(rating):
+    """
+    Maps numeric contest rating to competitive title badges and Tailwind styling.
+    """
+    if rating >= 2100:
+        return {"badge_title": "Grandmaster", "badge_color_class": "text-rose-400 bg-rose-950/40 border-rose-500/30"}
+    elif rating >= 1900:
+        return {"badge_title": "Candidate Master", "badge_color_class": "text-purple-400 bg-purple-950/40 border-purple-500/30"}
+    elif rating >= 1600:
+        return {"badge_title": "Expert", "badge_color_class": "text-indigo-400 bg-indigo-950/40 border-indigo-500/30"}
+    elif rating >= 1400:
+        return {"badge_title": "Specialist", "badge_color_class": "text-sky-400 bg-sky-950/40 border-sky-500/30"}
+    elif rating >= 1200:
+        return {"badge_title": "Pupil", "badge_color_class": "text-emerald-400 bg-emerald-950/40 border-emerald-500/30"}
+    else:
+        return {"badge_title": "Newbie", "badge_color_class": "text-zinc-400 bg-zinc-900 border-zinc-700"}
+
+
 def calculate_contest_leaderboard(contest):
     """
     Calculates official finalized contest standings using the ACM-ICPC time penalty math engine.
-    
-    Formula per solved problem:
-        Penalty = T_elapsed + (W * 20)
-        - T_elapsed: Minutes from contest start_time to earliest ACCEPTED submission.
-        - W: Number of failed submission attempts prior to the first ACCEPTED submission.
-        - Unsolved problems add 0 penalty. Post-AC submissions add 0 penalty.
-    
-    Sort order:
-        1. Highest Total Score (points) DESCENDING
-        2. Lowest Penalty Minutes ASCENDING
     """
+    from apps.auth.models import UserStats
+
     participants = ContestParticipant.objects.filter(contest=contest).select_related("user")
     contest_problems = ContestProblem.objects.filter(contest=contest).select_related("problem").order_by("order_index")
     
@@ -35,6 +45,7 @@ def calculate_contest_leaderboard(contest):
 
     for p in participants:
         user = p.user
+        stats, _ = UserStats.objects.get_or_create(user=user)
         user_total_score = 0
         user_total_penalty = 0
         problem_verdicts = {}
@@ -94,13 +105,18 @@ def calculate_contest_leaderboard(contest):
                     "time": 0
                 }
 
+        badge_info = get_rating_badge_info(stats.contest_rating)
+
         standings.append({
             "participant_id": str(p.id),
             "username": user.username,
             "email": user.email,
             "total_score": user_total_score,
             "penalty_minutes": user_total_penalty,
-            "elo_change": p.elo_change or 0,
+            "elo_change": p.elo_change if p.elo_change is not None else 0,
+            "contest_rating": stats.contest_rating,
+            "badge_title": badge_info["badge_title"],
+            "badge_color_class": badge_info["badge_color_class"],
             "problem_verdicts": problem_verdicts
         })
 

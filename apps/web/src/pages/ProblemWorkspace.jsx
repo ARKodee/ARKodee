@@ -100,6 +100,15 @@ export function ProblemWorkspace() {
     terminalOutput,
     isTerminalOpen,
     setIsTerminalOpen,
+    activeTerminalTab,
+    setActiveTerminalTab,
+    testCaseResults,
+    submissionResult,
+    visibleTestCases,
+    addFailedCaseToVisible,
+    customTestInput,
+    setCustomTestInput,
+    addFailedCaseToCustom,
     runCode,
     submitCode,
     submissions,
@@ -195,6 +204,15 @@ export function ProblemWorkspace() {
               terminalOutput={terminalOutput}
               isTerminalOpen={isTerminalOpen}
               setIsTerminalOpen={setIsTerminalOpen}
+              activeTerminalTab={activeTerminalTab}
+              setActiveTerminalTab={setActiveTerminalTab}
+              testCaseResults={testCaseResults}
+              submissionResult={submissionResult}
+              visibleTestCases={visibleTestCases}
+              addFailedCaseToVisible={addFailedCaseToVisible}
+              customTestInput={customTestInput}
+              setCustomTestInput={setCustomTestInput}
+              addFailedCaseToCustom={addFailedCaseToCustom}
               onRun={runCode}
               onSubmit={submitCode}
             />

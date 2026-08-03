@@ -10,6 +10,8 @@ import { ProblemWorkspace } from '../pages/ProblemWorkspace'
 import { MatchmakingArena } from '../pages/MatchmakingArena'
 import { Arena1v1Page } from '../pages/Arena1v1Page'
 
+import { DebugArenaPage } from '../pages/DebugArenaPage'
+
 function RequireAuth() {
   const { isAuthenticated } = useAuth()
   return isAuthenticated ? <Outlet /> : <Navigate to="/auth" replace />
@@ -42,14 +44,14 @@ export function AppRoutes() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/debug/:bugId" element={<DebugArenaPage />} />
+        <Route path="/debug" element={<DebugArenaPage />} />
         <Route path="/contests" element={<ContestsDashboard />} />
         <Route path="/contests/:slug" element={<ContestDetailsPage />} />
         <Route path="/contests/:slug/arena" element={<ContestArenaPage />} />
         <Route path="/matchmaking" element={<MatchmakingArena />} />
         <Route path="/arena/:matchId" element={<Arena1v1Page />} />
         <Route path="/arena" element={<Arena1v1Page />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/practice" element={<PracticeDashboard />} />
         <Route path="/practice/problems/:slug" element={<ProblemWorkspace />} />
       </Route>
