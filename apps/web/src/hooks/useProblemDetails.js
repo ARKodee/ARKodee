@@ -51,7 +51,7 @@ export function useProblemDetails(slug) {
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [terminalOutput, setTerminalOutput] = useState('');
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
 
   // ─── Primary Lifecycle Effect ────────────────────────────────────────────────
   useEffect(() => {

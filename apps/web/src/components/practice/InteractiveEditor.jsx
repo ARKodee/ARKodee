@@ -83,6 +83,34 @@ export function InteractiveEditor({
 }) {
   const editorRef = useRef(null);
   const [activeCaseIdx, setActiveCaseIdx] = useState(0);
+  const [terminalHeight, setTerminalHeight] = useState('38%');
+  const [isResizingTerminal, setIsResizingTerminal] = useState(false);
+
+  const handleTerminalMouseDown = (e) => {
+    e.preventDefault();
+    setIsResizingTerminal(true);
+    const startY = e.clientY;
+
+    const terminalElement = e.currentTarget.parentElement;
+    const startHeight = terminalElement ? terminalElement.offsetHeight : 250;
+    const parentElement = terminalElement ? terminalElement.parentElement : null;
+    const parentHeight = parentElement ? parentElement.offsetHeight : 600;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaY = startY - moveEvent.clientY;
+      const newHeight = Math.min(Math.max(startHeight + deltaY, 120), parentHeight * 0.75);
+      setTerminalHeight(`${newHeight}px`);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingTerminal(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   const fileName = FILE_NAMES[selectedLanguage] ?? 'main.py';
   const monacoLang = MONACO_LANG_MAP[selectedLanguage] ?? 'python';
@@ -146,6 +174,7 @@ export function InteractiveEditor({
           theme="arkodee-dark"
           options={{
             readOnly: readOnly,
+            contextmenu: false,
             minimap: { enabled: false },
             automaticLayout: true,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -174,7 +203,11 @@ export function InteractiveEditor({
 
       {/* ── Collapsible Terminal Panel ─────────────────────────────────────── */}
       {isTerminalOpen && (
-        <div className="ie-terminal">
+        <div className="ie-terminal" style={{ height: terminalHeight, maxHeight: 'none', position: 'relative' }}>
+          <div
+            className={`ie-terminal-resize-handle ${isResizingTerminal ? 'ie-terminal-resize-handle--active' : ''}`}
+            onMouseDown={handleTerminalMouseDown}
+          />
           <div className="ie-terminal-header">
             <div className="ie-terminal-tabs">
               <button
@@ -207,58 +240,77 @@ export function InteractiveEditor({
           <div className="ie-terminal-body">
             {activeTerminalTab === 'testcases' ? (
               <div>
-                {/* Testcase tabs */}
-                <div className="ie-testcase-tabs">
-                  {visibleTestCases.map((tc, idx) => {
-                    const res = testCaseResults[idx];
-                    let tabClass = 'ie-testcase-tab';
-                    if (res?.passed) tabClass += ' ie-testcase-tab--passed';
-                    else if (res && !res.passed) tabClass += ' ie-testcase-tab--failed';
-                    if (activeCaseIdx === idx) tabClass += ' ie-testcase-tab--active';
-
-                    return (
-                      <button
-                        key={tc.id || idx}
-                        onClick={() => setActiveCaseIdx(idx)}
-                        className={tabClass}
-                      >
-                        <span className="ie-testcase-indicator" />
-                        <span>{tc.label || `Case ${idx + 1}`}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Active case detail */}
-                {visibleTestCases[activeCaseIdx] ? (
+                {/* Global error fallback (Compilation Error / Execution Error) */}
+                {terminalOutput && (terminalOutput.includes('Compilation Error') || terminalOutput.includes('Execution Error')) ? (
                   <div className="ie-testcase-content">
-                    <div>
-                      <span className="ie-testcase-label">Input:</span>
-                      <pre className="ie-testcase-pre">{visibleTestCases[activeCaseIdx].input}</pre>
+                    <div className="ie-result-banner ie-result-banner--error" style={{ marginBottom: 'var(--space-3)' }}>
+                      <strong>{terminalOutput.split('\n\n')[0] || 'Error Occurred'}</strong>
                     </div>
-                    {visibleTestCases[activeCaseIdx].expected_output && (
-                      <div>
-                        <span className="ie-testcase-label">Expected Output:</span>
-                        <pre className="ie-testcase-pre ie-testcase-pre--expected">{visibleTestCases[activeCaseIdx].expected_output}</pre>
-                      </div>
-                    )}
-                    {testCaseResults[activeCaseIdx]?.output && (
-                      <div>
-                        <span className="ie-testcase-label">Your Output:</span>
-                        <pre className="ie-testcase-pre ie-testcase-pre--output">{testCaseResults[activeCaseIdx].output}</pre>
-                      </div>
-                    )}
-                    {testCaseResults[activeCaseIdx]?.error && (
-                      <div className="ie-testcase-error">
-                        <span className="ie-testcase-error-title">Error:</span>
-                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{testCaseResults[activeCaseIdx].error}</pre>
-                      </div>
-                    )}
+                    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--danger)', padding: 'var(--space-3)', backgroundColor: 'var(--bg-overlay)', borderRadius: 'var(--radius-md)', border: '1px solid var(--danger-border)' }}>
+                      {terminalOutput.substring(terminalOutput.indexOf('\n\n') + 2) || terminalOutput}
+                    </pre>
                   </div>
                 ) : (
-                  <div className="ie-empty">
-                    <span className="ie-empty-text">No test cases available.</span>
-                  </div>
+                  <>
+                    {/* Testcase tabs */}
+                    <div className="ie-testcase-tabs">
+                      {visibleTestCases.map((tc, idx) => {
+                        const res = testCaseResults[idx];
+                        let tabClass = 'ie-testcase-tab';
+                        if (res?.passed) tabClass += ' ie-testcase-tab--passed';
+                        else if (res && !res.passed) tabClass += ' ie-testcase-tab--failed';
+                        if (activeCaseIdx === idx) tabClass += ' ie-testcase-tab--active';
+
+                        return (
+                          <button
+                            key={tc.id || idx}
+                            onClick={() => setActiveCaseIdx(idx)}
+                            className={tabClass}
+                          >
+                            <span className="ie-testcase-indicator" />
+                            <span>{tc.label || `Case ${idx + 1}`}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active case detail */}
+                    {visibleTestCases[activeCaseIdx] ? (
+                      <div className="ie-testcase-content">
+                        <div>
+                          <span className="ie-testcase-label">Input:</span>
+                          <pre className="ie-testcase-pre">{visibleTestCases[activeCaseIdx].input}</pre>
+                        </div>
+                        {visibleTestCases[activeCaseIdx].expected_output && (
+                          <div>
+                            <span className="ie-testcase-label">Expected Output:</span>
+                            <pre className="ie-testcase-pre ie-testcase-pre--expected">{visibleTestCases[activeCaseIdx].expected_output}</pre>
+                          </div>
+                        )}
+                        {/* Always show "Your Output" if testCaseResults has been populated */}
+                        {testCaseResults[activeCaseIdx] && (
+                          <div>
+                            <span className="ie-testcase-label">Your Output:</span>
+                            <pre className="ie-testcase-pre ie-testcase-pre--output">
+                              {testCaseResults[activeCaseIdx].output !== undefined && testCaseResults[activeCaseIdx].output !== null
+                                ? (testCaseResults[activeCaseIdx].output === "" ? "(no output)" : testCaseResults[activeCaseIdx].output)
+                                : "(no output)"}
+                            </pre>
+                          </div>
+                        )}
+                        {testCaseResults[activeCaseIdx]?.error && (
+                          <div className="ie-testcase-error">
+                            <span className="ie-testcase-error-title">Error:</span>
+                            <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{testCaseResults[activeCaseIdx].error}</pre>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="ie-empty">
+                        <span className="ie-empty-text">No test cases available.</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -314,6 +366,17 @@ export function InteractiveEditor({
 
       {/* ── Bottom Action Toolbar ─────────────────────────────────────────── */}
       <div className="ie-action-bar">
+        <button
+          className={`ie-btn ie-btn--ghost ${isTerminalOpen ? 'ie-btn--active' : ''}`}
+          onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+          title={isTerminalOpen ? "Close console panel" : "Open console panel"}
+          id="btn-toggle-console"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: isTerminalOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', marginRight: '4px' }}>
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Console
+        </button>
         <div className="ie-action-spacer" />
         <div className="ie-action-buttons">
           <button

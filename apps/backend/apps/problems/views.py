@@ -44,6 +44,22 @@ def problems_list(request):
     solved_count = UserProblemStats.objects.filter(user=request.user, status="solved").count()
     attempted_count = UserProblemStats.objects.filter(user=request.user).exclude(status="solved").count()
     
+    # Calculate global score (Easy=100, Medium=200, Hard=300) dynamically via DB annotations
+    from django.db.models import Case, When, Value, IntegerField, Sum
+    solved_problems = Problem.objects.filter(
+        status="approved",
+        user_stats__user=request.user,
+        user_stats__status="solved"
+    )
+    total_score = solved_problems.annotate(
+        pts=Case(
+            When(difficulty="easy", then=Value(100)),
+            When(difficulty="medium", then=Value(200)),
+            default=Value(300),
+            output_field=IntegerField()
+        )
+    ).aggregate(total=Sum("pts"))["total"] or 0
+    
     problems = Problem.objects.filter(status="approved").prefetch_related("tags")
     
     if search_query:
@@ -99,7 +115,8 @@ def problems_list(request):
         "attempted_count": attempted_count,
         "total_filtered_count": total_filtered_count,
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
+        "total_score": total_score
     }, status=status.HTTP_200_OK)
 
 
@@ -214,7 +231,7 @@ def submit_code(request, problem_slug):
         pass
     starter_code = templates.get("python", "")
     
-    verdict, results, compile_error = run_code_in_sandbox(code, language, all_cases, problem.time_limit_ms, starter_code)
+    verdict, results, compile_error = run_code_in_sandbox(code, language, all_cases, problem.time_limit_ms, starter_code, stop_on_first_fail=True)
     
     # Calculate passed test cases count
     passed_count = sum(1 for r in results if r.get("passed"))

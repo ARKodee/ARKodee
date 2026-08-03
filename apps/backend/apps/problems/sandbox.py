@@ -809,7 +809,7 @@ def generate_py_driver(func_name, params, ret_type, has_class=True):
     return driver_code
 
 
-def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=None):
+def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=None, stop_on_first_fail=False):
     results = []
     verdict = "AC"
     compile_error = None
@@ -969,7 +969,8 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                     })
                     if not passed:
                         verdict = "WA"
-                        break
+                        if stop_on_first_fail:
+                            break
                         
             except subprocess.TimeoutExpired:
                 verdict = "TLE"

@@ -160,7 +160,7 @@ export function ProblemDescription({
           {sampleInputs.length > 0 && (
             <div className="pdsc-examples">
               <h3 className="pdsc-section-title">Examples</h3>
-              {sampleInputs.map((input, i) => (
+              {sampleInputs.slice(0, 2).map((input, i) => (
                 <SampleCase
                   key={i}
                   index={i}

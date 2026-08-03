@@ -122,10 +122,11 @@
 }
 
 .pw-pane--left {
-  width: 45%;
+  width: 38%;
   min-width: 280px;
   max-width: 60%;
   border-right: 1px solid var(--border);
+  overflow: visible;
 }
 
 .pw-pane--right {
@@ -214,7 +215,7 @@
 }
 
 .pw-skeleton-left {
-  width: 45%;
+  width: 38%;
   padding: var(--space-4);
   border-right: 1px solid var(--border);
 }
@@ -371,3 +372,38 @@
     display: none;
   }
 }
+
+/* Collapsed expand tab trigger */
+.pw-collapsed-expand-btn {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 100;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.pw-collapsed-expand-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+  border-color: var(--border-strong);
+}
+
+.pw-collapsed-expand-btn svg {
+  width: 12px;
+  height: 12px;
+}

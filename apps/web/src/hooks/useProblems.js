@@ -38,6 +38,7 @@ export function useProblems() {
   const [solvedCount, setSolvedCount] = useState(0);
   const [attemptedCount, setAttemptedCount] = useState(0);
   const [totalFilteredCount, setTotalFilteredCount] = useState(0);
+  const [totalScore, setTotalScore] = useState(0);
 
   // Internal debounce ref — stores the pending timer ID across renders.
   const debounceTimer = useRef(null);
@@ -97,6 +98,7 @@ export function useProblems() {
         setSolvedCount(data?.solved_count ?? 0);
         setAttemptedCount(data?.attempted_count ?? 0);
         setTotalFilteredCount(data?.total_filtered_count ?? 0);
+        setTotalScore(data?.total_score ?? 0);
       } catch (err) {
         setProblemsError(err.message ?? 'Failed to filter problems.');
         setProblems([]);
@@ -135,6 +137,7 @@ export function useProblems() {
     solvedCount,
     attemptedCount,
     totalFilteredCount,
+    totalScore,
 
     // Filter query strings & pagination
     searchQuery,

@@ -24,7 +24,7 @@ export function PracticeDashboard() {
     problems, submissionCalendar,
     isLoadingProblems, isLoadingCalendar,
     problemsError, calendarError,
-    totalProblems, solvedCount, attemptedCount, totalFilteredCount,
+    totalProblems, solvedCount, attemptedCount, totalFilteredCount, totalScore,
     searchQuery, activeDifficulty, currentPage, pageSize,
     setSearchQuery, setActiveDifficulty, setCurrentPage,
   } = useProblems();
@@ -45,10 +45,11 @@ export function PracticeDashboard() {
 
         {/* Stats strip */}
         <div className="prac-stats" aria-label="Problem statistics">
-          <StatCard label="Total"     value={totalProblems}                              variant="accent"   isLoading={isLoadingProblems} />
+          <StatCard label="Total"     value={totalProblems}                              variant="default"  isLoading={isLoadingProblems} />
           <StatCard label="Solved"    value={solvedCount}                                variant="success"  isLoading={isLoadingProblems} />
           <StatCard label="Attempted" value={attemptedCount}                             variant="warning"  isLoading={isLoadingProblems} />
-          <StatCard label="Remaining" value={totalProblems - solvedCount - attemptedCount} variant="default" isLoading={isLoadingProblems} />
+          <StatCard label="Remaining" value={totalProblems - solvedCount - attemptedCount} variant="default"  isLoading={isLoadingProblems} />
+          <StatCard label="Score"     value={`${totalScore} pts`}                        variant="accent"   isLoading={isLoadingProblems} />
         </div>
 
         {/* Main grid */}
