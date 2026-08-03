@@ -375,7 +375,7 @@ class SocketManager {
           setRoomDocument(room);
 
           // Post to Python Django backend duels endpoint to persist result and calculate ELO
-          const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+          const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:8000';
           const postData = {
             player_a_id: room.players[0].userId,
             player_b_id: room.players[1] ? room.players[1].userId : room.players[0].userId,

@@ -42,7 +42,7 @@ export function MatchmakingArena() {
 
   // Initialize socket connection
   useEffect(() => {
-    const socketUrl = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+    const socketUrl = import.meta.env.VITE_WS_URL || 'http://127.0.0.1:3000';
     const activeUserId = user?.id || user?.userId || 'user-1';
     const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
 
