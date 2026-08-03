@@ -115,8 +115,15 @@ def google_login_view(request):
 
     if user is None:
         # Create a new user account if they've never logged in with Google before
+        base_username = email.split("@")[0]
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
+
         user = User(
-            username=email,
+            username=username,
             email=email,
         )
 

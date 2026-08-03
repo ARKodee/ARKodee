@@ -48,8 +48,13 @@ class RegisterSerializer(serializers.Serializer):
         password = validated_data["password"]
         full_name = validated_data.get("fullName", "")
 
-        # Use email as username since Django User model requires username and email is unique
-        username = email
+        # Generate a clean, unique username from the email prefix
+        base_username = email.split("@")[0]
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
 
         # ⚙️ Split Full Name into First and Last Name
         name_parts = full_name.strip().split(" ", 1) if full_name else []
@@ -86,12 +91,14 @@ class UserSerializer(serializers.ModelSerializer):
     Serializes basic user metadata for API responses.
     """
     fullName = serializers.SerializerMethodField()
+    firstName = serializers.CharField(source="first_name", read_only=True)
+    lastName = serializers.CharField(source="last_name", read_only=True)
     duelRating = serializers.SerializerMethodField()
     contestRating = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "fullName", "duelRating", "contestRating"]
+        fields = ["id", "username", "email", "fullName", "firstName", "lastName", "duelRating", "contestRating"]
 
     def get_fullName(self, obj):
         full_name = f"{obj.first_name} {obj.last_name}".strip()
@@ -106,6 +113,7 @@ class UserSerializer(serializers.ModelSerializer):
         if hasattr(obj, "stats"):
             return obj.stats.contest_rating
         return 1200
+
 
 
 
