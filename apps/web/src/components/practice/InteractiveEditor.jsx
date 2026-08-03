@@ -71,7 +71,8 @@ export function InteractiveEditor({
   setIsTerminalOpen = () => {},
   onRun = () => {},
   onSubmit = () => {},
-  readOnly = false
+  readOnly = false,
+  enableSuggestions = true
 }) {
   const editorRef = useRef(null);
 
@@ -138,6 +139,11 @@ export function InteractiveEditor({
               verticalScrollbarSize: 6,
               horizontalScrollbarSize: 6,
             },
+            quickSuggestions: enableSuggestions ? { other: true, comments: false, strings: false } : false,
+            parameterHints: { enabled: enableSuggestions },
+            suggestOnTriggerCharacters: enableSuggestions,
+            tabCompletion: enableSuggestions ? "on" : "off",
+            wordBasedSuggestions: enableSuggestions ? "allDocuments" : "none",
           }}
         />
       </div>

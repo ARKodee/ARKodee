@@ -212,7 +212,33 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
   // 3. Mark room state as ACTIVE & started
   roomDoc.status = 'ACTIVE';
   roomDoc.isStarted = true;
+  const matchStartTime = new Date().toISOString();
+  roomDoc.startedAt = matchStartTime;
+  
+  // Initialize player metadata for the combat economy
+  if (roomDoc.players && Array.isArray(roomDoc.players)) {
+    roomDoc.players.forEach(p => {
+      p.ap = p.ap || 20; // Starts with 20 AP
+      p.score = p.score || 0;
+      p.solvedProblems = p.solvedProblems || {};
+      p.failedAttempts = p.failedAttempts || {};
+    });
+  }
   setRoomDocument(roomDoc);
+
+  // Setup AP passive regenerator (1 AP / 5 seconds)
+  const apInterval = setInterval(() => {
+    let activeRoom = getRoomDocument(roomId);
+    if (!activeRoom || activeRoom.status !== 'ACTIVE') {
+      clearInterval(apInterval);
+      return;
+    }
+    activeRoom.players.forEach((p) => {
+      p.ap = Math.min(100, (p.ap || 20) + 1); // Cap at 100 AP
+    });
+    setRoomDocument(activeRoom);
+    io.to(roomId).emit('room_updated', activeRoom);
+  }, 5000);
 
   // 4. Dynamic Socket ID Lookup & Broadcasting
   // Get mapped socket IDs from internal Map or Socket.io adapter room
@@ -228,7 +254,7 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
     roomId: roomId,
     roomCode: roomId,
     matchId: `MATCH-${roomId}-${Date.now()}`,
-    startedAt: new Date().toISOString(),
+    startedAt: matchStartTime,
     hostId: roomHostId,
     problems: DEFAULT_ARENA_PROBLEMS,
     players: roomDoc.players || [],

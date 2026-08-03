@@ -88,7 +88,36 @@ export function useMatchSocket(matchId) {
   const [isEditorLocked, setIsEditorLocked] = useState(false);
   const [connectionState, setConnectionState] = useState('DISCONNECTED');
   
+  // Real-time Combat telemetry states
+  const [startedAt, setStartedAt] = useState(null);
+  const [myScore, setMyScore] = useState(0);
+  const [myAp, setMyAp] = useState(20);
+  const [opponentScore, setOpponentScore] = useState(0);
+  const [opponentAp, setOpponentAp] = useState(20);
+  const [activeSabotage, setActiveSabotage] = useState(null);
+  const [sabotageTimeLeft, setSabotageTimeLeft] = useState(0);
+  const [myShieldActiveUntil, setMyShieldActiveUntil] = useState(0);
+  const [matchFinishedData, setMatchFinishedData] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+
   const socketRef = useRef(null);
+
+  // Handle active sabotage countdown tick
+  useEffect(() => {
+    if (sabotageTimeLeft <= 0) {
+      if (activeSabotage) {
+        setActiveSabotage(null);
+        if (activeSabotage === 'monaco-jam') {
+          setIsEditorLocked(false);
+        }
+      }
+      return;
+    }
+    const timer = setInterval(() => {
+      setSabotageTimeLeft((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [sabotageTimeLeft, activeSabotage]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -134,65 +163,107 @@ export function useMatchSocket(matchId) {
       setIsMatchReady(true);
       setIsMatchStarted(true);
 
+      if (payload?.startedAt) {
+        setStartedAt(payload.startedAt);
+      }
+
       if (payload?.hostId) {
         setHostId(payload.hostId);
       } else if (payload?.players && Array.isArray(payload.players) && payload.players.length > 0) {
         setHostId(payload.players[0].userId);
       }
 
+      // Read initial scores/AP from payload players list
       if (payload?.players && Array.isArray(payload.players)) {
-        const opp = payload.players.find((p) => String(p.userId) !== String(user?.id)) || payload.players[1];
+        const me = payload.players.find((p) => String(p.userId) === String(user?.id));
+        const opp = payload.players.find((p) => String(p.userId) !== String(user?.id));
+        
+        if (me) {
+          setMyScore(me.score || 0);
+          setMyAp(me.ap || 20);
+        }
         if (opp) {
+          setOpponentScore(opp.score || 0);
+          setOpponentAp(opp.ap || 20);
           setOpponentProfile({
             username: opp.username || 'OPPONENT',
             rating: opp.rating || null,
             avatar: opp.avatar || null,
             score: opp.score || 0,
-            solvedCount: opp.solvedCount || 0,
+            solvedCount: Object.keys(opp.solvedProblems || {}).filter(k => opp.solvedProblems[k]).length,
           });
         }
-      } else if (payload?.opponent) {
-        setOpponentProfile((prev) => ({
-          ...prev,
-          ...payload.opponent,
-        }));
       }
     };
 
     socket.on('match_ready', handleMatchStartedOrReady);
     socket.on('match_started', handleMatchStartedOrReady);
 
-    socket.on('arena_lobby_dissolved', (payload) => {
-      console.log('[useMatchSocket] arena_lobby_dissolved received:', payload);
-      setIsArenaDissolved(true);
-    });
-
-    socket.on('opponent_progress', (payload) => {
-      console.log('[useMatchSocket] Opponent progress update:', payload);
-      if (payload?.solvedCount !== undefined) {
-        setOpponentProfile((prev) => ({
-          ...prev,
-          solvedCount: payload.solvedCount,
-          score: payload.score ?? prev.score,
-        }));
+    socket.on('room_updated', (updatedRoom) => {
+      console.log('[useMatchSocket] room_updated received:', updatedRoom);
+      if (updatedRoom.startedAt) {
+        setStartedAt(updatedRoom.startedAt);
       }
-      if (payload?.problemProgress) {
-        setOpponentProgress(payload.problemProgress);
+      if (updatedRoom.players && Array.isArray(updatedRoom.players)) {
+        const me = updatedRoom.players.find((p) => String(p.userId) === String(user?.id));
+        const opp = updatedRoom.players.find((p) => String(p.userId) !== String(user?.id));
+        
+        if (me) {
+          setMyScore(me.score || 0);
+          setMyAp(me.ap || 20);
+          setMyShieldActiveUntil(me.shieldActiveUntil || 0);
+        }
+        if (opp) {
+          setOpponentScore(opp.score || 0);
+          setOpponentAp(opp.ap || 20);
+          setOpponentProfile({
+            username: opp.username || 'OPPONENT',
+            rating: opp.rating || null,
+            avatar: opp.avatar || null,
+            score: opp.score || 0,
+            solvedCount: Object.keys(opp.solvedProblems || {}).filter(k => opp.solvedProblems[k]).length,
+          });
+          setOpponentProgress(opp.solvedProblems || {});
+        }
       }
     });
 
     socket.on('opponent_sabotaged', (payload) => {
       console.log('[useMatchSocket] Sabotage received:', payload);
-      setIsEditorLocked(true);
-      setTimeout(() => {
-        setIsEditorLocked(false);
-      }, payload?.durationMs || 5000);
+      const sabType = payload.type;
+      const durationSec = Math.ceil((payload.durationMs || 5000) / 1000);
+      
+      setActiveSabotage(sabType);
+      setSabotageTimeLeft(durationSec);
+
+      if (sabType === 'monaco-jam') {
+        setIsEditorLocked(true);
+      }
+      setToastMessage(`⚠️ Opponent cast ${sabType.toUpperCase()} on you for ${durationSec}s!`);
+    });
+
+    socket.on('sabotage_blocked', (payload) => {
+      setToastMessage(`🛡️ Attack Blocked: ${payload.message || 'Opponent has active shield.'}`);
+    });
+
+    socket.on('reduce_sabotage', () => {
+      setSabotageTimeLeft((prev) => Math.max(0, Math.floor(prev / 2)));
+      setToastMessage(`✨ Cleanse activated! Sabotage duration reduced by 50%.`);
+    });
+
+    socket.on('match_finished', (payload) => {
+      console.log('[useMatchSocket] match_finished received:', payload);
+      setMatchFinishedData(payload);
+    });
+
+    socket.on('arena_lobby_dissolved', (payload) => {
+      console.log('[useMatchSocket] arena_lobby_dissolved received:', payload);
+      setIsArenaDissolved(true);
     });
 
     socket.on('connect_error', (err) => {
       console.warn('[useMatchSocket] Connection error (using fallback preloads):', err.message);
       setConnectionState('ERROR');
-      // If backend socket is not connected in demo mode, pre-populate default problems
       setProblems(DEFAULT_ARENA_PROBLEMS);
       setIsMatchReady(true);
     });
@@ -267,6 +338,15 @@ export function useMatchSocket(matchId) {
     }
   }, [matchId]);
 
+  /**
+   * Emit shield activation
+   */
+  const sendShield = useCallback((shieldType) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('use_shield', { matchId, shieldType });
+    }
+  }, [matchId]);
+
   return {
     problems,
     isMatchReady,
@@ -282,6 +362,18 @@ export function useMatchSocket(matchId) {
     initiateMatch,
     sendSubmission,
     sendSabotage,
+    sendShield,
+    startedAt,
+    myScore,
+    myAp,
+    opponentScore,
+    opponentAp,
+    activeSabotage,
+    sabotageTimeLeft,
+    myShieldActiveUntil,
+    matchFinishedData,
+    toastMessage,
+    setToastMessage,
     socket: socketRef.current,
   };
 }

@@ -89,7 +89,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["email", "fullName"]
+        fields = ["id", "email", "fullName"]
 
     def get_fullName(self, obj):
         full_name = f"{obj.first_name} {obj.last_name}".strip()

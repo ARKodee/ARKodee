@@ -44,7 +44,6 @@ export function MatchInitOverlay({
   useEffect(() => {
     if (phase !== 'COUNTDOWN') return;
 
-    // NOTE: Sound effect can be added here using new Audio('/sounds/countdown_beep.mp3').play();
     if (!audioPlayedRef.current) {
       audioPlayedRef.current = true;
     }
@@ -55,10 +54,7 @@ export function MatchInitOverlay({
       }, 1000);
       return () => clearTimeout(timer);
     } else {
-      // Countdown reached 0 -> initiate fade-out & handoff to ACTIVE state
       setIsFadingOut(true);
-
-      // NOTE: Final GO sound effect can be added here using new Audio('/sounds/match_start.mp3').play();
 
       const handoffTimer = setTimeout(() => {
         onHandoff();
@@ -66,7 +62,7 @@ export function MatchInitOverlay({
 
       return () => clearTimeout(handoffTimer);
     }
-  }, [phase, countdown, onHandoff]);
+  }, [phase, countdown]);
 
   return (
     <div
