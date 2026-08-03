@@ -1,0 +1,396 @@
+/* src/components/practice/ProblemDescription.css
+   Problem description panel styles
+   Uses design system tokens
+*/
+
+.pdsc-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+
+.pdsc-root .ie-terminal {
+  max-height: 220px;
+}
+
+/* ── Tab Selector Bar ───────────────────────────────────────────────────────── */
+.pdsc-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  min-height: var(--h-btn-sm);
+}
+
+.pdsc-tab {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease);
+}
+
+.pdsc-tab:hover {
+  color: var(--text-secondary);
+  background-color: var(--bg-overlay);
+}
+
+.pdsc-tab--active {
+  color: var(--accent);
+  background-color: var(--accent-subtle);
+}
+
+/* ── Content Area ───────────────────────────────────────────────────────────── */
+.pdsc-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+/* ── Header Section ─────────────────────────────────────────────────────────── */
+.pdsc-header {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.pdsc-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.pdsc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── Difficulty Badge ───────────────────────────────────────────────────────── */
+.pdsc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-nano);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-sm);
+}
+
+.pdsc-badge--easy {
+  background-color: var(--success-subtle);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+}
+
+.pdsc-badge--medium {
+  background-color: var(--warning-subtle);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
+}
+
+.pdsc-badge--hard {
+  background-color: var(--danger-subtle);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+}
+
+/* ── Limit Indicators ───────────────────────────────────────────────────────── */
+.pdsc-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.pdsc-limit svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Section Blocks ─────────────────────────────────────────────────────────── */
+.pdsc-section {
+  margin-bottom: var(--space-4);
+}
+
+.pdsc-section-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.pdsc-section-body {
+  padding: var(--space-3);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.pdsc-paragraph {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-body);
+  margin-bottom: var(--space-2);
+}
+
+.pdsc-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Examples Section ────────────────────────────────────────────────────────── */
+.pdsc-examples {
+  margin-top: var(--space-4);
+}
+
+.pdsc-examples .pdsc-section-title {
+  margin-bottom: var(--space-3);
+}
+
+.pdsc-sample {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.pdsc-sample:last-child {
+  margin-bottom: 0;
+}
+
+.pdsc-sample-heading {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.pdsc-sample-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 640px) {
+  .pdsc-sample-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.pdsc-sample-block {
+  padding: var(--space-2);
+  background-color: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.pdsc-sample-label {
+  display: block;
+  font-size: var(--text-nano);
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-1);
+}
+
+.pdsc-sample-pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+}
+
+/* ── Submissions Tab ─────────────────────────────────────────────────────────── */
+.pdsc-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.pdsc-placeholder svg {
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-3);
+  opacity: 0.5;
+}
+
+.pdsc-placeholder p {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.pdsc-placeholder span {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.submissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.submission-card {
+  padding: var(--space-3);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.submission-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.submission-badge-group {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.submission-status-badge {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+
+.submission-status-badge--accepted {
+  background-color: var(--success-subtle);
+  color: var(--success);
+}
+
+.submission-status-badge--wrong-answer,
+.submission-status-badge--wa {
+  background-color: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.submission-status-badge--time-limit-exceeded,
+.submission-status-badge--tle {
+  background-color: var(--warning-subtle);
+  color: var(--warning);
+}
+
+.submission-lang-badge {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background-color: var(--bg-overlay);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+
+.submission-time {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.submission-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.submission-testcases {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.submission-view-code-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--accent);
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.submission-view-code-btn:hover {
+  text-decoration: underline;
+}
+
+.submission-code-block {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.submission-skeleton-card {
+  padding: var(--space-3);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.submission-skeleton-line {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 0%,
+    var(--bg-overlay) 50%,
+    var(--bg-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: pdsc-shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes pdsc-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .pdsc-tabs {
+    overflow-x: auto;
+  }
+
+  .pdsc-content {
+    padding: var(--space-3);
+  }
+
+  .pdsc-sample-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -2,6 +2,7 @@
 // Presentational Component — no internal state, no data fetching.
 // All values and mutators arrive exclusively through props.
 import React from 'react';
+import './FilterPanel.css';
 
 /**
  * DIFFICULTY_TABS
