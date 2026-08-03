@@ -1,11 +1,13 @@
 // src/pages/ProblemWorkspace.jsx
-// Split-Canvas Conductor Page Layout — master full-screen workspace manager.
-// No direct inline text parsing or network states; delegates to useProblemDetails hook.
-import React from 'react';
+// Split-Canvas Conductor Page Layout — resizable IDE workspace.
+// Uses design system tokens and provides collapsible/collapsible panels.
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProblemDetails } from '../hooks/useProblemDetails';
 import { ProblemDescription } from '../components/practice/ProblemDescription';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import './ProblemWorkspace.css';
 
 // ─── Language Options ──────────────────────────────────────────────────────────
 const LANGUAGES = [
@@ -15,8 +17,12 @@ const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
 ];
 
-// ─── Loading Skeleton ──────────────────────────────────────────────────────────
+// ─── Initial Panel Widths ──────────────────────────────────────────────────────
+const INITIAL_LEFT_WIDTH = 45;
+const MIN_LEFT_WIDTH = 30;
+const MAX_LEFT_WIDTH = 60;
 
+// ─── Loading Skeleton ──────────────────────────────────────────────────────────
 function WorkspaceSkeleton() {
   return (
     <div className="pw-skeleton-root">
@@ -38,22 +44,11 @@ function WorkspaceSkeleton() {
 }
 
 // ─── Error State ───────────────────────────────────────────────────────────────
-
 function WorkspaceError({ message, onRetry }) {
   return (
     <div className="pw-error-root">
       <div className="pw-error-card">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
           <line x1="12" y1="8" x2="12" y2="12" />
           <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -67,26 +62,76 @@ function WorkspaceError({ message, onRetry }) {
   );
 }
 
-// ─── Main Page Component ───────────────────────────────────────────────────────
+// ─── Resize Handle Component ───────────────────────────────────────────────────
+function ResizeHandle({ position, onResize, containerRef }) {
+  const [isActive, setIsActive] = useState(false);
+  const startPos = useRef(null);
+  const startWidth = useRef(null);
 
-/**
- * ProblemWorkspace
- *
- * Full-screen split-pane IDE layout.
- * URL: /practice/problems/:slug
- *
- * Layout:
- *   ┌──────────────────────────────────────────────────────────┐
- *   │  Toolbar: [← Back | Title]              [Language ▾]    │
- *   ├───────────────────────────┬──────────────────────────────┤
- *   │  ProblemDescription       │  InteractiveEditor           │
- *   │  (scroll-isolated)        │  (Monaco + Terminal)         │
- *   │                           │                              │
- *   └───────────────────────────┴──────────────────────────────┘
- */
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    setIsActive(true);
+    startPos.current = e.clientX;
+    startWidth.current = containerRef.current?.offsetWidth;
+
+    const handleMouseMove = (moveEvent) => {
+      if (startPos.current === null || startWidth.current === null) return;
+      const delta = moveEvent.clientX - startPos.current;
+      const containerWidth = containerRef.current?.offsetWidth || window.innerWidth;
+      const deltaPercent = (delta / containerWidth) * 100;
+      const newWidth = Math.min(
+        Math.max(startWidth.current + deltaPercent, MIN_LEFT_WIDTH),
+        MAX_LEFT_WIDTH
+      );
+      onResize(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsActive(false);
+      startPos.current = null;
+      startWidth.current = null;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [containerRef, onResize]);
+
+  return (
+    <div
+      className={`pw-resize-handle ${isActive ? 'pw-resize-handle--active' : ''}`}
+      onMouseDown={handleMouseDown}
+      role="separator"
+      tabIndex={0}
+      aria-orientation="vertical"
+    />
+  );
+}
+
+// ─── Collapse Toggle Component ─────────────────────────────────────────────────
+function CollapseToggle({ isCollapsed, onToggle, position }) {
+  return (
+    <button
+      className={`pw-collapse-toggle ${isCollapsed ? 'pw-collapse-toggle--collapsed' : ''}`}
+      onClick={onToggle}
+      title={isCollapsed ? 'Expand panel' : 'Collapse panel'}
+      aria-label={isCollapsed ? 'Expand problem description' : 'Collapse problem description'}
+    >
+      <ChevronRight size={14} />
+    </button>
+  );
+}
+
+// ─── Main Page Component ───────────────────────────────────────────────────────
 export function ProblemWorkspace() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const containerRef = useRef(null);
+  const [leftWidth, setLeftWidth] = useState(INITIAL_LEFT_WIDTH);
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isLeftHovered, setIsLeftHovered] = useState(false);
+
   const {
     problem,
     loading,
@@ -127,9 +172,31 @@ export function ProblemWorkspace() {
     window.location.reload();
   };
 
+  const handleResize = useCallback((width) => {
+    setLeftWidth(width);
+  }, []);
+
+  const handleCollapseToggle = () => {
+    setIsLeftCollapsed(!isLeftCollapsed);
+  };
+
+  // Auto-expand on hover when collapsed
+  const handleMouseEnter = () => {
+    setIsLeftHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    setIsLeftHovered(false);
+  };
+
+  // Calculate actual left panel width
+  const actualLeftWidth = isLeftCollapsed && !isLeftHovered ? 0 : leftWidth;
+
   return (
     <main className="pw-root" id="problem-workspace">
-      {/* ── Top Toolbar ──────────────────────────────────────────────────── */}
+      {/* Navbar is rendered by the app shell */}
+
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <header className="pw-toolbar">
         <div className="pw-toolbar-left">
           <button
@@ -138,13 +205,9 @@ export function ProblemWorkspace() {
             aria-label="Back to Practice Arena"
             id="btn-back-to-practice"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <ChevronLeft size={18} />
           </button>
-
           <span className="pw-toolbar-sep" aria-hidden="true" />
-
           <h1 className="pw-toolbar-title">
             {loading ? (
               <span className="pw-skel pw-skel--inline-title" />
@@ -171,16 +234,19 @@ export function ProblemWorkspace() {
         </div>
       </header>
 
-      {/* ── Content Area ─────────────────────────────────────────────────── */}
+      {/* ── Content Area ─────────────────────────────────────────────────────── */}
       {error ? (
         <WorkspaceError message={error} onRetry={handleRetry} />
       ) : loading ? (
         <WorkspaceSkeleton />
       ) : (
-        <div className="pw-canvas">
-          {/* Left Pane — Problem Description */}
+        <div className="pw-canvas" ref={containerRef}>
+          {/* Left Pane — Problem Description (Resizable) */}
           <section
-            className="pw-pane-left"
+            className="pw-pane pw-pane--left"
+            style={{ width: `${actualLeftWidth}%` }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
             aria-label="Problem description"
           >
             <ProblemDescription
@@ -188,13 +254,37 @@ export function ProblemWorkspace() {
               submissions={submissions}
               loadingSubmissions={loadingSubmissions}
             />
+            {!isLeftCollapsed && (
+              <>
+                <ResizeHandle
+                  position="right"
+                  onResize={handleResize}
+                  containerRef={containerRef}
+                />
+                <CollapseToggle
+                  isCollapsed={isLeftCollapsed}
+                  onToggle={handleCollapseToggle}
+                  position="right"
+                />
+              </>
+            )}
           </section>
 
           {/* Right Pane — Interactive Editor */}
           <section
-            className="pw-pane-right"
+            className="pw-pane pw-pane--right"
             aria-label="Code editor"
           >
+            {isLeftCollapsed && !isLeftHovered && (
+              <button
+                className="pw-expand-hint"
+                onClick={handleCollapseToggle}
+                title="Expand problem description"
+              >
+                <Maximize2 size={14} />
+                <span>Problem</span>
+              </button>
+            )}
             <InteractiveEditor
               code={code}
               setCode={setCode}

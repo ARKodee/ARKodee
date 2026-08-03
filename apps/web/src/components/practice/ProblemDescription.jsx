@@ -2,6 +2,7 @@
 // Presentational Text Container Panel — left column canvas pane.
 // No internal network fetching or loading effects; all values via props.
 import React, { useState } from 'react';
+import './ProblemDescription.css';
 
 // ─── Tab Identifiers ──────────────────────────────────────────────────────────
 const TABS = [

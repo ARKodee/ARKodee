@@ -3,6 +3,7 @@
 // Mounts Monaco code editor with custom IDE theme and action toolbar.
 import React, { useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
+import './InteractiveEditor.css';
 
 // ─── Language → File Extension Map ─────────────────────────────────────────────
 const FILE_NAMES = {

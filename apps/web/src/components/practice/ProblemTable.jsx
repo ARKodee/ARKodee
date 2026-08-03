@@ -3,6 +3,7 @@
 // and renders an interactive tabular list. No internal state or data fetching.
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import './ProblemTable.css';
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 

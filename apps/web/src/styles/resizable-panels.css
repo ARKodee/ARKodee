@@ -1,0 +1,296 @@
+/* src/styles/resizable-panels.css
+   Resizable and collapsible panel utilities for editor pages
+   Uses design system tokens
+*/
+
+/* ── Resizable Container ────────────────────────────────────────────────────── */
+.rs-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+}
+
+.rs-container--vertical {
+  flex-direction: row;
+}
+
+.rs-container--horizontal {
+  flex-direction: column;
+}
+
+/* ── Resizable Panel ───────────────────────────────────────────────────────── */
+.rs-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg-base);
+  border-color: var(--border);
+  border-style: solid;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.rs-panel--resizable {
+  position: relative;
+}
+
+.rs-panel--left {
+  border-right-width: 1px;
+}
+
+.rs-panel--right {
+  border-left-width: 1px;
+}
+
+.rs-panel--top {
+  border-bottom-width: 1px;
+}
+
+.rs-panel--bottom {
+  border-top-width: 1px;
+}
+
+/* ── Resize Handle ─────────────────────────────────────────────────────────── */
+.rs-handle {
+  position: absolute;
+  z-index: 10;
+  background-color: transparent;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.rs-handle--vertical {
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.rs-handle--horizontal {
+  bottom: -4px;
+  left: 0;
+  height: 8px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+.rs-handle:hover,
+.rs-handle--active {
+  background-color: var(--accent);
+}
+
+.rs-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 24px;
+  background-color: var(--border-strong);
+  border-radius: var(--radius-full);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.rs-handle--vertical::after {
+  width: 3px;
+  height: 24px;
+}
+
+.rs-handle--horizontal::after {
+  width: 24px;
+  height: 3px;
+}
+
+.rs-handle:hover::after,
+.rs-handle--active::after {
+  opacity: 1;
+}
+
+/* ── Collapsible Panel ─────────────────────────────────────────────────────── */
+.rs-collapsible {
+  display: flex;
+  flex-direction: column;
+}
+
+.rs-collapsible__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-btn-sm);
+  height: var(--h-btn-sm);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease);
+}
+
+.rs-collapsible__toggle:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+}
+
+.rs-collapsible__toggle--collapsed {
+  transform: rotate(-180deg);
+}
+
+.rs-collapsible--collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden;
+}
+
+/* ── Panel Header ───────────────────────────────────────────────────────────── */
+.rs-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  min-height: var(--h-btn-sm);
+}
+
+.rs-panel__title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rs-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* ── Panel Content ─────────────────────────────────────────────────────────── */
+.rs-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Panel Footer ───────────────────────────────────────────────────────────── */
+.rs-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  min-height: var(--h-btn-sm);
+}
+
+/* ── Min/Max Width Constraints ─────────────────────────────────────────────── */
+.rs-panel--min-0 { min-width: 0; }
+.rs-panel--min-200 { min-width: 200px; }
+.rs-panel--min-280 { min-width: 280px; }
+.rs-panel--min-320 { min-width: 320px; }
+.rs-panel--min-400 { min-width: 400px; }
+
+.rs-panel--max-30 { max-width: 30%; }
+.rs-panel--max-40 { max-width: 40%; }
+.rs-panel--max-45 { max-width: 45%; }
+.rs-panel--max-50 { max-width: 50%; }
+.rs-panel--max-60 { max-width: 60%; }
+
+/* ── Animation States ───────────────────────────────────────────────────────── */
+.rs-panel--animating {
+  transition:
+    width var(--duration-base) var(--ease),
+    min-width var(--duration-base) var(--ease),
+    max-width var(--duration-base) var(--ease),
+    height var(--duration-base) var(--ease),
+    min-height var(--duration-base) var(--ease),
+    max-height var(--duration-base) var(--ease);
+}
+
+/* ── Collapse/Expand Toggle Button ─────────────────────────────────────────── */
+.rs-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.rs-toggle-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  border-color: var(--border-strong);
+}
+
+.rs-toggle-btn--active {
+  color: var(--accent);
+  background-color: var(--accent-subtle);
+  border-color: var(--accent-border);
+}
+
+/* ── Split View with Fixed Sidebar ─────────────────────────────────────────── */
+.rs-split {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.rs-split__sidebar {
+  flex-shrink: 0;
+  overflow: hidden;
+  background-color: var(--bg-surface);
+  border-color: var(--border);
+}
+
+.rs-split__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg-base);
+}
+
+.rs-split__sidebar--left {
+  width: 280px;
+  border-right-width: 1px;
+}
+
+.rs-split__sidebar--right {
+  width: 320px;
+  border-left-width: 1px;
+}
+
+/* Responsive: collapse sidebar on smaller screens */
+@media (max-width: 1024px) {
+  .rs-split__sidebar--left,
+  .rs-split__sidebar--right {
+    width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .rs-split__sidebar {
+    display: none;
+  }
+}

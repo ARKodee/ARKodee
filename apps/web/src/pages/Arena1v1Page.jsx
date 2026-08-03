@@ -1,44 +1,109 @@
 // src/pages/Arena1v1Page.jsx
-// Conductor & Layout Manager for 1v1 Competitive Arena
-
+// Arena1v1Page — live 1v1 competitive arena with split-pane workspace
+// Uses design system tokens, no Tailwind
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import Editor from '@monaco-editor/react';
 import { useAuth } from '../store/AuthContext';
 import { useMatchSocket, DEFAULT_ARENA_PROBLEMS } from '../hooks/useMatchSocket';
 import { ProblemDescription } from '../components/practice/ProblemDescription';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
 import { MatchInitOverlay } from '../components/arena/MatchInitOverlay';
 import {
-  Swords,
   ArrowLeft,
+  Swords,
   Clock,
-  Shield,
   Zap,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Flame,
-  AlertTriangle,
   Lock,
+  Shield,
+  CheckCircle2,
+  CircleDot,
+  Circle,
+  ChevronDown,
+  ChevronUp,
+  Play,
+  Send,
 } from 'lucide-react';
+import './Arena1v1Page.css';
 
-/**
- * Arena1v1Page Component
- *
- * State Machine:
- *   IDLE -> INITIATING -> COUNTDOWN -> ACTIVE
- */
+// ─── Language Options ──────────────────────────────────────────────────────────
+const LANGUAGES = [
+  { id: 'python', label: 'Python 3', monaco: 'python' },
+  { id: 'cpp', label: 'C++ 17', monaco: 'cpp' },
+  { id: 'java', label: 'Java', monaco: 'java' },
+  { id: 'javascript', label: 'JavaScript', monaco: 'javascript' },
+];
+
+// ─── Difficulty Badge Component ─────────────────────────────────────────────────
+function DifficultyBadge({ difficulty }) {
+  const className = `a1-difficulty-badge a1-difficulty-badge--${difficulty?.toLowerCase()}`;
+  return <span className={className}>{difficulty}</span>;
+}
+
+// ─── Problem Status Icon Component ──────────────────────────────────────────────
+function ProblemStatusIcon({ status }) {
+  if (status === 'solved') return <CheckCircle2 size={14} className="a1-problem-tab-icon a1-problem-tab-icon--solved" />;
+  if (status === 'attempted') return <CircleDot size={14} className="a1-problem-tab-icon a1-problem-tab-icon--attempted" />;
+  return <Circle size={14} className="a1-problem-tab-icon a1-problem-tab-icon--untouched" />;
+}
+
+// ─── Console Output Component ───────────────────────────────────────────────────
+function ConsoleOutput({ output, isOpen, onToggle }) {
+  const [activeTab, setActiveTab] = useState('output');
+
+  if (!isOpen) {
+    return (
+      <div className="a1-console a1-console--closed">
+        <div className="a1-console-header">
+          <button className="a1-console-toggle" onClick={onToggle}>
+            <ChevronUp size={14} />
+            <span>Output</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="a1-console a1-console--open">
+      <div className="a1-console-header">
+        <div className="a1-console-tabs">
+          <button
+            className={`a1-console-tab ${activeTab === 'output' ? 'a1-console-tab--active' : ''}`}
+            onClick={() => setActiveTab('output')}
+          >
+            Output
+          </button>
+          <button
+            className={`a1-console-tab ${activeTab === 'testcases' ? 'a1-console-tab--active' : ''}`}
+            onClick={() => setActiveTab('testcases')}
+          >
+            Testcases
+          </button>
+        </div>
+        <div className="a1-console-actions">
+          <button className="a1-console-close" onClick={onToggle}>
+            <ChevronDown size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="a1-console-body">
+        <pre>{output || 'Ready to run...'}</pre>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page Component ───────────────────────────────────────────────────────
 export function Arena1v1Page() {
   const { matchId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // State Machine Phase: 'IDLE' | 'INITIATING' | 'COUNTDOWN' | 'ACTIVE'
-  // ──────────────────────────────────────────────────────────────────────────
+  // Match phase state: 'IDLE' | 'INITIATING' | 'COUNTDOWN' | 'ACTIVE'
   const [matchPhase, setMatchPhase] = useState('IDLE');
 
-  // Multi-problem state management inside parent conductor
+  // Problem navigation
   const [activeProblemIndex, setActiveProblemIndex] = useState(0);
   const [userCodeMap, setUserCodeMap] = useState({});
   const [selectedLanguageMap, setSelectedLanguageMap] = useState({});
@@ -47,10 +112,10 @@ export function Arena1v1Page() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Match timer (seconds)
+  // Timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // WebSocket hook & pre-loader
+  // WebSocket hook
   const {
     problems,
     isMatchReady,
@@ -71,36 +136,38 @@ export function Arena1v1Page() {
   const activeUserId = user?.id || user?.userId || 'user-1';
   const activeUsername = user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
 
-  // Check if current user is Host: hostId match or default true before socket payload resolves
+  // Check if current user is host
   const isHost = hostId
     ? String(activeUserId) === String(hostId)
     : true;
-  
-  // Active problem object derived from problems array with default fallback
+
+  // Get active problems list
   const activeProblemsList = (problems && problems.length > 0) ? problems : DEFAULT_ARENA_PROBLEMS;
   const activeProblem = activeProblemsList[activeProblemIndex] || activeProblemsList[0];
 
-  // Active code value for currently selected problem tab
+  // Get current problem ID
   const currentProblemId = activeProblem?.id || `p${activeProblemIndex + 1}`;
+
+  // Get current code and language
   const currentCode = userCodeMap[currentProblemId] ?? `# Write your solution for ${activeProblem?.title || 'Problem'} here\n\n`;
   const currentLanguage = selectedLanguageMap[currentProblemId] ?? 'python';
   const currentTerminalOutput = terminalOutputMap[currentProblemId] ?? '';
 
-  // Automatically transition IDLE -> INITIATING when match_started event arrives
+  // Transition IDLE -> INITIATING when match starts
   useEffect(() => {
     if (isMatchStarted && matchPhase === 'IDLE') {
       setMatchPhase('INITIATING');
     }
   }, [isMatchStarted, matchPhase]);
 
-  // Automatically redirect both players back to /matchmaking if arena lobby is dissolved
+  // Redirect when arena is dissolved
   useEffect(() => {
     if (isArenaDissolved) {
       navigate('/matchmaking');
     }
   }, [isArenaDissolved, navigate]);
 
-  // Match timer ticks when match is ACTIVE
+  // Timer tick when match is ACTIVE
   useEffect(() => {
     let timer;
     if (matchPhase === 'ACTIVE') {
@@ -111,7 +178,7 @@ export function Arena1v1Page() {
     return () => clearInterval(timer);
   }, [matchPhase]);
 
-  // Handle "Start Match" click -> transition IDLE -> INITIATING
+  // Start match
   const handleStartMatch = () => {
     if (!isHost) return;
     requestStartMatch();
@@ -119,52 +186,50 @@ export function Arena1v1Page() {
     initiateMatch();
   };
 
-  // Leave Arena Lobby -> notifies backend to dissolve match for both players
+  // Leave arena
   const handleLeaveArena = () => {
     leaveArenaLobby();
     navigate('/matchmaking');
   };
 
-  // Called when countdown overlay completes -> transition to ACTIVE
+  // Countdown complete -> ACTIVE
   const handleOverlayHandoff = () => {
     setMatchPhase('ACTIVE');
   };
 
-  // Helper code updater for active problem
-  const setCodeForCurrentProblem = (newCode) => {
+  // Update code for current problem
+  const handleCodeChange = (newCode) => {
     setUserCodeMap((prev) => ({
       ...prev,
       [currentProblemId]: newCode,
     }));
   };
 
-  // Helper language updater for active problem
-  const setLanguageForCurrentProblem = (lang) => {
+  // Update language for current problem
+  const handleLanguageChange = (lang) => {
     setSelectedLanguageMap((prev) => ({
       ...prev,
       [currentProblemId]: lang,
     }));
   };
 
-  // Run Code Execution Handler
+  // Run code
   const handleRunCode = () => {
     setIsRunning(true);
     setTerminalOutputMap((prev) => ({
       ...prev,
-      [currentProblemId]: `> Running test cases for ${activeProblem?.title || 'Problem'}...\n[PASS] Sample Test 1: Output matches expected.\n[PASS] Sample Test 2: Time elapsed 14ms.\n\nAll sample test cases passed successfully.`,
+      [currentProblemId]: `> Running test cases for ${activeProblem?.title || 'Problem'}...\n[PASS] Sample Test 1\n[PASS] Sample Test 2\n\nAll sample tests passed.`,
     }));
     setIsTerminalOpen(true);
-    setTimeout(() => {
-      setIsRunning(false);
-    }, 1200);
+    setTimeout(() => setIsRunning(false), 1200);
   };
 
-  // Submit Code Handler
+  // Submit code
   const handleSubmitCode = () => {
     setIsSubmitting(true);
     setTerminalOutputMap((prev) => ({
       ...prev,
-      [currentProblemId]: `> Submitting solution for ${activeProblem?.title || 'Problem'} to evaluation server...\n[VERIFYING] Testcase 1/15... PASS\n[VERIFYING] Testcase 8/15... PASS\n[VERIFYING] Testcase 15/15... PASS\n\nRESULT: ACCEPTED (Time: 32ms, Memory: 14.2MB)`,
+      [currentProblemId]: `> Submitting solution...\n[VERIFYING] Testcases...\n\nRESULT: ACCEPTED`,
     }));
     setIsTerminalOpen(true);
     setTimeout(() => {
@@ -173,242 +238,281 @@ export function Arena1v1Page() {
     }, 1800);
   };
 
-  // Format seconds mm:ss
+  // Format timer
   const formatTimer = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
 
+  // Get timer class
+  const getTimerClass = () => {
+    const mins = Math.floor(elapsedSeconds / 60);
+    if (mins >= 25) return 'a1-timer a1-timer--critical';
+    if (mins >= 20) return 'a1-timer a1-timer--warning';
+    return 'a1-timer a1-timer--normal';
+  };
+
+  // Render IDLE state
+  if (matchPhase === 'IDLE') {
+    return (
+      <div className="a1-root">
+        {/* Initiation Overlay */}
+        {(matchPhase === 'INITIATING' || matchPhase === 'COUNTDOWN') && (
+          <MatchInitOverlay
+            userA={{ username: activeUsername, rating: user?.elo || 1482 }}
+            userB={{ username: opponentProfile?.username || 'Challenger', rating: opponentProfile?.rating || 1540 }}
+            onHandoff={handleOverlayHandoff}
+          />
+        )}
+
+        <div className="a1-lobby">
+          {/* Header */}
+          <header className="a1-lobby-header">
+            <button className="a1-lobby-back" onClick={handleLeaveArena}>
+              <ArrowLeft size={16} />
+              <span>Leave Arena</span>
+            </button>
+            <span className="a1-lobby-status">LOBBY STATUS: {connectionState}</span>
+          </header>
+
+          {/* Main Card */}
+          <div className="a1-lobby-card">
+            <div className="a1-lobby-icon">
+              <Swords size={40} />
+            </div>
+
+            <h1 className="a1-lobby-title">1v1 Ranked Arena</h1>
+            <p className="a1-lobby-desc">
+              Match #{matchId?.substring(0, 8) || 'ARENA-01'} is ready. Both players receive 4 problems.
+              The fastest correct solution wins.
+            </p>
+
+            {/* Match Info Grid */}
+            <div className="a1-lobby-stats">
+              <div className="a1-lobby-stat">
+                <span className="a1-lobby-stat-label">Problems</span>
+                <span className="a1-lobby-stat-value">4 Algorithmic</span>
+              </div>
+              <div className="a1-lobby-stat">
+                <span className="a1-lobby-stat-label">Time Limit</span>
+                <span className="a1-lobby-stat-value">30:00 Mins</span>
+              </div>
+              <div className="a1-lobby-stat">
+                <span className="a1-lobby-stat-label">Sabotage</span>
+                <span className="a1-lobby-stat-value a1-lobby-stat-value--accent">ENABLED</span>
+              </div>
+              <div className="a1-lobby-stat">
+                <span className="a1-lobby-stat-label">Ranked ELO</span>
+                <span className="a1-lobby-stat-value a1-lobby-stat-value--warning">± 25 PTS</span>
+              </div>
+            </div>
+
+            {/* Start Button */}
+            {isHost ? (
+              <button className="a1-lobby-start" onClick={handleStartMatch}>
+                <Zap size={18} />
+                <span>Start Match</span>
+              </button>
+            ) : (
+              <div className="a1-lobby-waiting">
+                <Lock size={18} />
+                <span>Waiting for host to start...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render ACTIVE state
   return (
-    <div className="h-screen w-full bg-[#0a0a0c] text-zinc-100 flex flex-col overflow-hidden font-sans select-none">
-      
-      {/* ────────────────────────────────────────────────────────────────────────
-          MATCH INITIATION OVERLAY (Mounted during INITIATING and COUNTDOWN phases)
-          ──────────────────────────────────────────────────────────────────────── */}
+    <div className="a1-root">
+      {/* Initiation Overlay */}
       {(matchPhase === 'INITIATING' || matchPhase === 'COUNTDOWN') && (
         <MatchInitOverlay
-          userA={{
-            username: activeUsername,
-            rating: user?.elo || user?.rating || 1482,
-          }}
-          userB={{
-            username: opponentProfile?.username || 'Challenger',
-            rating: opponentProfile?.rating || 1540,
-          }}
+          userA={{ username: activeUsername, rating: user?.elo || 1482 }}
+          userB={{ username: opponentProfile?.username || 'Challenger', rating: opponentProfile?.rating || 1540 }}
           onHandoff={handleOverlayHandoff}
         />
       )}
 
-      {/* ────────────────────────────────────────────────────────────────────────
-          STATE 1: IDLE / PRE-MATCH LOBBY
-          ──────────────────────────────────────────────────────────────────────── */}
-      {matchPhase === 'IDLE' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 relative overflow-hidden bg-[#0a0a0c]">
-          
-          {/* Header */}
-          <div className="w-full max-w-4xl flex items-center justify-between mb-8">
-            <button
-              onClick={handleLeaveArena}
-              className="flex items-center gap-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors bg-zinc-900/80 border border-zinc-800 px-4 py-2 rounded-lg cursor-pointer"
-            >
-              <ArrowLeft size={16} />
-              <span>LEAVE ARENA LOBBY</span>
+      <div className="a1-body">
+        {/* Header */}
+        <header className="a1-header">
+          <div className="a1-header-left">
+            <button className="a1-back-btn" onClick={handleLeaveArena}>
+              <ArrowLeft size={14} />
+              <span>Exit</span>
             </button>
-            <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/50 border border-indigo-500/20 px-3 py-1 rounded-full uppercase tracking-widest">
-              LOBBY STATUS: {connectionState}
-            </span>
+            <span className="a1-header-sep" />
+            <div className="a1-match-info">
+              <span className="a1-match-id">#{matchId?.substring(0, 8) || 'RANKED'}</span>
+              <span className="a1-vs-divider">vs</span>
+              <span className="a1-opponent-name">{opponentProfile?.username || 'Challenger'}</span>
+            </div>
           </div>
 
-          {/* Center Tactical Lobby Card */}
-          <div className="w-full max-w-4xl bg-[#111113] border border-zinc-800/80 rounded-2xl p-8 md:p-12 shadow-2xl shadow-black/80 flex flex-col items-center text-center relative overflow-hidden">
-            {/* Glow backdrop */}
-            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-indigo-400 mb-6 shadow-inner">
-              <Swords size={40} />
+          <div className="a1-header-right">
+            <div className={getTimerClass()}>
+              <Clock size={14} />
+              <span>{formatTimer(elapsedSeconds)}</span>
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-black tracking-wider uppercase text-white font-mono">
-              1v1 RANKED ARENA // DEFUSAL MODE
-            </h1>
-            <p className="text-xs text-zinc-400 font-mono mt-2 max-w-xl leading-relaxed">
-              Match #<span className="text-indigo-400 font-bold">{matchId || 'ARENA-01'}</span> is locked and primed.
-              Both contenders will receive 4 algorithmic problems simultaneously. The fastest defusal with highest testcase pass rate wins.
-            </p>
-
-            {/* Match Overview Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mt-8">
-              <div className="bg-zinc-950/60 border border-zinc-800/60 p-4 rounded-xl flex flex-col items-center">
-                <span className="text-[10px] font-mono uppercase text-zinc-500">Problem Set</span>
-                <span className="text-sm font-mono font-bold text-white mt-1">4 Algorithmic</span>
-              </div>
-              <div className="bg-zinc-950/60 border border-zinc-800/60 p-4 rounded-xl flex flex-col items-center">
-                <span className="text-[10px] font-mono uppercase text-zinc-500">Time Limit</span>
-                <span className="text-sm font-mono font-bold text-white mt-1">30:00 Mins</span>
-              </div>
-              <div className="bg-zinc-950/60 border border-zinc-800/60 p-4 rounded-xl flex flex-col items-center">
-                <span className="text-[10px] font-mono uppercase text-zinc-500">Sabotage Moves</span>
-                <span className="text-sm font-mono font-bold text-emerald-400 mt-1">ENABLED</span>
-              </div>
-              <div className="bg-zinc-950/60 border border-zinc-800/60 p-4 rounded-xl flex flex-col items-center">
-                <span className="text-[10px] font-mono uppercase text-zinc-500">Ranked ELO</span>
-                <span className="text-sm font-mono font-bold text-amber-400 mt-1">± 25 PTS</span>
-              </div>
-            </div>
-
-            {/* Primary Action Button */}
-            {isHost ? (
-              <button
-                onClick={handleStartMatch}
-                className="mt-10 px-10 py-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-mono font-bold text-sm tracking-wider uppercase rounded-xl shadow-lg shadow-indigo-600/30 transition-all duration-200 active:scale-95 cursor-pointer flex items-center gap-3"
-              >
-                <Zap size={18} />
-                <span>START MATCH & INITIATE CONDUCTOR</span>
-              </button>
-            ) : (
-              <div className="mt-10 px-8 py-4 bg-zinc-950 border border-zinc-800 text-zinc-500 font-mono font-bold text-sm uppercase rounded-xl cursor-not-allowed flex items-center gap-3">
-                <Lock size={18} className="text-zinc-500" />
-                <span>WAITING FOR HOST TO START MATCH...</span>
-              </div>
-            )}
-          </div>
-
-        </div>
-      )}
-
-      {/* ────────────────────────────────────────────────────────────────────────
-          STATE 2: ACTIVE ARENA WORKSPACE CONDUCTOR LAYOUT
-          ──────────────────────────────────────────────────────────────────────── */}
-      {matchPhase === 'ACTIVE' && (
-        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-[#0a0a0c]">
-          
-          {/* ── Top Conductor Toolbar Bar ──────────────────────────────────────── */}
-          <header className="h-14 bg-[#111113] border-b border-zinc-800/80 px-4 flex items-center justify-between shrink-0 z-20">
-            
-            {/* Left: Exit & Title */}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleLeaveArena}
-                className="p-2 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 rounded-md transition-colors cursor-pointer"
-                title="Forfeit / Exit Match"
-              >
-                <ArrowLeft size={16} />
-              </button>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold text-white uppercase tracking-wide">
-                  1v1 ARENA
-                </span>
-                <span className="text-[10px] font-mono text-zinc-500">
-                  MATCH #{matchId?.substring(0, 8) || 'RANKED'}
-                </span>
-              </div>
-            </div>
-
-            {/* Center: Problem Navigation Tabs */}
-            <div className="flex items-center gap-1.5 bg-zinc-950/80 p-1 rounded-lg border border-zinc-800/80">
-              {activeProblemsList.map((p, idx) => (
-                <button
-                  key={p.id || idx}
-                  onClick={() => setActiveProblemIndex(idx)}
-                  className={`px-3 py-1 rounded text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                    activeProblemIndex === idx
-                      ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-                  }`}
-                >
-                  <span>P{idx + 1}</span>
-                  <span className="text-[10px] opacity-75 hidden sm:inline">
-                    {p.difficulty?.substring(0, 1) || ''}
-                  </span>
-                </button>
+            <select
+              className="a1-lang-select"
+              value={currentLanguage}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+            >
+              {LANGUAGES.map((lang) => (
+                <option key={lang.id} value={lang.id}>{lang.label}</option>
               ))}
+            </select>
+          </div>
+        </header>
+
+        {/* Workspace */}
+        <div className="a1-workspace">
+          {/* Left Sidebar - Problem List */}
+          <aside className="a1-sidebar">
+            <div className="a1-sidebar-header">
+              <span className="a1-sidebar-title">Problems</span>
             </div>
-
-            {/* Right: Timer & Opponent Progress Bar */}
-            <div className="flex items-center gap-4">
-              {/* Match Timer */}
-              <div className="flex items-center gap-2 bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800 font-mono text-xs text-indigo-400">
-                <Clock size={14} className="animate-pulse" />
-                <span>{formatTimer(elapsedSeconds)}</span>
+            <div className="a1-sidebar-content">
+              <div className="a1-problem-tabs">
+                {activeProblemsList.map((prob, idx) => {
+                  const status = opponentProgress?.[prob.id] || 'untouched';
+                  return (
+                    <button
+                      key={prob.id || idx}
+                      className={`a1-problem-tab ${idx === activeProblemIndex ? 'a1-problem-tab--active' : ''}`}
+                      onClick={() => setActiveProblemIndex(idx)}
+                    >
+                      <ProblemStatusIcon status={status} />
+                      <span className="a1-problem-tab-name">P{idx + 1}</span>
+                    </button>
+                  );
+                })}
               </div>
-
-              {/* Opponent Status */}
-              <div className="hidden lg:flex items-center gap-2 bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800 text-xs font-mono">
-                <span className="text-zinc-500 uppercase text-[10px]">Opponent:</span>
-                <span className="text-red-400 font-bold">{opponentProfile?.username || '...'}</span>
-                <span className="text-zinc-500">[{opponentProfile?.solvedCount || 0}/4 Solved]</span>
-              </div>
-
-              {/* Language Selector */}
-              <select
-                className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono rounded-md px-2 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
-                value={currentLanguage}
-                onChange={(e) => setLanguageForCurrentProblem(e.target.value)}
-              >
-                <option value="python">Python 3</option>
-                <option value="cpp">C++ 17</option>
-                <option value="java">Java</option>
-                <option value="javascript">JavaScript</option>
-              </select>
             </div>
+          </aside>
 
-          </header>
+          {/* Main Content */}
+          <div className="a1-main">
+            <div className="a1-split">
+              {/* Left - Problem Description */}
+              <section className="a1-description">
+                <div className="a1-description-scroll">
+                  <div className="a1-problem-header">
+                    <div className="a1-problem-title-row">
+                      <span className="a1-problem-index">P{activeProblemIndex + 1}.</span>
+                      <h2 className="a1-problem-title">{activeProblem?.title}</h2>
+                    </div>
+                    <div className="a1-problem-meta">
+                      <DifficultyBadge difficulty={activeProblem?.difficulty} />
+                    </div>
+                  </div>
+                  <div className="a1-problem-content">
+                    <p>{activeProblem?.description || 'Problem description...'}</p>
+                  </div>
+                </div>
+              </section>
 
-          {/* ── Main Split Canvas Workspace ───────────────────────────────────── */}
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 overflow-hidden relative">
-            
-            {/* Left Pane: Dumb ProblemDescription Component */}
-            <section className="h-full min-h-0 border-r border-zinc-800/80 bg-[#0a0a0c] overflow-y-auto">
-              <ProblemDescription
-                problem={activeProblem}
-                submissions={[]}
-                loadingSubmissions={false}
-              />
-            </section>
+              {/* Right - Editor */}
+              <div className="a1-editor">
+                <div className="a1-editor-container">
+                  <Editor
+                    height="100%"
+                    language={LANGUAGES.find(l => l.id === currentLanguage)?.monaco}
+                    value={currentCode}
+                    onChange={handleCodeChange}
+                    theme="vs-dark"
+                    options={{
+                      readOnly: isEditorLocked,
+                      fontSize: 13,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      padding: { top: 12, bottom: 12 },
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
 
-            {/* Right Pane: Dumb InteractiveEditor Component */}
-            <section className="h-full min-h-0 bg-[#111113] relative overflow-hidden flex flex-col">
-              <InteractiveEditor
-                code={currentCode}
-                setCode={setCodeForCurrentProblem}
-                selectedLanguage={currentLanguage}
-                isRunning={isRunning}
-                isSubmitting={isSubmitting}
-                terminalOutput={currentTerminalOutput}
-                isTerminalOpen={isTerminalOpen}
-                setIsTerminalOpen={setIsTerminalOpen}
-                onRun={handleRunCode}
-                onSubmit={handleSubmitCode}
-                readOnly={isEditorLocked}
-              />
-            </section>
+                {/* Console */}
+                <ConsoleOutput
+                  output={currentTerminalOutput}
+                  isOpen={isTerminalOpen}
+                  onToggle={() => setIsTerminalOpen(!isTerminalOpen)}
+                />
 
+                {/* Action Bar */}
+                <div className="a1-action-bar">
+                  <button
+                    className="a1-btn a1-btn--ghost"
+                    onClick={handleRunCode}
+                    disabled={isRunning || isSubmitting}
+                  >
+                    <Play size={14} />
+                    <span>Run</span>
+                  </button>
+                  <button
+                    className="a1-btn a1-btn--primary"
+                    onClick={handleSubmitCode}
+                    disabled={isRunning || isSubmitting}
+                  >
+                    <Send size={14} />
+                    <span>Submit</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* ── Bottom Tactical Sabotage Action Bar ────────────────────────────── */}
-          <footer className="h-10 bg-[#111113] border-t border-zinc-800 px-4 flex items-center justify-between text-xs font-mono shrink-0">
-            <div className="flex items-center gap-2 text-zinc-400 text-[11px]">
-              <Shield size={13} className="text-indigo-400" />
-              <span>TACTICAL SABOTAGE DEPLOYMENT</span>
+          {/* Right Sidebar - Opponent Progress */}
+          <aside className="a1-opponent-panel">
+            <div className="a1-opponent-header">
+              <div className="a1-opponent-avatar">
+                {(opponentProfile?.username || 'C')[0].toUpperCase()}
+              </div>
+              <div className="a1-opponent-info">
+                <span className="a1-opponent-label">Opponent</span>
+                <span className="a1-opponent-name">{opponentProfile?.username || 'Challenger'}</span>
+              </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => sendSabotage('LOCK_EDITOR')}
-                className="px-2.5 py-1 bg-red-950/40 hover:bg-red-900/40 border border-red-800/40 text-red-300 text-[10px] rounded transition-colors uppercase tracking-wider flex items-center gap-1 cursor-pointer"
-                title="Lock opponent's code editor for 5s"
-              >
-                <Lock size={11} />
-                <span>Sabotage: Lock Opponent (5s)</span>
-              </button>
+            <div className="a1-opponent-progress">
+              {activeProblemsList.map((prob, idx) => {
+                const status = opponentProgress?.[prob.id] || 'untouched';
+                return (
+                  <div key={prob.id || idx} className="a1-opponent-problem">
+                    <span className="a1-opponent-problem-name">P{idx + 1}</span>
+                    <span className={`a1-opponent-problem-status a1-opponent-problem-status--${status}`} />
+                  </div>
+                );
+              })}
             </div>
-          </footer>
-
+          </aside>
         </div>
-      )}
 
+        {/* Sabotage Bar */}
+        <footer className="a1-footer">
+          <div className="a1-footer-left">
+            <Shield size={14} />
+            <span>Sabotage</span>
+          </div>
+          <div className="a1-footer-actions">
+            <button
+              className="a1-sabotage-btn"
+              onClick={() => sendSabotage('LOCK_EDITOR')}
+              title="Lock opponent's editor for 5 seconds"
+            >
+              <Lock size={12} />
+              <span>Lock Editor (5s)</span>
+            </button>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
