@@ -123,7 +123,7 @@ export function useMatchSocket(matchId) {
     if (!matchId) return;
 
     const activeUserId = user?.id || user?.userId || 'user-1';
-    const activeUsername = user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+    const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
 
     const socketUrl = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
     const socket = io(socketUrl, {

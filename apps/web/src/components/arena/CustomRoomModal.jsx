@@ -71,7 +71,7 @@ export function CustomRoomModal({ socket, user, onClose }) {
     if (viewMode === 'CREATE' && user && !roomCode) {
       setErrorMsg('');
       const activeUserId = user?.id || user?.userId || 'user-1';
-      const activeUsername = user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+      const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
       socket.emit('create_custom_room', {
         userId: activeUserId,
         username: activeUsername
@@ -88,7 +88,7 @@ export function CustomRoomModal({ socket, user, onClose }) {
   }, [socket, viewMode, user, onClose, navigate]);
 
   const activeUserId = user?.id || user?.userId || 'user-1';
-  const activeUsername = user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+  const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
   const isHostUser = viewMode === 'CREATE';
 
   // Derived player state

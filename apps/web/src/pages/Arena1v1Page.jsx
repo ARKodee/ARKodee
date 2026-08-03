@@ -97,7 +97,7 @@ export function Arena1v1Page() {
   } = useMatchSocket(matchId);
 
   const activeUserId = user?.id || user?.userId || 'user-1';
-  const activeUsername = user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+  const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
 
   const isHost = hostId
     ? String(activeUserId) === String(hostId)
