@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { getContestDetails, startVirtualContest, getContestLeaderboard } from '../lib/contests';
 import { Leaderboard } from '../components/contests/Leaderboard';
+import { Navbar } from '../components/layout/Navbar';
 import './ContestDetailsPage.css';
 
 // ─── Helper Functions ──────────────────────────────────────────────────────────
@@ -127,25 +128,26 @@ export function ContestDetailsPage() {
   const handleStartVirtual = async () => {
     setVirtualLoading(true);
     try {
-      if (!sessionStatus.active) {
-        localStorage.removeItem(`virtual_start_${slug}`);
-        const languagesList = ['python', 'cpp', 'java', 'javascript'];
-        if (contest && contest.problems) {
-          contest.problems.forEach((p) => {
-            languagesList.forEach((lang) => {
-              localStorage.removeItem(`contest_draft_${slug}_${p.slug}_${lang}`);
-            });
-          });
-        }
-      }
       await startVirtualContest(slug);
+      // Clear any stale localStorage data so Arena gets a fresh timer
+      localStorage.removeItem(`virtual_start_${slug}`);
+      if (contest && contest.problems) {
+        const languagesList = ['python', 'cpp', 'java', 'javascript'];
+        contest.problems.forEach((p) => {
+          languagesList.forEach((lang) => {
+            localStorage.removeItem(`contest_draft_${slug}_${p.slug}_${lang}`);
+          });
+        });
+      }
       navigate(`/contests/${slug}/arena?virtual=true`);
     } catch (err) {
+      // startVirtualContest may return 400 if already started — still allow entry
       navigate(`/contests/${slug}/arena?virtual=true`);
     } finally {
       setVirtualLoading(false);
     }
   };
+
 
   // Loading state
   if (loading) {
@@ -185,7 +187,8 @@ export function ContestDetailsPage() {
 
   return (
     <div className="cd-root">
-      {/* Header */}
+      <Navbar />
+      {/* Page header — back button + title + status */}
       <header className="cd-header">
         <div className="cd-header-left">
           <button className="cd-back-btn" onClick={() => navigate('/contests')}>
@@ -247,12 +250,14 @@ export function ContestDetailsPage() {
           {/* Virtual Practice Box (for ended contests) */}
           {timeInfo.status === 'ended' && (
             <div className="cd-virtual-box">
-              <span className="cd-virtual-box-title">Virtual Practice Mode</span>
-              <p className="cd-virtual-box-desc">
-                {sessionStatus.active
-                  ? 'You have an active virtual simulation running. Resume the contest to continue coding.'
-                  : 'This contest has ended. Start a virtual simulation to solve problems under simulated exam conditions.'}
-              </p>
+              <div className="cd-virtual-box-content">
+                <span className="cd-virtual-box-title">Virtual Practice Mode</span>
+                <p className="cd-virtual-box-desc">
+                  {sessionStatus.active
+                    ? 'You have an active virtual simulation running. Resume the contest to continue coding.'
+                    : 'This contest has ended. Start a virtual simulation to solve problems under simulated exam conditions.'}
+                </p>
+              </div>
               <button
                 className="cd-btn cd-btn--primary"
                 onClick={handleStartVirtual}
@@ -267,6 +272,7 @@ export function ContestDetailsPage() {
               </button>
             </div>
           )}
+
 
           {/* Tabs (for ended contests) */}
           {timeInfo.status === 'ended' && (

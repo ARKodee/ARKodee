@@ -127,20 +127,96 @@
   font-family: var(--font-ui);
 }
 
-/* ── Language Select ────────────────────────────────────────────────────────── */
-.ca-lang-select {
+/* ── Language Dropdown ──────────────────────────────────────────────────────── */
+.ca-lang-dropdown {
+  position: relative;
+}
+
+.ca-lang-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
+  font-weight: 500;
   color: var(--text-secondary);
   background-color: var(--bg-overlay);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+  white-space: nowrap;
 }
 
-.ca-lang-select:hover {
+.ca-lang-trigger:hover:not(:disabled) {
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
   border-color: var(--border-strong);
+}
+
+.ca-lang-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ca-lang-trigger svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.ca-lang-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 50;
+  min-width: 140px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+  animation: ca-menu-in 0.12s var(--ease);
+}
+
+@keyframes ca-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+.ca-lang-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease);
+  text-align: left;
+}
+
+.ca-lang-option:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+}
+
+.ca-lang-option--active {
+  color: var(--accent);
+  background-color: var(--accent-subtle);
+  font-weight: 600;
 }
 
 /* ── Timer Display ─────────────────────────────────────────────────────────── */
@@ -212,9 +288,30 @@
 }
 
 .ca-sidebar--collapsed {
-  width: 0;
-  min-width: 0;
-  border-right: none;
+  width: 36px;           /* stays wide enough to show the restore button */
+  min-width: 36px;
+  overflow: visible;
+}
+
+/* Restore button — shown inside the collapsed sidebar */
+.ca-sidebar-restore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 100%;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease),
+              background-color var(--duration-fast) var(--ease);
+}
+
+.ca-sidebar-restore:hover {
+  color: var(--accent);
+  background-color: var(--accent-subtle);
 }
 
 .ca-sidebar-header {
@@ -466,12 +563,45 @@
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
+}
+
+/* Resize handle between description and editor */
+.ca-split-handle {
+  flex-shrink: 0;
+  width: 8px;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+  z-index: 15;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.ca-split-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 40px;
+  background-color: var(--border-strong);
+  border-radius: var(--radius-full);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.ca-split-handle:hover {
+  background-color: var(--accent-subtle);
+}
+
+.ca-split-handle:hover::after {
+  opacity: 1;
 }
 
 .ca-description {
-  width: 45%;
-  min-width: 280px;
-  max-width: 55%;
+  position: relative;       /* anchor for the desc-toggle chip */
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -483,6 +613,42 @@
   width: 0;
   min-width: 0;
   border-right: none;
+  overflow: visible;     /* let the toggle chip peek out */
+}
+
+/* Desc collapse/expand toggle chip — always visible on the edge */
+.ca-desc-toggle {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 28px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease),
+              background-color var(--duration-fast) var(--ease),
+              border-color var(--duration-fast) var(--ease);
+}
+
+.ca-desc-toggle:hover {
+  color: var(--accent);
+  background-color: var(--accent-subtle);
+  border-color: var(--accent-border);
+}
+
+/* For collapsed state, reposition to the left edge */
+.ca-description--collapsed .ca-desc-toggle {
+  right: auto;
+  left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 .ca-description-scroll {
@@ -665,15 +831,19 @@
   flex-direction: column;
   background-color: var(--bg-base);
   border-top: 1px solid var(--border);
-  transition: height var(--duration-base) var(--ease);
+  /* no height transition here — the body-wrap handles it */
+  flex-shrink: 0;
 }
 
-.ca-console--open {
-  height: 220px;
+/* Body wrapper — animates open/closed */
+.ca-console-body-wrap {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height var(--duration-base) var(--ease);
 }
 
-.ca-console--closed {
-  height: 0;
+.ca-console-body-wrap--open {
+  max-height: 220px;
 }
 
 .ca-console-header {
@@ -907,6 +1077,12 @@
   to { transform: rotate(360deg); }
 }
 
+/* Generic spin utility used by Loader2 icons */
+.animate-spin {
+  animation: ca-spin 1s linear infinite;
+}
+
+
 /* ── Error State ─────────────────────────────────────────────────────────────── */
 .ca-error {
   display: flex;
@@ -999,4 +1175,174 @@
   .ca-split {
     flex-direction: column;
   }
+}
+
+/* ── Exit Confirmation Modal ─────────────────────────────────────────────────── */
+
+/* Full-screen backdrop — fixed so it sits above everything */
+.ca-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background-color: rgba(0, 0, 0, 0.60);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: ca-overlay-in 0.15s var(--ease);
+}
+
+@keyframes ca-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Modal card */
+.ca-modal {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.50), 0 4px 16px rgba(0, 0, 0, 0.30);
+  overflow: hidden;
+  animation: ca-modal-in 0.18s var(--ease);
+}
+
+@keyframes ca-modal-in {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+/* Danger accent bar at the very top */
+.ca-modal-accent-bar {
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--danger) 0%, #f97316 100%);
+}
+
+/* Header row: icon + title/subtitle */
+.ca-modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.ca-modal-icon-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: var(--danger-subtle);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-md);
+  color: var(--danger);
+}
+
+.ca-modal-icon-wrap svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ca-modal-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+.ca-modal-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.ca-modal-subtitle {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--danger);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+/* Body text */
+.ca-modal-body {
+  padding: 0 var(--space-4) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-body);
+  border-bottom: 1px solid var(--border);
+}
+
+.ca-modal-body p { margin: 0; }
+
+.ca-modal-body strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Action buttons row */
+.ca-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--bg-elevated);
+}
+
+/* Shared modal button base */
+.ca-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.ca-modal-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Ghost / secondary */
+.ca-modal-btn--ghost {
+  color: var(--text-secondary);
+  background-color: transparent;
+  border: 1px solid var(--border);
+}
+
+.ca-modal-btn--ghost:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+  border-color: var(--border-strong);
+}
+
+/* Danger / confirm */
+.ca-modal-btn--danger {
+  color: #fff;
+  background-color: var(--danger);
+  border: 1px solid transparent;
+}
+
+.ca-modal-btn--danger:hover {
+  background-color: #dc2626;
+  box-shadow: 0 0 0 3px var(--danger-subtle);
 }

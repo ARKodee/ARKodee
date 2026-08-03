@@ -8,7 +8,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   ArrowLeft,
+  AlertTriangle,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Clock,
   Loader2,
@@ -176,6 +178,33 @@ export function ContestArenaPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [descriptionCollapsed, setDescriptionCollapsed] = useState(false);
 
+  // Split resize state — description panel width %
+  const splitContainerRef = useRef(null);
+  const [descWidth, setDescWidth] = useState(45);
+  const descDragState = useRef(null);
+  const DESC_MIN = 25;
+  const DESC_MAX = 65;
+
+  const handleDescResizeStart = useCallback((e) => {
+    e.preventDefault();
+    descDragState.current = { startX: e.clientX, startPct: descWidth };
+
+    const onMove = (mv) => {
+      if (!descDragState.current || !splitContainerRef.current) return;
+      const w = splitContainerRef.current.offsetWidth;
+      if (!w) return;
+      const delta = ((mv.clientX - descDragState.current.startX) / w) * 100;
+      setDescWidth(Math.min(Math.max(descDragState.current.startPct + delta, DESC_MIN), DESC_MAX));
+    };
+    const onUp = () => {
+      descDragState.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [descWidth]);
+
   // Code State
   const [code, setCode] = useState('');
 
@@ -314,14 +343,20 @@ export function ContestArenaPage() {
         const data = await getContestDetails(slug);
         if (cancelled) return;
 
-        const runtimeStatus = data.status_label || 'ended';
+        const rawStatus = data.status_label || data.status || 'ended';
+        const runtimeStatus = rawStatus.toLowerCase();
 
-        if (runtimeStatus === 'upcoming' || (runtimeStatus === 'live' && !data.is_registered)) {
-          navigate(`/contests/${slug}`);
-          return;
+        // Non-virtual: redirect if not yet started or not registered for live
+        if (!isVirtual) {
+          if (runtimeStatus === 'upcoming' || (runtimeStatus === 'live' && !data.is_registered)) {
+            navigate(`/contests/${slug}`);
+            return;
+          }
         }
 
-        if (isVirtual && runtimeStatus !== 'past' && runtimeStatus !== 'ended') {
+        // Virtual mode: only allow for ended/past/completed contests
+        const isEndedStatus = ['ended', 'past', 'completed', 'finished', 'closed'].includes(runtimeStatus);
+        if (isVirtual && !isEndedStatus) {
           navigate(`/contests/${slug}`);
           return;
         }
@@ -345,6 +380,7 @@ export function ContestArenaPage() {
     fetchData();
     return () => { cancelled = true; }
   }, [slug, isVirtual, navigate]);
+
 
   // Handle submit
   const handleSubmit = useCallback(async () => {
@@ -491,36 +527,51 @@ export function ContestArenaPage() {
       <div className="ca-body">
         <div className="ca-workspace">
           {/* Sidebar - Problem List */}
+          {/* When collapsed, a thin restore tab remains visible */}
           <aside className={`ca-sidebar ${sidebarCollapsed ? 'ca-sidebar--collapsed' : ''}`}>
-            <div className="ca-sidebar-header">
-              <span className="ca-sidebar-title">Problem List</span>
-              <button className="ca-sidebar-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
-                <LayoutGrid size={16} />
+            {sidebarCollapsed ? (
+              /* Restore button — always visible even when sidebar is 0-width */
+              <button
+                className="ca-sidebar-restore"
+                onClick={() => setSidebarCollapsed(false)}
+                title="Show problem list"
+                aria-label="Expand problem list"
+              >
+                <LayoutGrid size={14} />
               </button>
-            </div>
-            <div className="ca-sidebar-content">
-              <div className="ca-problem-list">
-                {problems.map((prob, idx) => {
-                  const key = prob.id || prob.slug;
-                  const status = problemStatuses[key] || 'untouched';
-                  const isActive = idx === activeProblemIdx;
+            ) : (
+              <>
+                <div className="ca-sidebar-header">
+                  <span className="ca-sidebar-title">Problem List</span>
+                  <button className="ca-sidebar-toggle" onClick={() => setSidebarCollapsed(true)} title="Hide problem list">
+                    <LayoutGrid size={16} />
+                  </button>
+                </div>
+                <div className="ca-sidebar-content">
+                  <div className="ca-problem-list">
+                    {problems.map((prob, idx) => {
+                      const key = prob.id || prob.slug;
+                      const status = problemStatuses[key] || 'untouched';
+                      const isActive = idx === activeProblemIdx;
 
-                  return (
-                    <button
-                      key={key || idx}
-                      className={`ca-problem-item ${isActive ? 'ca-problem-item--active' : ''}`}
-                      onClick={() => handleSelectProblem(idx)}
-                    >
-                      <ProblemStatusIcon status={status} />
-                      <span className="ca-problem-item-name">
-                        {String.fromCharCode(65 + idx)}. {prob.title}
-                      </span>
-                      <span className="ca-problem-item-points">{prob.points} pt</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                      return (
+                        <button
+                          key={key || idx}
+                          className={`ca-problem-item ${isActive ? 'ca-problem-item--active' : ''}`}
+                          onClick={() => handleSelectProblem(idx)}
+                        >
+                          <ProblemStatusIcon status={status} />
+                          <span className="ca-problem-item-name">
+                            {String.fromCharCode(65 + idx)}. {prob.title}
+                          </span>
+                          <span className="ca-problem-item-points">{prob.points} pt</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
           </aside>
 
           {/* Main Content */}
@@ -580,9 +631,21 @@ export function ContestArenaPage() {
               </div>
             ) : (
               // Split Layout - Problem + Editor
-              <div className="ca-split">
+              <div className="ca-split" ref={splitContainerRef}>
                 {/* Left - Problem Description */}
-                <section className={`ca-description ${descriptionCollapsed ? 'ca-description--collapsed' : ''}`}>
+                <section
+                  className={`ca-description ${descriptionCollapsed ? 'ca-description--collapsed' : ''}`}
+                  style={!descriptionCollapsed ? { width: `${descWidth}%` } : undefined}
+                >
+                  {/* Collapse toggle — always visible */}
+                  <button
+                    className="ca-desc-toggle"
+                    onClick={() => setDescriptionCollapsed(!descriptionCollapsed)}
+                    title={descriptionCollapsed ? 'Expand problem' : 'Collapse problem'}
+                    aria-label={descriptionCollapsed ? 'Expand problem description' : 'Collapse problem description'}
+                  >
+                    {descriptionCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                  </button>
                   <div className="ca-description-scroll">
                     <div className="ca-problem-header">
                       <div className="ca-problem-title-row">
@@ -637,6 +700,18 @@ export function ContestArenaPage() {
                   </div>
                 </section>
 
+                {/* Resize handle between description and editor */}
+                {!descriptionCollapsed && (
+                  <div
+                    className="ca-split-handle"
+                    onMouseDown={handleDescResizeStart}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Drag to resize"
+                    title="Drag to resize"
+                  />
+                )}
+
                 {/* Right - Editor + Console */}
                 <div className="ca-editor">
                   <div className="ca-editor-container">
@@ -665,8 +740,8 @@ export function ContestArenaPage() {
                     />
                   </div>
 
-                  {/* Console */}
-                  <div className={`ca-console ca-console--${consoleOpen ? 'open' : 'closed'}`}>
+                  {/* Console — header always visible, only body collapses */}
+                  <div className="ca-console">
                     <div className="ca-console-header">
                       <div className="ca-console-tabs">
                         <span className="ca-console-tab ca-console-tab--active">
@@ -683,13 +758,18 @@ export function ContestArenaPage() {
                           {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                           <span>Submit</span>
                         </button>
-                        <button className="ca-console-close" onClick={() => setConsoleOpen(!consoleOpen)}>
+                        <button
+                          className="ca-console-close"
+                          onClick={() => setConsoleOpen(!consoleOpen)}
+                          title={consoleOpen ? 'Minimize' : 'Expand console'}
+                          aria-label={consoleOpen ? 'Minimize console' : 'Expand console'}
+                        >
                           {consoleOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                         </button>
                       </div>
                     </div>
 
-                    {consoleOpen && (
+                    <div className={`ca-console-body-wrap${consoleOpen ? ' ca-console-body-wrap--open' : ''}`}>
                       <div className="ca-console-body">
                         {submitting && (
                           <div className="ca-console-loading">
@@ -721,8 +801,8 @@ export function ContestArenaPage() {
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </div>{/* /ca-console-body-wrap */}
+                  </div>{/* /ca-console */}
                 </div>
               </div>
             )}
@@ -734,25 +814,39 @@ export function ContestArenaPage() {
       {showExitConfirm && (
         <div className="ca-modal-overlay" onClick={() => setShowExitConfirm(false)}>
           <div className="ca-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Danger accent bar */}
+            <div className="ca-modal-accent-bar" />
+
             <div className="ca-modal-header">
-              <AlertTriangle size={20} />
-              <h3>Exit Virtual Simulation?</h3>
+              <div className="ca-modal-icon-wrap">
+                <AlertTriangle size={22} />
+              </div>
+              <div className="ca-modal-header-text">
+                <h3 className="ca-modal-title">Exit Virtual Simulation?</h3>
+                <p className="ca-modal-subtitle">This action cannot be undone</p>
+              </div>
             </div>
-            <p className="ca-modal-body">
-              Exiting will terminate your simulation session, reset the timer, and delete your drafted solutions.
-            </p>
+
+            <div className="ca-modal-body">
+              <p>Exiting will <strong>terminate your simulation session</strong>, reset the countdown timer, and permanently delete all drafted solutions for this contest.</p>
+            </div>
+
             <div className="ca-modal-actions">
-              <button className="ca-btn ca-btn--ghost" onClick={() => setShowExitConfirm(false)}>
+              <button
+                className="ca-modal-btn ca-modal-btn--ghost"
+                onClick={() => setShowExitConfirm(false)}
+              >
                 Stay and Code
               </button>
               <button
-                className="ca-btn ca-btn--danger"
+                className="ca-modal-btn ca-modal-btn--danger"
                 onClick={() => {
                   resetVirtualContestData(contest?.slug, problems);
                   setShowExitConfirm(false);
                   navigate('/contests');
                 }}
               >
+                <AlertTriangle size={13} />
                 Confirm Exit
               </button>
             </div>

@@ -2,6 +2,7 @@
 // Presentational Component — renders an immersive pixel-heatmap activity grid.
 // Consumes a timestamp-to-count dictionary map through props.
 import React, { useMemo } from 'react';
+import './SubmissionCalendar.css';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 

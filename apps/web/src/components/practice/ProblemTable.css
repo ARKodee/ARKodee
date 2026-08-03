@@ -13,6 +13,7 @@
 .pt-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;          /* crucial: respects column widths, prevents overflow */
   font-size: var(--text-base);
   font-family: var(--font-ui);
 }
@@ -31,6 +32,7 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
 .pt-th--status {
@@ -39,15 +41,15 @@
 }
 
 .pt-th--title {
-  min-width: 320px;
+  /* width: auto — takes remaining space in table-layout:fixed */
 }
 
 .pt-th--difficulty {
-  width: 140px;
+  width: 110px;
 }
 
 .pt-th--points {
-  width: 100px;
+  width: 80px;
   text-align: right;
   padding-right: var(--space-5);
 }
@@ -112,9 +114,17 @@
 }
 
 .pt-td--title {
+  /* Stay as table-cell (not flex) so table-layout:fixed works */
+  overflow: hidden;
+}
+
+/* Inner flex wrapper for number + title text */
+.pt-title-inner {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .pt-td--difficulty {
@@ -167,6 +177,11 @@
   font-weight: 500;
   color: var(--text-primary);
   transition: color var(--duration-fast) var(--ease);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 
 .pt-row:hover .pt-problem-title {

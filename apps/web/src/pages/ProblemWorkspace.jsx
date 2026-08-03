@@ -63,40 +63,44 @@ function WorkspaceError({ message, onRetry }) {
 }
 
 // ─── Resize Handle Component ───────────────────────────────────────────────────
-function ResizeHandle({ position, onResize, containerRef }) {
+function ResizeHandle({ onResize, containerRef, currentWidth }) {
   const [isActive, setIsActive] = useState(false);
-  const startPos = useRef(null);
-  const startWidth = useRef(null);
+  const dragState = useRef(null); // { startX, startPercent }
 
   const handleMouseDown = useCallback((e) => {
     e.preventDefault();
     setIsActive(true);
-    startPos.current = e.clientX;
-    startWidth.current = containerRef.current?.offsetWidth;
+
+    // Capture start position and the CURRENT percentage (not pixel width)
+    dragState.current = {
+      startX: e.clientX,
+      startPercent: currentWidth,
+    };
 
     const handleMouseMove = (moveEvent) => {
-      if (startPos.current === null || startWidth.current === null) return;
-      const delta = moveEvent.clientX - startPos.current;
-      const containerWidth = containerRef.current?.offsetWidth || window.innerWidth;
-      const deltaPercent = (delta / containerWidth) * 100;
-      const newWidth = Math.min(
-        Math.max(startWidth.current + deltaPercent, MIN_LEFT_WIDTH),
+      if (!dragState.current || !containerRef.current) return;
+      const containerWidth = containerRef.current.offsetWidth;
+      if (containerWidth === 0) return;
+
+      const deltaX = moveEvent.clientX - dragState.current.startX;
+      const deltaPercent = (deltaX / containerWidth) * 100;
+      const newPercent = Math.min(
+        Math.max(dragState.current.startPercent + deltaPercent, MIN_LEFT_WIDTH),
         MAX_LEFT_WIDTH
       );
-      onResize(newWidth);
+      onResize(newPercent);
     };
 
     const handleMouseUp = () => {
       setIsActive(false);
-      startPos.current = null;
-      startWidth.current = null;
+      dragState.current = null;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [containerRef, onResize]);
+  }, [containerRef, onResize, currentWidth]);
 
   return (
     <div
@@ -105,9 +109,11 @@ function ResizeHandle({ position, onResize, containerRef }) {
       role="separator"
       tabIndex={0}
       aria-orientation="vertical"
+      aria-label="Drag to resize panels"
     />
   );
 }
+
 
 // ─── Collapse Toggle Component ─────────────────────────────────────────────────
 function CollapseToggle({ isCollapsed, onToggle, position }) {
@@ -257,9 +263,9 @@ export function ProblemWorkspace() {
             {!isLeftCollapsed && (
               <>
                 <ResizeHandle
-                  position="right"
                   onResize={handleResize}
                   containerRef={containerRef}
+                  currentWidth={leftWidth}
                 />
                 <CollapseToggle
                   isCollapsed={isLeftCollapsed}

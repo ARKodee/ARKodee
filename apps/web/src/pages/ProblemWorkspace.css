@@ -4,12 +4,13 @@
 */
 
 .pw-root {
-  min-height: 100vh;
+  height: 100vh;              /* capped — prevents canvas from growing past viewport */
   display: flex;
   flex-direction: column;
   background-color: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
+  overflow: hidden;
 }
 
 .pw-root .navbar {
@@ -131,6 +132,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;           /* keep ie-root contained inside this pane */
+  min-width: 0;
 }
 
 /* ── Resize Handle ─────────────────────────────────────────────────────────── */

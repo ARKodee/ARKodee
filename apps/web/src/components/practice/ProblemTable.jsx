@@ -195,10 +195,12 @@ export function ProblemTable({ problems = [], isLoading = false }) {
 
                 {/* Title */}
                 <td className="pt-td pt-td--title" role="cell">
-                  <span className="pt-problem-number">
-                    {String(problem.id ?? index + 1).padStart(3, '0')}.
-                  </span>
-                  <span className="pt-problem-title">{problem.title}</span>
+                  <div className="pt-title-inner">
+                    <span className="pt-problem-number">
+                      {String(index + 1).padStart(3, '0')}.
+                    </span>
+                    <span className="pt-problem-title">{problem.title}</span>
+                  </div>
                 </td>
 
                 {/* Difficulty */}
