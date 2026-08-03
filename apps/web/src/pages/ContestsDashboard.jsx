@@ -1,43 +1,45 @@
-// apps/web/src/pages/ContestsDashboard.jsx
+// src/pages/ContestsDashboard.jsx
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Swords, Flame, CalendarClock, ArchiveRestore, User, Loader2, X, Shield, KeyRound, Check } from 'lucide-react'
 import { useContestData } from '../hooks/useContestData'
 import { ContestList } from '../components/contests/ContestList'
 import { Leaderboard } from '../components/contests/Leaderboard'
-import { ProfileHUD } from '../components/dashboard/ProfileHUD'
-import { TacticalNav } from '../components/dashboard/TacticalNav'
+import { Navbar } from '../components/layout/Navbar'
+import { Button } from '../components/ui/Button'
+import { Badge } from '../components/ui/Badge'
+import { Input } from '../components/ui/Input'
+import { Spinner } from '../components/ui/Spinner'
+import { EmptyState } from '../components/ui/EmptyState'
+import './ContestsDashboard.css'
+
+/* ── Icons ───────────────────────────────────────────────────────────────────── */
+const IconSwords   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="21" x2="21" y2="7"/></svg>
+const IconFlame    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+const IconClock    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+const IconArchive  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+const IconKey      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/></svg>
+const IconClose    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+const IconShield   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
 
 const FILTER_TABS = [
-  { key: 'all', label: 'All Contests', icon: Swords },
-  { key: 'live', label: 'Live', icon: Flame },
-  { key: 'upcoming', label: 'Upcoming', icon: CalendarClock },
-  { key: 'past', label: 'Past', icon: ArchiveRestore },
+  { key: 'all',      label: 'All',      icon: IconSwords  },
+  { key: 'live',     label: 'Live',     icon: IconFlame   },
+  { key: 'upcoming', label: 'Upcoming', icon: IconClock   },
+  { key: 'past',     label: 'Past',     icon: IconArchive },
 ]
 
-/**
- * RegistrationModal Component
- * Interactive overlay modal that manages rules consent, access PIN checks, and registration trigger.
- */
+/* ── Registration Modal ─────────────────────────────────────────────────────── */
 function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
   const [accessCode, setAccessCode] = useState('')
-  const [consent, setConsent] = useState(false)
+  const [consent, setConsent]       = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [err, setErr] = useState('')
+  const [err, setErr]               = useState('')
 
   const handleRegister = async (e) => {
     e.preventDefault()
-    if (!consent) {
-      setErr('You must agree to the contest terms and conditions.')
-      return
-    }
-    if (contest.access_code_required && !accessCode.trim()) {
-      setErr('Please enter the private access PIN.')
-      return
-    }
-
-    setSubmitting(true)
-    setErr('')
+    if (!consent) { setErr('You must agree to the contest rules.'); return }
+    if (contest.access_code_required && !accessCode.trim()) { setErr('Enter the access PIN.'); return }
+    setSubmitting(true); setErr('')
     try {
       await onRegisterConfirm(contest.id, accessCode)
       onClose()
@@ -49,116 +51,74 @@ function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020205]/85 backdrop-blur-md p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-[#0e0e12]/95 p-6 shadow-2xl relative overflow-hidden">
-        {/* Decorative corner glow */}
-        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex items-start justify-between mb-4">
+    <div className="cd-modal-backdrop">
+      <div className="cd-modal">
+        {/* Header */}
+        <div className="cd-modal__header">
           <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-              Contest Registration
-            </span>
-            <h3 className="text-lg font-bold text-white mt-2 leading-tight">
-              {contest.title}
-            </h3>
+            <Badge variant="accent">Contest Registration</Badge>
+            <h3 className="cd-modal__title">{contest.title}</h3>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 transition-all"
-          >
-            <X className="w-4 h-4" />
+          <button className="cd-modal__close" onClick={onClose} aria-label="Close">
+            <IconClose />
           </button>
         </div>
 
-        <div className="space-y-4 max-h-[320px] overflow-y-auto pr-1 scrollbar-thin text-xs text-zinc-400 leading-relaxed">
+        {/* Info */}
+        <div className="cd-modal__info">
           {contest.description && (
-            <div className="p-3.5 rounded-xl border border-zinc-800/60 bg-zinc-900/30">
-              <h4 className="font-semibold text-zinc-200 mb-1">About this Contest</h4>
-              <p className="font-mono">{contest.description}</p>
+            <div className="cd-modal__section">
+              <p className="cd-modal__section-title">About</p>
+              <p className="cd-modal__section-body">{contest.description}</p>
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-3 rounded-xl border border-zinc-800/40 bg-zinc-900/10">
-              <span className="text-[10px] uppercase font-bold text-zinc-500 block">Start Time</span>
-              <span className="font-semibold text-zinc-300">
-                {new Date(contest.start_time).toLocaleString()}
-              </span>
+          <div className="cd-modal__meta-grid">
+            <div className="cd-modal__meta-item">
+              <span className="cd-modal__meta-label">Start Time</span>
+              <span className="cd-modal__meta-value">{new Date(contest.start_time).toLocaleString()}</span>
             </div>
-            <div className="p-3 rounded-xl border border-zinc-800/40 bg-zinc-900/10">
-              <span className="text-[10px] uppercase font-bold text-zinc-500 block">Rated Status</span>
-              <span className={`font-semibold inline-flex items-center gap-1 mt-0.5 ${contest.is_rated ? 'text-amber-400' : 'text-zinc-400'}`}>
-                {contest.is_rated ? <Shield className="w-3.5 h-3.5" /> : null}
-                {contest.is_rated ? 'Rated' : 'Unrated'}
+            <div className="cd-modal__meta-item">
+              <span className="cd-modal__meta-label">Rated</span>
+              <span className="cd-modal__meta-value" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {contest.is_rated ? <><IconShield /> Rated</> : 'Unrated'}
               </span>
             </div>
           </div>
-
           {contest.eligible_class_tier && contest.eligible_class_tier !== 'all' && (
-            <div>
-              <h4 className="font-semibold text-zinc-300 mb-1">Eligibility requirements</h4>
-              <p className="text-zinc-500">
-                Restricted to participants classified in: <strong className="text-violet-400">{contest.eligible_class_tier.replace('_', ' ').toUpperCase()}</strong>.
-              </p>
-            </div>
+            <p className="cd-modal__eligibility">
+              Restricted to: <strong>{contest.eligible_class_tier.replace('_', ' ').toUpperCase()}</strong>
+            </p>
           )}
         </div>
 
-        <form onSubmit={handleRegister} className="mt-5 space-y-4">
+        {/* Form */}
+        <form className="cd-modal__form" onSubmit={handleRegister}>
           {contest.access_code_required && (
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5 text-rose-400" />
-                Access PIN Code
-              </label>
-              <input
-                type="password"
-                required
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
-                placeholder="Enter private match code..."
-                className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
+            <Input
+              label="Access PIN"
+              type="password"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              placeholder="Enter private access PIN"
+              icon={<IconKey />}
+              required
+            />
           )}
-
-          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-zinc-800/40 bg-zinc-900/20 cursor-pointer select-none">
+          <label className="cd-modal__consent">
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
-              className="mt-0.5 rounded border-zinc-700 bg-zinc-950 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-zinc-900 cursor-pointer"
+              style={{ flexShrink: 0, marginTop: 2 }}
             />
-            <span className="text-[11px] text-zinc-400 leading-tight">
-              I agree to abide by ARKodee contest rules, honor codes, and submission regulations. I will not engage in collaborative assistance or code sharing.
-            </span>
+            <span>I agree to ARKodee contest rules and will not engage in any collaborative assistance or code sharing.</span>
           </label>
-
-          {err && <p className="text-xs text-rose-400 font-medium">{err}</p>}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-zinc-400 bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-700/40 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Registering...</span>
-                </>
-              ) : (
-                'Confirm Registration'
-              )}
-            </button>
+          {err && <p className="cd-modal__err">{err}</p>}
+          <div className="cd-modal__actions">
+            <Button variant="secondary" type="button" onClick={onClose} style={{ flex: 1 }}>Cancel</Button>
+            <Button variant="primary" type="submit" loading={submitting} style={{ flex: 1 }}>
+              Confirm Registration
+            </Button>
           </div>
         </form>
       </div>
@@ -166,202 +126,95 @@ function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
   )
 }
 
-/**
- * ContestsDashboard — Master layout assembling the contests arena
- * Left pane (2/3): Filter toolbar + ContestList (Grouped categories by default)
- * Right pane (1/3): Global ELO Standings Side HUD
- */
+/* ── Main Page ──────────────────────────────────────────────────────────────── */
 export function ContestsDashboard() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeFilter = searchParams.get('status') || 'all'
 
-  const {
-    contests,
-    leaderboard,
-    loading,
-    error,
-    handleRegister,
-    fetchLeaderboard,
-  } = useContestData(activeFilter)
-
-  // Registration modal controller state
+  const { contests, leaderboard, loading, error, handleRegister, fetchLeaderboard } = useContestData(activeFilter)
   const [registeringContest, setRegisteringContest] = useState(null)
 
-  // Load global ELO leaderboard on mount
-  useEffect(() => {
-    fetchLeaderboard('global')
-  }, [fetchLeaderboard])
+  useEffect(() => { fetchLeaderboard('global') }, [fetchLeaderboard])
 
-  // Custom filter updater
-  const handleFilterChange = (key) => {
-    setSearchParams({ status: key })
-  }
-
-  // Navigate based on lifecycle status
-  const handleSelectContest = (contest) => {
+  const handleFilterChange    = (key) => setSearchParams({ status: key })
+  const handleSelectContest   = (contest) => {
     const status = contest.runtimeStatus || 'ended'
-    if (status === 'ended') {
-      // Ended/past contests navigate to detail page for virtual practice triggers
-      navigate(`/contests/${contest.slug}`)
-    } else {
-      // Live or upcoming: check if registered. If registered, active matches enter Arena. Otherwise, show registration modal.
-      if (contest.is_registered) {
-        if (status === 'active') {
-          navigate(`/contests/${contest.slug}/arena`)
-        } else {
-          // Registered but upcoming
-          setRegisteringContest(contest)
-        }
-      } else {
-        setRegisteringContest(contest)
-      }
-    }
+    if (status === 'ended') return navigate(`/contests/${contest.slug}`)
+    if (contest.is_registered && status === 'active') return navigate(`/contests/${contest.slug}/arena`)
+    setRegisteringContest(contest)
   }
-
-  // Handle CTA button action clicks
   const handleActionClick = (contest) => {
     const status = contest.runtimeStatus || 'ended'
-    if (status === 'upcoming' && !contest.is_registered) {
-      setRegisteringContest(contest)
-    } else if (status === 'active') {
-      if (contest.is_registered) {
-        navigate(`/contests/${contest.slug}/arena`)
-      } else {
-        setRegisteringContest(contest)
-      }
-    } else if (status === 'ended') {
-      navigate(`/contests/${contest.slug}`)
-    }
-  }
-
-  const handleConfirmRegistration = async (contestId, accessCode) => {
-    await handleRegister(contestId, accessCode)
+    if (status === 'ended')  return navigate(`/contests/${contest.slug}`)
+    if (status === 'active' && contest.is_registered) return navigate(`/contests/${contest.slug}/arena`)
+    setRegisteringContest(contest)
   }
 
   return (
-    <div
-      className="w-screen min-h-screen flex flex-col font-mono"
-      style={{ background: '#020617', color: '#ffffff', overflowY: 'auto' }}
-    >
-      {/* Scanline sweep */}
-      <div
-        className="pointer-events-none fixed inset-x-0 z-50 animate-scan-line"
-        style={{
-          height: 3,
-          background:
-            'linear-gradient(transparent 0%, rgba(245,158,11,0.045) 50%, transparent 100%)',
-        }}
-      />
+    <div className="cd-page">
+      <Navbar />
 
-      {/* Dot-grid background */}
-      <div
-        className="pointer-events-none fixed inset-0 z-0"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(245,158,11,0.018) 1px, transparent 1px),' +
-            'linear-gradient(90deg, rgba(245,158,11,0.018) 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-        }}
-      />
-
-      {/* Top Header layout matching Dashboard */}
-      <header className="relative z-10 flex-shrink-0 flex items-center gap-4 p-4">
-        <ProfileHUD />
-        <div className="flex-1 min-w-0">
-          <TacticalNav />
-        </div>
-      </header>
-
-      {/* Main content grid */}
-      <div className="relative z-10 flex-1">
-        {/* Page header */}
-        <div className="border-b border-zinc-800/60 bg-[#0a0a0c]/80 backdrop-blur-md sticky top-0 z-10">
-          <div className="max-w-7xl mx-auto px-6 py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-600/10 border border-indigo-500/20">
-                <Swords className="w-5 h-5 text-indigo-400" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-white tracking-tight">Contests Arena</h1>
-                <p className="text-xs text-zinc-500 mt-0.5">Compete, rank, and conquer</p>
-              </div>
-            </div>
-          </div>
+      <div className="cd-body">
+        {/* Page title */}
+        <div className="cd-page-header">
+          <h1 className="cd-page-title">Contests</h1>
+          <p className="cd-page-sub">Compete, rank, and conquer</p>
         </div>
 
-        {/* Main content grid */}
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left pane — 2/3 */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* Filter toolbar */}
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#111113]/60 border border-zinc-800/60 backdrop-blur-sm">
-                {FILTER_TABS.map(({ key, label, icon: Icon }) => (
-                  <button
-                    key={key}
-                    onClick={() => handleFilterChange(key)}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                      activeFilter === key
-                        ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.08)]'
-                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 border border-transparent'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Loading state */}
-              {loading && (
-                <div className="flex items-center justify-center py-20">
-                  <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-                </div>
-              )}
-
-              {/* Error state */}
-              {error && !loading && (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <p className="text-sm text-rose-400 font-medium">{error}</p>
-                    <button
-                      onClick={() => handleFilterChange(activeFilter)}
-                      className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
-                    >
-                      Try again
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Contest list */}
-              {!loading && !error && (
-                <ContestList
-                  contests={contests}
-                  activeFilter={activeFilter}
-                  onSelectContest={handleSelectContest}
-                  onActionClick={handleActionClick}
-                />
-              )}
+        <div className="cd-grid">
+          {/* Left — filter + list */}
+          <section className="cd-main">
+            {/* Filter tabs */}
+            <div className="cd-filters">
+              {FILTER_TABS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  className={`cd-filter-btn${activeFilter === key ? ' cd-filter-btn--active' : ''}`}
+                  onClick={() => handleFilterChange(key)}
+                >
+                  <Icon /> {label}
+                </button>
+              ))}
             </div>
 
-            {/* Right pane — 1/3 */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-20">
-                <Leaderboard leaderboard={leaderboard} title="Global ELO Standing" />
+            {/* States */}
+            {loading && (
+              <div className="cd-center-state">
+                <Spinner size="md" />
               </div>
+            )}
+            {error && !loading && (
+              <EmptyState
+                title="Failed to load contests"
+                description={error}
+                action={<Button variant="ghost" size="sm" onClick={() => handleFilterChange(activeFilter)}>Try again</Button>}
+              />
+            )}
+            {!loading && !error && (
+              <ContestList
+                contests={contests}
+                activeFilter={activeFilter}
+                onSelectContest={handleSelectContest}
+                onActionClick={handleActionClick}
+              />
+            )}
+          </section>
+
+          {/* Right — leaderboard */}
+          <aside className="cd-side">
+            <div className="cd-side-sticky">
+              <Leaderboard leaderboard={leaderboard} title="Global ELO Standing" />
             </div>
-          </div>
+          </aside>
         </div>
       </div>
 
-      {/* Registration Consent Modal */}
       {registeringContest && (
         <RegistrationModal
           contest={registeringContest}
           onClose={() => setRegisteringContest(null)}
-          onRegisterConfirm={handleConfirmRegistration}
+          onRegisterConfirm={async (id, code) => await handleRegister(id, code)}
         />
       )}
     </div>
