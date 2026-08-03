@@ -1,0 +1,160 @@
+/* src/components/practice/FilterPanel.css */
+/* Search + difficulty filter bar — uses design system tokens only */
+
+/* ── Root ──────────────────────────────────────────────────────────────────── */
+.fp-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Search Wrapper ─────────────────────────────────────────────────────────── */
+.fp-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast) var(--ease),
+              box-shadow var(--duration-fast) var(--ease);
+}
+
+.fp-search-wrap:focus-within {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.fp-search-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 42px;
+  color: var(--text-muted);
+  pointer-events: none;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.fp-search-wrap:focus-within .fp-search-icon {
+  color: var(--accent);
+}
+
+.fp-search-input {
+  flex: 1;
+  height: var(--h-btn-sm);
+  background: none;
+  border: none;
+  outline: none;
+  font-size: var(--text-sm);
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  padding: 0;
+  min-width: 0;
+}
+
+.fp-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Remove browser's default search cancel button */
+.fp-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.fp-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease),
+              background-color var(--duration-fast) var(--ease);
+  margin-right: var(--space-1);
+}
+
+.fp-search-clear:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+}
+
+/* ── Difficulty Tabs ────────────────────────────────────────────────────────── */
+.fp-tabs {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.fp-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--h-btn-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-ui);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease),
+              background-color var(--duration-fast) var(--ease),
+              border-color var(--duration-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.fp-tab:hover:not(.fp-tab--active) {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+}
+
+/* All */
+.fp-tab--all.fp-tab--active {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+  border-color: var(--border-strong);
+}
+
+/* Easy */
+.fp-tab--easy.fp-tab--active {
+  color: var(--success);
+  background-color: var(--success-subtle);
+  border-color: var(--success-border);
+}
+
+/* Medium */
+.fp-tab--medium.fp-tab--active {
+  color: var(--warning);
+  background-color: var(--warning-subtle);
+  border-color: var(--warning-border);
+}
+
+/* Hard */
+.fp-tab--hard.fp-tab--active {
+  color: var(--danger);
+  background-color: var(--danger-subtle);
+  border-color: var(--danger-border);
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .fp-tabs {
+    gap: var(--space-1);
+  }
+  .fp-tab {
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
+  }
+}
