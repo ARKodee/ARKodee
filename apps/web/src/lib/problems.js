@@ -23,6 +23,14 @@ export const getProblemsList = async (params = {}) => {
     queryParams.append('difficulty', params.difficulty.toUpperCase());
   }
 
+  if (params.page) {
+    queryParams.append('page', params.page);
+  }
+
+  if (params.page_size) {
+    queryParams.append('page_size', params.page_size);
+  }
+
   const queryString = queryParams.toString();
   const endpoint = queryString
     ? `/problems/?${queryString}`

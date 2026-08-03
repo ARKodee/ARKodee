@@ -218,7 +218,7 @@ export function ProblemWorkspace() {
             {loading ? (
               <span className="pw-skel pw-skel--inline-title" />
             ) : (
-              problem?.title ?? 'Problem'
+              problem ? `#${problem.serial_no} ${problem.title}` : 'Problem'
             )}
           </h1>
         </div>

@@ -122,7 +122,7 @@ function EmptyState() {
  *      is_solved, is_attempted
  *    }
  */
-export function ProblemTable({ problems = [], isLoading = false }) {
+export function ProblemTable({ problems = [], isLoading = false, startIndex = 0 }) {
   const navigate = useNavigate();
 
   const handleRowClick = (slug) => {
@@ -197,7 +197,7 @@ export function ProblemTable({ problems = [], isLoading = false }) {
                 <td className="pt-td pt-td--title" role="cell">
                   <div className="pt-title-inner">
                     <span className="pt-problem-number">
-                      {String(index + 1).padStart(3, '0')}.
+                      {String(problem.serial_no ?? (startIndex + index + 1)).padStart(3, '0')}.
                     </span>
                     <span className="pt-problem-title">{problem.title}</span>
                   </div>

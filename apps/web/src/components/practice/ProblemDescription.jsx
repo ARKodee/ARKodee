@@ -116,7 +116,7 @@ export function ProblemDescription({
         <div className="pdsc-content" role="tabpanel" aria-labelledby="tab-description">
           {/* Header Stats */}
           <div className="pdsc-header">
-            <h2 className="pdsc-title">{problem.title}</h2>
+            <h2 className="pdsc-title">{problem.serial_no ? `#${problem.serial_no} ${problem.title}` : problem.title}</h2>
             <div className="pdsc-meta">
               <span className={DIFFICULTY_STYLES[difficulty] ?? 'pdsc-badge'}>
                 {difficulty}

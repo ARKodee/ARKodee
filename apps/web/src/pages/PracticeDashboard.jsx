@@ -24,10 +24,13 @@ export function PracticeDashboard() {
     problems, submissionCalendar,
     isLoadingProblems, isLoadingCalendar,
     problemsError, calendarError,
-    totalProblems, solvedCount, attemptedCount,
-    searchQuery, activeDifficulty,
-    setSearchQuery, setActiveDifficulty,
+    totalProblems, solvedCount, attemptedCount, totalFilteredCount,
+    searchQuery, activeDifficulty, currentPage, pageSize,
+    setSearchQuery, setActiveDifficulty, setCurrentPage,
   } = useProblems();
+
+  const totalPages = Math.ceil(totalFilteredCount / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
 
   return (
     <div className="prac-page" id="practice-dashboard">
@@ -61,7 +64,34 @@ export function PracticeDashboard() {
               onSearchChange={setSearchQuery}
               onDifficultyChange={setActiveDifficulty}
             />
-            <ProblemTable problems={problems.slice(0, 50)} isLoading={isLoadingProblems} />
+            <ProblemTable 
+              problems={problems} 
+              isLoading={isLoadingProblems} 
+              startIndex={startIndex}
+            />
+
+            {/* Pagination Controls */}
+            {!isLoadingProblems && totalPages > 1 && (
+              <div className="prac-pagination">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  className="prac-pagination-btn"
+                >
+                  Previous
+                </button>
+                <span className="prac-pagination-info">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  className="prac-pagination-btn"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </section>
 
           {/* Right — calendar */}
@@ -76,3 +106,5 @@ export function PracticeDashboard() {
     </div>
   );
 }
+
+export default PracticeDashboard;
