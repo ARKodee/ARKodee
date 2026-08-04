@@ -42,12 +42,12 @@ def contests_list_view(request):
     filter_type = request.query_params.get("filter", "all").strip().lower()
     now = timezone.now()
     
-    queryset = Contest.objects.filter(status="approved").order_by("start_time")
+    queryset = Contest.objects.filter(status="approved").order_by("-start_time")
     
     if filter_type == "live":
         queryset = queryset.filter(start_time__lte=now, end_time__gte=now)
     elif filter_type == "upcoming":
-        queryset = queryset.filter(start_time__gt=now)
+        queryset = queryset.filter(start_time__gt=now).order_by("-start_time")
     elif filter_type == "past":
         queryset = queryset.filter(end_time__lt=now).order_by("-end_time")
         

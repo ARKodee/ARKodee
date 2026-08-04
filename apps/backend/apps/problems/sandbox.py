@@ -322,6 +322,18 @@ def generate_java_driver(func_name, params, ret_type):
                 f"        for (int i = 0; i < {p_name}_size; i++) {p_name}[i] = sc.hasNextInt() ? sc.nextInt() : 0;"
             )
             call_args.append(p_name)
+        elif p_type_norm == "List[List[int]]":
+            java_read_lines.append(
+                f"int {p_name}_rows = sc.hasNextInt() ? sc.nextInt() : 0;\n"
+                f"        int {p_name}_cols = sc.hasNextInt() ? sc.nextInt() : 0;\n"
+                f"        int[][] {p_name} = new int[{p_name}_rows][{p_name}_cols];\n"
+                f"        for (int r = 0; r < {p_name}_rows; r++) {{\n"
+                f"            for (int c = 0; c < {p_name}_cols; c++) {{\n"
+                f"                {p_name}[r][c] = sc.hasNextInt() ? sc.nextInt() : 0;\n"
+                f"            }}\n"
+                f"        }}"
+            )
+            call_args.append(p_name)
         elif "TreeNode" in p_type_norm:
             java_read_lines.append(f"TreeNode {p_name} = sc.hasNext() ? buildTree(sc.next()) : null;")
             call_args.append(p_name)
@@ -439,6 +451,18 @@ def generate_cpp_driver(func_name, params, ret_type):
                 f"int {p_name}_size = 0; cin >> {p_name}_size;\n"
                 f"    vector<int> {p_name}({p_name}_size);\n"
                 f"    for (int i = 0; i < {p_name}_size; i++) cin >> {p_name}[i];"
+            )
+            call_args.append(p_name)
+        elif p_type_norm == "List[List[int]]":
+            cpp_read_lines.append(
+                f"int {p_name}_rows = 0; cin >> {p_name}_rows;\n"
+                f"    int {p_name}_cols = 0; cin >> {p_name}_cols;\n"
+                f"    vector<vector<int>> {p_name}({p_name}_rows, vector<int>({p_name}_cols));\n"
+                f"    for (int r = 0; r < {p_name}_rows; r++) {{\n"
+                f"        for (int c = 0; c < {p_name}_cols; c++) {{\n"
+                f"            cin >> {p_name}[r][c];\n"
+                f"        }}\n"
+                f"    }}"
             )
             call_args.append(p_name)
         elif "TreeNode" in p_type_norm:
@@ -571,6 +595,20 @@ def generate_js_driver(func_name, params, ret_type):
                 f"let {p_name}_size = parseInt(nextToken() || '0', 10);\n"
                 f"    let {p_name} = [];\n"
                 f"    for (let i = 0; i < {p_name}_size; i++) {p_name}.push(parseInt(nextToken() || '0', 10));"
+            )
+            call_args.append(p_name)
+        elif p_type_norm == "List[List[int]]":
+            js_read_lines.append(
+                f"let {p_name}_rows = parseInt(nextToken() || '0', 10);\n"
+                f"    let {p_name}_cols = parseInt(nextToken() || '0', 10);\n"
+                f"    let {p_name} = [];\n"
+                f"    for (let r = 0; r < {p_name}_rows; r++) {{\n"
+                f"        let row = [];\n"
+                f"        for (let c = 0; c < {p_name}_cols; c++) {{\n"
+                f"            row.push(parseInt(nextToken() || '0', 10));\n"
+                f"        }}\n"
+                f"        {p_name}.push(row);\n"
+                f"    }}"
             )
             call_args.append(p_name)
         elif "TreeNode" in p_type_norm:
