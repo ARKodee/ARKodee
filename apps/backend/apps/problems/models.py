@@ -63,14 +63,21 @@ class Problem(models.Model):
         blank=True,
         related_name="created_problems"
     )
+    serial_no = models.PositiveIntegerField(unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
     class Meta:
         db_table = "problems"
 
+    def save(self, *args, **kwargs):
+        if not self.serial_no:
+            max_serial = Problem.objects.aggregate(max_val=models.Max('serial_no'))['max_val']
+            self.serial_no = (max_serial or 0) + 1
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.title} ({self.difficulty.capitalize()})"
+        return f"#{self.serial_no} - {self.title} ({self.difficulty.capitalize()})"
 
 
 class TestCase(models.Model):

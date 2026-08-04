@@ -1,5 +1,5 @@
 // src/pages/ContestsDashboard.jsx
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useContestData } from '../hooks/useContestData'
 import { ContestList } from '../components/contests/ContestList'
@@ -38,87 +38,77 @@ function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
   const handleRegister = async (e) => {
     e.preventDefault()
     if (!consent) { setErr('You must agree to the contest rules.'); return }
-    if (contest.access_code_required && !accessCode.trim()) { setErr('Enter the access PIN.'); return }
-    setSubmitting(true); setErr('')
+    setSubmitting(true)
+    setErr('')
     try {
       await onRegisterConfirm(contest.id, accessCode)
       onClose()
     } catch (error) {
-      setErr(error.message || 'Registration failed. Check access PIN.')
+      setErr(error.message || 'Registration failed. Check your access PIN.')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="cd-modal-backdrop">
-      <div className="cd-modal">
-        {/* Header */}
+    <div className="cd-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="cd-modal" onClick={(e) => e.stopPropagation()}>
         <div className="cd-modal__header">
-          <div>
-            <Badge variant="accent">Contest Registration</Badge>
-            <h3 className="cd-modal__title">{contest.title}</h3>
+          <div className="cd-modal__title-row">
+            <h2 className="cd-modal__title">Contest Registration</h2>
+            <span className="cd-modal__subtitle">{contest.title}</span>
           </div>
-          <button className="cd-modal__close" onClick={onClose} aria-label="Close">
+          <button className="cd-modal__close-btn" onClick={onClose} aria-label="Close dialog">
             <IconClose />
           </button>
         </div>
 
-        {/* Info */}
-        <div className="cd-modal__info">
-          {contest.description && (
-            <div className="cd-modal__section">
-              <p className="cd-modal__section-title">About</p>
-              <p className="cd-modal__section-body">{contest.description}</p>
-            </div>
-          )}
-          <div className="cd-modal__meta-grid">
+        <form onSubmit={handleRegister} className="cd-modal__form">
+          {err && <div className="cd-modal__error" role="alert">{err}</div>}
+
+          <div className="cd-modal__meta">
             <div className="cd-modal__meta-item">
-              <span className="cd-modal__meta-label">Start Time</span>
-              <span className="cd-modal__meta-value">{new Date(contest.start_time).toLocaleString()}</span>
+              <span className="cd-modal__meta-label">Access</span>
+              <span className="cd-modal__meta-value">
+                {contest.access_code_required ? 'Private (PIN Required)' : 'Public (Open)'}
+              </span>
             </div>
             <div className="cd-modal__meta-item">
               <span className="cd-modal__meta-label">Rated</span>
-              <span className="cd-modal__meta-value" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span className="cd-modal__meta-value">
                 {contest.is_rated ? <><IconShield /> Rated</> : 'Unrated'}
               </span>
             </div>
           </div>
-          {contest.eligible_class_tier && contest.eligible_class_tier !== 'all' && (
-            <p className="cd-modal__eligibility">
-              Restricted to: <strong>{contest.eligible_class_tier.replace('_', ' ').toUpperCase()}</strong>
-            </p>
-          )}
-        </div>
 
-        {/* Form */}
-        <form className="cd-modal__form" onSubmit={handleRegister}>
           {contest.access_code_required && (
-            <Input
-              label="Access PIN"
-              type="password"
-              value={accessCode}
-              onChange={(e) => setAccessCode(e.target.value)}
-              placeholder="Enter private access PIN"
-              icon={<IconKey />}
-              required
-            />
+            <div className="cd-modal__input-group">
+              <label htmlFor="reg-pin" className="cd-modal__input-label">Access PIN Code</label>
+              <Input
+                id="reg-pin"
+                type="password"
+                placeholder="Enter 4-digit PIN"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+                maxLength={10}
+                required
+              />
+            </div>
           )}
-          <label className="cd-modal__consent">
+
+          <label className="cd-modal__checkbox-label">
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
-              style={{ flexShrink: 0, marginTop: 2 }}
+              className="cd-modal__checkbox"
             />
-            <span>I agree to ARKodee contest rules and will not engage in any collaborative assistance or code sharing.</span>
+            <span>I agree to follow the code of conduct, solve problems individually, and prevent plagiarism.</span>
           </label>
-          {err && <p className="cd-modal__err">{err}</p>}
+
           <div className="cd-modal__actions">
-            <Button variant="secondary" type="button" onClick={onClose} style={{ flex: 1 }}>Cancel</Button>
-            <Button variant="primary" type="submit" loading={submitting} style={{ flex: 1 }}>
-              Confirm Registration
-            </Button>
+            <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" type="submit" isLoading={submitting}>Register</Button>
           </div>
         </form>
       </div>
@@ -134,8 +124,119 @@ export function ContestsDashboard() {
 
   const { contests, leaderboard, loading, error, handleRegister, fetchLeaderboard } = useContestData(activeFilter)
   const [registeringContest, setRegisteringContest] = useState(null)
+  const stickyRef = useRef(null)
 
   useEffect(() => { fetchLeaderboard('global') }, [fetchLeaderboard])
+
+  useEffect(() => {
+    const el = stickyRef.current;
+    if (!el) return;
+
+    const parent = el.parentElement;
+    if (!parent) return;
+
+    let lastScrollY = window.scrollY;
+    let sidebarState = 'top'; // 'top' | 'sticky-bottom' | 'scrolling' | 'sticky-top'
+    let currentTop = 0; // Relative top offset inside parent container in px
+
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const deltaY = scrollY - lastScrollY;
+      lastScrollY = scrollY;
+
+      if (deltaY === 0) return;
+
+      const rect = el.getBoundingClientRect();
+      const parentRect = parent.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      const navbarHeight = 80;
+      const margin = 16;
+      const elHeight = rect.height;
+      const parentHeight = parentRect.height;
+
+      // If sidebar is shorter than viewport, stick it normally to top
+      if (elHeight + navbarHeight + margin <= viewportHeight) {
+        el.style.position = 'sticky';
+        el.style.top = `${navbarHeight + margin}px`;
+        el.style.bottom = 'auto';
+        el.style.transform = 'none';
+        return;
+      }
+
+      const parentPageTop = parentRect.top + scrollY;
+      const maxTop = Math.max(0, parentHeight - elHeight);
+
+      if (deltaY > 0) {
+        // Scrolling DOWN
+        if (sidebarState === 'sticky-top') {
+          sidebarState = 'scrolling';
+          currentTop = Math.max(0, scrollY + navbarHeight + margin - parentPageTop - deltaY);
+          el.style.position = 'relative';
+          el.style.top = `${currentTop}px`;
+          el.style.bottom = 'auto';
+          el.style.transform = 'none';
+        } else if (sidebarState === 'top') {
+          const bottomLimit = scrollY + viewportHeight - margin;
+          if (bottomLimit >= parentPageTop + elHeight) {
+            sidebarState = 'sticky-bottom';
+            el.style.position = 'sticky';
+            el.style.top = 'auto';
+            el.style.bottom = `${margin}px`;
+            el.style.transform = 'none';
+          }
+        } else if (sidebarState === 'scrolling') {
+          const bottomLimit = scrollY + viewportHeight - margin;
+          if (bottomLimit >= parentPageTop + currentTop + elHeight) {
+            sidebarState = 'sticky-bottom';
+            el.style.position = 'sticky';
+            el.style.top = 'auto';
+            el.style.bottom = `${margin}px`;
+            el.style.transform = 'none';
+          }
+        }
+      } else {
+        // Scrolling UP
+        if (sidebarState === 'sticky-bottom') {
+          sidebarState = 'scrolling';
+          currentTop = Math.min(maxTop, scrollY + viewportHeight - margin - elHeight - parentPageTop - deltaY);
+          el.style.position = 'relative';
+          el.style.top = `${currentTop}px`;
+          el.style.bottom = 'auto';
+          el.style.transform = 'none';
+        } else if (sidebarState === 'scrolling') {
+          const topLimit = scrollY + navbarHeight + margin;
+          if (topLimit <= parentPageTop + currentTop) {
+            sidebarState = 'sticky-top';
+            el.style.position = 'sticky';
+            el.style.top = `${navbarHeight + margin}px`;
+            el.style.bottom = 'auto';
+            el.style.transform = 'none';
+          }
+        } else if (sidebarState === 'sticky-top') {
+          const topLimit = scrollY + navbarHeight + margin;
+          if (topLimit <= parentPageTop) {
+            sidebarState = 'top';
+            el.style.position = 'relative';
+            el.style.top = '0px';
+            el.style.bottom = 'auto';
+            el.style.transform = 'none';
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+    
+    // Initial call
+    handleScroll();
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [contests, leaderboard]);
 
   const handleFilterChange    = (key) => setSearchParams({ status: key })
   const handleSelectContest   = (contest) => {
@@ -146,31 +247,31 @@ export function ContestsDashboard() {
   }
   const handleActionClick = (contest) => {
     const status = contest.runtimeStatus || 'ended'
-    if (status === 'ended')  return navigate(`/contests/${contest.slug}`)
+    if (status === 'ended')  return navigate(`/contests/${contest.slug}/arena?virtual=true`)
     if (status === 'active' && contest.is_registered) return navigate(`/contests/${contest.slug}/arena`)
     setRegisteringContest(contest)
   }
 
   return (
-    <div className="cd-page">
+    <div className="cd-db-page">
       <Navbar />
 
-      <div className="cd-body">
+      <div className="cd-db-body">
         {/* Page title */}
-        <div className="cd-page-header">
-          <h1 className="cd-page-title">Contests</h1>
-          <p className="cd-page-sub">Compete, rank, and conquer</p>
+        <div className="cd-db-page-header">
+          <h1 className="cd-db-page-title">Contests</h1>
+          <p className="cd-db-page-sub">Compete, rank, and conquer</p>
         </div>
 
-        <div className="cd-grid">
+        <div className="cd-db-grid">
           {/* Left — filter + list */}
-          <section className="cd-main">
+          <section className="cd-db-main">
             {/* Filter tabs */}
-            <div className="cd-filters">
+            <div className="cd-db-filters">
               {FILTER_TABS.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
-                  className={`cd-filter-btn${activeFilter === key ? ' cd-filter-btn--active' : ''}`}
+                  className={`cd-db-filter-btn${activeFilter === key ? ' cd-db-filter-btn--active' : ''}`}
                   onClick={() => handleFilterChange(key)}
                 >
                   <Icon /> {label}
@@ -180,7 +281,7 @@ export function ContestsDashboard() {
 
             {/* States */}
             {loading && (
-              <div className="cd-center-state">
+              <div className="cd-db-center-state">
                 <Spinner size="md" />
               </div>
             )}
@@ -202,8 +303,8 @@ export function ContestsDashboard() {
           </section>
 
           {/* Right — leaderboard */}
-          <aside className="cd-side">
-            <div className="cd-side-sticky">
+          <aside className="cd-db-side">
+            <div className="cd-db-side-sticky" ref={stickyRef}>
               <Leaderboard leaderboard={leaderboard} title="Global ELO Standing" />
             </div>
           </aside>

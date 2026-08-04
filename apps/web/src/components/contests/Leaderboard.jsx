@@ -1,6 +1,7 @@
 // apps/web/src/components/contests/Leaderboard.jsx
 import React from 'react'
 import { Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import './Leaderboard.css'
 
 /**
  * Tier badge for top 3 ranks
@@ -8,27 +9,27 @@ import { Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 const TierBadge = ({ rank }) => {
   if (rank === 1) {
     return (
-      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30">
-        <span className="text-sm font-bold text-amber-400">1</span>
+      <span className="lbd-badge lbd-badge--1">
+        <span>1</span>
       </span>
     )
   }
   if (rank === 2) {
     return (
-      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-400/10 border border-zinc-400/30">
-        <span className="text-sm font-bold text-zinc-300">2</span>
+      <span className="lbd-badge lbd-badge--2">
+        <span>2</span>
       </span>
     )
   }
   if (rank === 3) {
     return (
-      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-700/10 border border-amber-700/30">
-        <span className="text-sm font-bold text-amber-600">3</span>
+      <span className="lbd-badge lbd-badge--3">
+        <span>3</span>
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center justify-center w-7 h-7 text-xs font-medium text-zinc-500">
+    <span className="lbd-badge lbd-badge--other">
       {rank}
     </span>
   )
@@ -42,23 +43,23 @@ const EloShift = ({ shift }) => {
 
   if (shift > 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-400">
-        <TrendingUp className="w-3 h-3" />
+      <span className="lbd-shift lbd-shift--up">
+        <TrendingUp className="lbd-shift-icon" />
         +{shift}
       </span>
     )
   }
   if (shift < 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-rose-400">
-        <TrendingDown className="w-3 h-3" />
+      <span className="lbd-shift lbd-shift--down">
+        <TrendingDown className="lbd-shift-icon" />
         {shift}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-zinc-600">
-      <Minus className="w-3 h-3" />
+    <span className="lbd-shift lbd-shift--flat">
+      <Minus className="lbd-shift-icon" />
       0
     </span>
   )
@@ -74,93 +75,79 @@ export function Leaderboard({ leaderboard, title = 'Global Standings' }) {
   const isElo = title.toLowerCase().includes('elo') || title.toLowerCase().includes('rating')
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-[#111113]/40 backdrop-blur-md overflow-hidden">
+    <div className="lbd-root">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3.5 border-b border-zinc-850 bg-[#0e0e11]/60">
-        <Trophy className="w-4 h-4 text-indigo-400" />
-        <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">{title}</h3>
+      <div className="lbd-header">
+        <Trophy className="lbd-header-icon" />
+        <h3 className="lbd-header-title">{title}</h3>
       </div>
 
       {/* Column headers */}
       {isElo ? (
-        <div className="grid grid-cols-[50px_1fr_80px] gap-2 px-4 py-2.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/40 bg-zinc-900/10">
+        <div className="lbd-columns lbd-columns--elo">
           <span>#</span>
           <span>Coder</span>
-          <span className="text-right">Rating</span>
+          <span style={{ textAlign: 'right' }}>Rating</span>
         </div>
       ) : (
-        <div className="grid grid-cols-[50px_1fr_64px_64px] gap-2 px-4 py-2.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/40 bg-zinc-900/10">
+        <div className="lbd-columns lbd-columns--scores">
           <span>#</span>
           <span>User</span>
-          <span className="text-right">Score</span>
-          <span className="text-right">Penalty</span>
+          <span style={{ textAlign: 'right' }}>Score</span>
+          <span style={{ textAlign: 'right' }}>Penalty</span>
         </div>
       )}
 
       {/* Rows */}
-      <div className="max-h-[480px] overflow-y-auto scrollbar-thin">
+      <div className="lbd-body">
         {(!leaderboard || leaderboard.length === 0) ? (
-          <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
-            <Trophy className="w-8 h-8 mb-2 text-zinc-700" />
-            <p className="text-xs font-mono">No standings available</p>
+          <div className="lbd-placeholder">
+            <Trophy className="lbd-placeholder-icon" />
+            <p className="lbd-placeholder-text">No standings available</p>
           </div>
         ) : (
           leaderboard.map((entry, idx) => {
             const rank = entry.rank || idx + 1
-            const isTopThree = rank <= 3
+            const rankClass = rank === 1 ? '1' : rank === 2 ? '2' : rank === 3 ? '3' : 'other';
 
             return (
               <div
                 key={entry.username || idx}
-                className={`group transition-all duration-150 hover:bg-indigo-500/[0.03] cursor-default ${
-                  isElo
-                    ? 'grid grid-cols-[50px_1fr_80px] gap-2 items-center px-4 py-3'
-                    : 'grid grid-cols-[50px_1fr_64px_64px] gap-2 items-center px-4 py-3 border-b border-zinc-800/20 last:border-b-0'
-                }`}
+                className={`lbd-row ${isElo ? 'lbd-row--elo' : 'lbd-row--scores'}`}
               >
                 {/* Rank */}
-                <div>
+                <div className="lbd-rank-cell">
                   <TierBadge rank={rank} />
                 </div>
 
                 {/* Username + shift */}
-                <div className="min-w-0 flex flex-col justify-center">
-                  <div className="flex items-center gap-2">
-                    <p className={`text-xs font-bold truncate ${
-                      rank === 1
-                        ? 'text-amber-400'
-                        : rank === 2
-                          ? 'text-zinc-300'
-                          : rank === 3
-                            ? 'text-amber-600'
-                            : 'text-zinc-200'
-                    }`}>
+                <div className="lbd-info-cell">
+                  <div className="lbd-username-wrapper">
+                    <p className={`lbd-username lbd-username--${rankClass}`}>
                       {entry.username}
                     </p>
                     {entry.badge_title && (
-                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${entry.badge_color_class || 'text-zinc-400 bg-zinc-900 border-zinc-700'}`}>
+                      <span className="lbd-title-badge">
                         {entry.badge_title}
                       </span>
                     )}
-                  </div>
-                  {(entry.elo_change !== undefined || entry.elo_shift !== undefined) && (
-                    <div className="mt-0.5">
+                    {(entry.elo_change !== undefined || entry.elo_shift !== undefined) && (
                       <EloShift shift={entry.elo_change ?? entry.elo_shift} />
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
                 {/* Score / Rating columns */}
                 {isElo ? (
-                  <p className="text-xs font-semibold text-indigo-400 text-right tabular-nums">
+                  <p className="lbd-value lbd-value--rating">
                     {entry.elo_rating ?? entry.contest_rating ?? 1200}
                   </p>
                 ) : (
                   <>
-                    <p className="text-xs font-semibold text-emerald-400 text-right tabular-nums">
+                    <p className="lbd-value lbd-value--score">
                       {entry.total_score ?? entry.score ?? 0}
                     </p>
-                    <p className="text-[11px] text-zinc-500 text-right tabular-nums">
+                    <p className="lbd-value lbd-value--penalty">
                       {entry.penalty_minutes ?? entry.penalty ?? 0}m
                     </p>
                   </>
@@ -173,3 +160,5 @@ export function Leaderboard({ leaderboard, title = 'Global Standings' }) {
     </div>
   )
 }
+
+export default Leaderboard

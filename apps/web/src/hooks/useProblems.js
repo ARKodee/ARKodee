@@ -12,6 +12,7 @@ import { getProblemsList, getSubmissionCalendar } from '../lib/problems';
  *  - Submission calendar data
  *  - Search query string with 300ms debounce
  *  - Active difficulty tab filter
+ *  - Current page pagination (server-side limits)
  *
  * @returns {Object} Structured contract of values, metrics, statuses, and setters.
  */
@@ -26,12 +27,26 @@ export function useProblems() {
   const [problemsError, setProblemsError] = useState(null);
   const [calendarError, setCalendarError] = useState(null);
 
-  // ─── Filter State ─────────────────────────────────────────────────────────────
+  // ─── Filter & Pagination State ────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [activeDifficulty, setActiveDifficulty] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
+
+  // ─── Database-Level Metrics ──────────────────────────────────────────────────
+  const [totalProblems, setTotalProblems] = useState(0);
+  const [solvedCount, setSolvedCount] = useState(0);
+  const [attemptedCount, setAttemptedCount] = useState(0);
+  const [totalFilteredCount, setTotalFilteredCount] = useState(0);
+  const [totalScore, setTotalScore] = useState(0);
 
   // Internal debounce ref — stores the pending timer ID across renders.
   const debounceTimer = useRef(null);
+
+  // ─── Reset page to 1 on filter/search queries change ──────────────────────────
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeDifficulty]);
 
   // ─── Effect 1: Initial Calendar Data Sync ────────────────────────────────────
   // Fires once on mount to fetch the user's submission activity calendar.
@@ -59,13 +74,10 @@ export function useProblems() {
     return () => { isMounted = false; };
   }, []);
 
-  // ─── Effect 2: Reactive Filter Refetch with Debounce ─────────────────────────
-  // Observes searchQuery and activeDifficulty. A 300ms debounce on search
-  // prevents excessive backend calls while the user is typing.
+  // ─── Effect 2: Reactive Filter & Paginated Refetch with Debounce ─────────────
+  // Observes searchQuery, activeDifficulty, and currentPage. A 300ms debounce on
+  // search prevents excessive backend calls while the user is typing.
   useEffect(() => {
-    // Skip the very first render (initial load is handled by Effect 1).
-    // We track this with a ref that flips after mount.
-    // Clear any pending debounce timer from the previous keystroke.
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
@@ -78,8 +90,15 @@ export function useProblems() {
         const data = await getProblemsList({
           search: searchQuery,
           difficulty: activeDifficulty,
+          page: currentPage,
+          page_size: pageSize,
         });
-        setProblems(Array.isArray(data) ? data : (data?.results ?? []));
+        setProblems(data?.results ?? []);
+        setTotalProblems(data?.total_problems ?? 0);
+        setSolvedCount(data?.solved_count ?? 0);
+        setAttemptedCount(data?.attempted_count ?? 0);
+        setTotalFilteredCount(data?.total_filtered_count ?? 0);
+        setTotalScore(data?.total_score ?? 0);
       } catch (err) {
         setProblemsError(err.message ?? 'Failed to filter problems.');
         setProblems([]);
@@ -88,7 +107,7 @@ export function useProblems() {
       }
     };
 
-    // Apply debounce only to text search; difficulty changes fire immediately.
+    // Apply debounce only to text search; difficulty and page changes fire immediately.
     const delay = searchQuery !== '' ? 300 : 0;
     debounceTimer.current = setTimeout(executeRefetch, delay);
 
@@ -97,14 +116,7 @@ export function useProblems() {
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [searchQuery, activeDifficulty]);
-
-  // ─── Derived Tracking Metrics ─────────────────────────────────────────────────
-  const totalProblems = problems.length;
-  const solvedCount = problems.filter((p) => p.is_solved === true).length;
-  const attemptedCount = problems.filter(
-    (p) => p.is_attempted === true && p.is_solved !== true
-  ).length;
+  }, [searchQuery, activeDifficulty, currentPage]);
 
   // ─── Packaged Contract ────────────────────────────────────────────────────────
   return {
@@ -120,17 +132,24 @@ export function useProblems() {
     problemsError,
     calendarError,
 
-    // Tracking metrics
+    // Tracking metrics (Calculated on server database level)
     totalProblems,
     solvedCount,
     attemptedCount,
+    totalFilteredCount,
+    totalScore,
 
-    // Filter query strings
+    // Filter query strings & pagination
     searchQuery,
     activeDifficulty,
+    currentPage,
+    pageSize,
 
     // State modifier functions
     setSearchQuery,
     setActiveDifficulty,
+    setCurrentPage,
   };
 }
+
+export default useProblems;

@@ -137,8 +137,6 @@ function ContestCard({ contest, onSelectContest, onActionClick }) {
           </p>
         )}
 
-        <ContestBadges contest={contest} />
-
         <div className="contest-card__meta">
           <span className="contest-card__meta-item">
             <Clock />
@@ -148,6 +146,18 @@ function ContestCard({ contest, onSelectContest, onActionClick }) {
             <Users />
             {contest.participant_count ?? 0} participants
           </span>
+          {contest.is_rated && (
+            <span className="contest-card__badge contest-card__badge--rated">
+              <Shield />
+              Rated
+            </span>
+          )}
+          {contest.eligible_class_tier && contest.eligible_class_tier !== 'all' && (
+            <span className="contest-card__badge contest-card__badge--class">
+              <GraduationCap />
+              {contest.eligible_class_tier.replace('_', ' ')}
+            </span>
+          )}
         </div>
       </div>
 

@@ -17,10 +17,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-1) var(--space-3);
+  padding: 0 var(--space-3);
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border);
-  min-height: var(--h-btn-sm);
+  height: 40px;
+  box-sizing: border-box;
 }
 
 .ie-file-tab {
@@ -453,4 +454,29 @@
   .ie-terminal {
     max-height: 200px;
   }
+}
+
+/* Console resize handle */
+.ie-terminal-resize-handle {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 100%;
+  height: 8px;
+  cursor: ns-resize;
+  z-index: 20;
+  background-color: transparent;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.ie-terminal-resize-handle:hover,
+.ie-terminal-resize-handle--active {
+  background-color: var(--accent-subtle);
+}
+
+/* Active console toggle button state */
+.ie-btn--active {
+  color: var(--accent) !important;
+  background-color: var(--accent-subtle) !important;
+  border-color: var(--accent-border) !important;
 }

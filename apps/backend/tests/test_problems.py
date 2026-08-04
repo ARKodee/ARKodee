@@ -187,10 +187,12 @@ class ProblemsApiTests(APITestCase):
         url = reverse("problems_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["title"], "Addition Problem")
-        self.assertEqual(response.data[0]["difficulty"], "EASY")
-        self.assertEqual(response.data[0]["is_solved"], False)
+        self.assertIn("results", response.data)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["title"], "Addition Problem")
+        self.assertEqual(response.data["results"][0]["difficulty"], "EASY")
+        self.assertEqual(response.data["results"][0]["is_solved"], False)
+        self.assertEqual(response.data["total_problems"], 1)
         
     def test_problem_detail_api(self):
         url = reverse("problem_detail", kwargs={"problem_slug": "addition-problem"})

@@ -82,6 +82,181 @@
   letter-spacing: -0.01em;
 }
 
+.ca-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border: 1px solid;
+}
+
+.ca-mode-badge--virtual {
+  background-color: var(--warning-subtle);
+  color: var(--warning);
+  border-color: var(--warning-border);
+}
+
+.ca-mode-badge--live {
+  background-color: var(--success-subtle);
+  color: var(--success);
+  border-color: var(--success-border);
+}
+
+.ca-ping-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background-color: var(--success);
+  animation: ca-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ca-ping {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Overview Tabs ─────────────────────────────────────────────────────────── */
+.ca-overview-tabs {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.ca-overview-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease);
+}
+
+.ca-overview-tab:hover {
+  color: var(--text-primary);
+}
+
+.ca-overview-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.ca-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: ca-fade-in var(--duration-base) var(--ease);
+}
+
+.ca-tab-content--standings {
+  width: 100%;
+}
+
+.ca-tab-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) 0;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+}
+
+@keyframes ca-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Submissions Table ──────────────────────────────────────────────────────── */
+.ca-submissions-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background-color: var(--bg-surface);
+}
+
+.ca-submissions-header,
+.ca-submissions-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 100px 120px 80px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+.ca-submissions-header {
+  background-color: var(--bg-base);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.ca-submissions-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.ca-submissions-row:last-child {
+  border-bottom: none;
+}
+
+.ca-sub-time {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.ca-sub-prob {
+  font-weight: 600;
+}
+
+.ca-sub-lang {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.ca-sub-verdict {
+  font-weight: 700;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+}
+
+.ca-sub-verdict--success {
+  color: var(--success);
+}
+
+.ca-sub-verdict--error {
+  color: var(--danger);
+}
+
+.ca-sub-score {
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--warning);
+}
+
+.ca-submissions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  gap: var(--space-2);
+  color: var(--text-muted);
+}
+
 /* ── Problem Switcher ───────────────────────────────────────────────────────── */
 .ca-problem-switcher {
   display: flex;
@@ -427,7 +602,8 @@
 /* Overview screen */
 .ca-overview {
   width: 100%;
-  max-width: 800px;
+  max-width: 960px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -604,7 +780,7 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;       /* let the toggle chip peek out */
   border-right: 1px solid var(--border);
   transition: width var(--duration-base) var(--ease);
 }
@@ -622,7 +798,7 @@
   top: 50%;
   right: -14px;
   transform: translateY(-50%);
-  z-index: 20;
+  z-index: 100; /* Prevent toggle button from being overridden by adjacent panes */
   width: 28px;
   height: 48px;
   display: flex;
@@ -831,8 +1007,25 @@
   flex-direction: column;
   background-color: var(--bg-base);
   border-top: 1px solid var(--border);
-  /* no height transition here — the body-wrap handles it */
   flex-shrink: 0;
+  position: relative; /* anchor for the resize handle */
+}
+
+/* Console Top Resize Handle */
+.ca-console-resize-handle {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 50;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.ca-console-resize-handle:hover,
+.ca-console-resize-handle--active {
+  background-color: var(--accent);
 }
 
 /* Body wrapper — animates open/closed */
@@ -843,7 +1036,10 @@
 }
 
 .ca-console-body-wrap--open {
-  max-height: 220px;
+  max-height: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .ca-console-header {
@@ -903,6 +1099,12 @@
 .ca-console-close:hover {
   color: var(--text-primary);
   background-color: var(--bg-overlay);
+}
+
+.ca-console-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .ca-console-body {
@@ -1345,4 +1547,234 @@
 .ca-modal-btn--danger:hover {
   background-color: #dc2626;
   box-shadow: 0 0 0 3px var(--danger-subtle);
+}
+
+/* ── Congratulations Stats Overlay ─────────────────────────────────────────── */
+.ca-congrats-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(10, 10, 12, 0.85);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.ca-congrats-card {
+  width: 100%;
+  max-width: 500px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl), 0 0 40px rgba(168, 85, 247, 0.15);
+  padding: var(--space-4);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ca-congrats-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #3b82f6, #a855f7, #ec4899);
+}
+
+.ca-congrats-trophy {
+  font-size: 36px;
+  margin-bottom: var(--space-1);
+  display: inline-block;
+  animation: ca-pulse 2s infinite ease-in-out;
+}
+
+.ca-congrats-title {
+  font-size: var(--text-base);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+  background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ca-congrats-subtitle {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.ca-congrats-contest-name {
+  display: inline-block;
+  align-self: center;
+  font-size: var(--text-nano);
+  font-weight: 600;
+  color: var(--accent);
+  background-color: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  padding: 2px var(--space-2);
+  border-radius: 9999px;
+  margin-bottom: var(--space-4);
+}
+
+.ca-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.ca-stat-item {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+}
+
+.ca-stat-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-border);
+}
+
+.ca-stat-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-1);
+}
+
+.ca-stat-value {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.ca-stat-desc {
+  font-size: var(--text-nano);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.ca-congrats-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.ca-congrats-btn {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+.ca-congrats-btn:hover {
+  transform: scale(1.02);
+}
+
+@keyframes ca-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.animate-fade-in {
+  animation: ca-fadeIn 0.4s var(--ease) forwards;
+}
+
+@keyframes ca-fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Live Contest Complete & Expired Overlays ───────────────────────────────── */
+.ca-live-complete-overlay, .ca-live-expired-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(10, 10, 12, 0.85);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.ca-live-card {
+  width: 100%;
+  max-width: 500px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl), 0 0 40px rgba(59, 130, 246, 0.15);
+  padding: var(--space-5);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.ca-live-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #10b981, #3b82f6);
+}
+
+.ca-live-card--expired::before {
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+
+.ca-live-icon {
+  font-size: 40px;
+  margin-bottom: var(--space-2);
+  display: inline-block;
+}
+
+.ca-live-title {
+  font-size: var(--text-base);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.ca-live-desc {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: var(--leading-body);
+  margin-bottom: var(--space-5);
+}
+
+.ca-live-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
 }

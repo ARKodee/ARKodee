@@ -2,6 +2,8 @@
 // Presentational Text Container Panel — left column canvas pane.
 // No internal network fetching or loading effects; all values via props.
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import './ProblemDescription.css';
 
 // ─── Tab Identifiers ──────────────────────────────────────────────────────────
@@ -20,19 +22,59 @@ const DIFFICULTY_STYLES = {
 // ─── Sub-Components ───────────────────────────────────────────────────────────
 
 /**
+ * Helper to pre-process raw problem description text to ensure linebreaks
+ * and correct layout formatting.
+ */
+function formatDescriptionText(text) {
+  if (!text) return '';
+  
+  // Normalize carriage returns
+  let formatted = text.replace(/\r\n/g, '\n');
+
+  // Ensure spacing and linebreaks for Example headings (Example 1, Example 2, etc.)
+  formatted = formatted.replace(/(?:^|\n|\s)(Example\s+\d+:)/gi, '\n\n### $1\n');
+  
+  // Ensure spacing and heading for Constraints section
+  formatted = formatted.replace(/(?:^|\n|\s)(Constraints:)/gi, '\n\n### Constraints\n');
+
+  // Strip Example blocks from description text since they are rendered dynamically below
+  formatted = formatted.replace(/(?:^|\n|\s)*(?:### )?Example\s+\d+:[\s\S]*?(?=(?:### Example\s+\d+:|### Constraints|Constraints:|Note:|$))/gi, '\n\n');
+
+  // Look for the Constraints section and convert its non-empty lines into bullet points
+  const constraintsMatch = formatted.match(/(### Constraints[\s\S]*?)(?=(?:Note:|$))/i);
+  if (constraintsMatch) {
+    const rawConstraintsSection = constraintsMatch[1];
+    const lines = rawConstraintsSection.split('\n');
+    const formattedLines = lines.map(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('### Constraints')) return line;
+      if (!trimmed) return '';
+      if (trimmed.startsWith('-') || trimmed.startsWith('*')) return line;
+      return `- ${trimmed}`;
+    });
+    const newConstraintsSection = formattedLines.join('\n');
+    formatted = formatted.replace(rawConstraintsSection, newConstraintsSection);
+  }
+
+  // Remove any excessive consecutive empty lines (more than 2 newlines)
+  formatted = formatted.replace(/\n{3,}/g, '\n\n');
+  
+  return formatted.trim();
+}
+
+/**
  * SectionBlock — Reusable bordered text block for constraints, format specs.
  */
 function SectionBlock({ title, content }) {
   if (!content) return null;
+  const formattedContent = formatDescriptionText(content);
   return (
     <div className="pdsc-section">
       <h3 className="pdsc-section-title">{title}</h3>
       <div className="pdsc-section-body">
-        {content.split('\n').map((line, i) => (
-          <p key={i} className="pdsc-paragraph">
-            {line || '\u00A0'}
-          </p>
-        ))}
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {formattedContent}
+        </ReactMarkdown>
       </div>
     </div>
   );
@@ -73,6 +115,7 @@ export function ProblemDescription({
   problem,
   submissions = [],
   loadingSubmissions = false,
+  maxExamples = 2,
 }) {
   const [activeTab, setActiveTab] = useState('description');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState(null);
@@ -80,6 +123,30 @@ export function ProblemDescription({
   if (!problem) return null;
 
   const difficulty = (problem.difficulty ?? '').toUpperCase();
+
+  // Extract and strip constraints segment from description if embedded
+  let parsedDescription = problem.description || '';
+  let parsedConstraints = problem.constraints || '';
+  let extractedConstraints = '';
+
+  let normalizedDesc = parsedDescription.replace(/\r\n/g, '\n');
+  // Normalize Constraints header syntax
+  normalizedDesc = normalizedDesc.replace(/(?:^|\n|\s)(Constraints:)/gi, '\n\n### Constraints\n');
+  
+  // Find Constraints section
+  const constraintsMatch = normalizedDesc.match(/(### Constraints[\s\S]*?)(?=(?:Note:|$))/i);
+  if (constraintsMatch) {
+    extractedConstraints = constraintsMatch[1];
+    // Strip constraints block from description container text
+    normalizedDesc = normalizedDesc.replace(constraintsMatch[0], '');
+  }
+
+  let finalDescription = normalizedDesc.trim();
+  let finalConstraints = (extractedConstraints || parsedConstraints).trim();
+
+  // Clean the separate constraints text of any duplicated headers
+  finalConstraints = finalConstraints.replace(/^### Constraints\s*/i, '');
+  finalConstraints = finalConstraints.replace(/^Constraints:\s*/i, '');
 
   // Normalize sample testcases into paired arrays
   const sampleInputs = Array.isArray(problem.sample_input)
@@ -116,7 +183,7 @@ export function ProblemDescription({
         <div className="pdsc-content" role="tabpanel" aria-labelledby="tab-description">
           {/* Header Stats */}
           <div className="pdsc-header">
-            <h2 className="pdsc-title">{problem.title}</h2>
+            <h2 className="pdsc-title">{problem.serial_no ? `#${problem.serial_no} ${problem.title}` : problem.title}</h2>
             <div className="pdsc-meta">
               <span className={DIFFICULTY_STYLES[difficulty] ?? 'pdsc-badge'}>
                 {difficulty}
@@ -145,10 +212,10 @@ export function ProblemDescription({
           </div>
 
           {/* Problem Statement */}
-          <SectionBlock title="Problem Statement" content={problem.description} />
+          <SectionBlock title="Problem Statement" content={finalDescription} />
 
           {/* Constraints */}
-          <SectionBlock title="Constraints" content={problem.constraints} />
+          <SectionBlock title="Constraints" content={finalConstraints} />
 
           {/* Input Format */}
           <SectionBlock title="Input Format" content={problem.input_format} />
@@ -160,7 +227,7 @@ export function ProblemDescription({
           {sampleInputs.length > 0 && (
             <div className="pdsc-examples">
               <h3 className="pdsc-section-title">Examples</h3>
-              {sampleInputs.map((input, i) => (
+              {sampleInputs.slice(0, maxExamples).map((input, i) => (
                 <SampleCase
                   key={i}
                   index={i}

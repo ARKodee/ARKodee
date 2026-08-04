@@ -3,6 +3,7 @@
 // Mounts Monaco code editor with custom IDE theme and action toolbar.
 import React, { useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
+import { useTheme } from '../../store/ThemeContext';
 import './InteractiveEditor.css';
 
 // ─── Language → File Extension Map ─────────────────────────────────────────────
@@ -51,6 +52,35 @@ const ARKODEE_DARK_THEME = {
   },
 };
 
+const ARKODEE_LIGHT_THEME = {
+  base: 'vs',
+  inherit: true,
+  rules: [
+    { token: '', foreground: '0f0f14', background: 'f9f9fb' },
+    { token: 'comment', foreground: '9292a0', fontStyle: 'italic' },
+    { token: 'keyword', foreground: '6d58f5' },
+    { token: 'string', foreground: '059669' },
+    { token: 'number', foreground: 'd97706' },
+    { token: 'type', foreground: '6d58f5' },
+    { token: 'function', foreground: '0f0f14' },
+  ],
+  colors: {
+    'editor.background':                 '#f9f9fb',
+    'editor.foreground':                 '#0f0f14',
+    'editor.lineHighlightBackground':    '#f0f0f5',
+    'editor.selectionBackground':        '#e4e4ec',
+    'editorLineNumber.foreground':       '#9292a0',
+    'editorLineNumber.activeForeground': '#52525e',
+    'editorGutter.background':           '#f9f9fb',
+    'editorWidget.background':           '#ffffff',
+    'editorWidget.border':               '#e4e4ec',
+    'editor.inactiveSelectionBackground':'#ededf5',
+    'editorCursor.foreground':           '#6d58f5',
+    'editorIndentGuide.background':      '#e4e4ec',
+    'editorIndentGuide.activeBackground':'#c8c8d8',
+  },
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 /**
@@ -78,22 +108,53 @@ export function InteractiveEditor({
   addFailedCaseToVisible = () => {},
   onRun = () => {},
   onSubmit = () => {},
-  readOnly = false
+  readOnly = false,
+  enableSuggestions = true
 }) {
+  const { theme } = useTheme();
   const editorRef = useRef(null);
   const [activeCaseIdx, setActiveCaseIdx] = useState(0);
+  const [terminalHeight, setTerminalHeight] = useState('38%');
+  const [isResizingTerminal, setIsResizingTerminal] = useState(false);
+
+  const handleTerminalMouseDown = (e) => {
+    e.preventDefault();
+    setIsResizingTerminal(true);
+    const startY = e.clientY;
+
+    const terminalElement = e.currentTarget.parentElement;
+    const startHeight = terminalElement ? terminalElement.offsetHeight : 250;
+    const parentElement = terminalElement ? terminalElement.parentElement : null;
+    const parentHeight = parentElement ? parentElement.offsetHeight : 600;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaY = startY - moveEvent.clientY;
+      const newHeight = Math.min(Math.max(startHeight + deltaY, 120), parentHeight * 0.75);
+      setTerminalHeight(`${newHeight}px`);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingTerminal(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   const fileName = FILE_NAMES[selectedLanguage] ?? 'main.py';
   const monacoLang = MONACO_LANG_MAP[selectedLanguage] ?? 'python';
 
   /**
    * handleEditorMount — Fires once when Monaco finishes bootstrapping.
-   * Registers the custom ARKodee dark theme globally.
+   * Registers custom light and dark themes.
    */
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
     monaco.editor.defineTheme('arkodee-dark', ARKODEE_DARK_THEME);
-    monaco.editor.setTheme('arkodee-dark');
+    monaco.editor.defineTheme('arkodee-light', ARKODEE_LIGHT_THEME);
+    monaco.editor.setTheme(theme === 'dark' ? 'arkodee-dark' : 'arkodee-light');
   };
 
   const handleAddFailedToTestcases = (tcResult) => {
@@ -142,9 +203,10 @@ export function InteractiveEditor({
           value={code}
           onChange={(value) => !readOnly && setCode(value ?? '')}
           onMount={handleEditorMount}
-          theme="arkodee-dark"
+          theme={theme === 'dark' ? 'arkodee-dark' : 'arkodee-light'}
           options={{
             readOnly: readOnly,
+            contextmenu: false,
             minimap: { enabled: false },
             automaticLayout: true,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -162,13 +224,22 @@ export function InteractiveEditor({
               verticalScrollbarSize: 6,
               horizontalScrollbarSize: 6,
             },
+            quickSuggestions: enableSuggestions ? { other: true, comments: false, strings: false } : false,
+            parameterHints: { enabled: enableSuggestions },
+            suggestOnTriggerCharacters: enableSuggestions,
+            tabCompletion: enableSuggestions ? "on" : "off",
+            wordBasedSuggestions: enableSuggestions ? "allDocuments" : "none",
           }}
         />
       </div>
 
       {/* ── Collapsible Terminal Panel ─────────────────────────────────────── */}
       {isTerminalOpen && (
-        <div className="ie-terminal">
+        <div className="ie-terminal" style={{ height: terminalHeight, maxHeight: 'none', position: 'relative' }}>
+          <div
+            className={`ie-terminal-resize-handle ${isResizingTerminal ? 'ie-terminal-resize-handle--active' : ''}`}
+            onMouseDown={handleTerminalMouseDown}
+          />
           <div className="ie-terminal-header">
             <div className="ie-terminal-tabs">
               <button
@@ -201,58 +272,77 @@ export function InteractiveEditor({
           <div className="ie-terminal-body">
             {activeTerminalTab === 'testcases' ? (
               <div>
-                {/* Testcase tabs */}
-                <div className="ie-testcase-tabs">
-                  {visibleTestCases.map((tc, idx) => {
-                    const res = testCaseResults[idx];
-                    let tabClass = 'ie-testcase-tab';
-                    if (res?.passed) tabClass += ' ie-testcase-tab--passed';
-                    else if (res && !res.passed) tabClass += ' ie-testcase-tab--failed';
-                    if (activeCaseIdx === idx) tabClass += ' ie-testcase-tab--active';
-
-                    return (
-                      <button
-                        key={tc.id || idx}
-                        onClick={() => setActiveCaseIdx(idx)}
-                        className={tabClass}
-                      >
-                        <span className="ie-testcase-indicator" />
-                        <span>{tc.label || `Case ${idx + 1}`}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Active case detail */}
-                {visibleTestCases[activeCaseIdx] ? (
+                {/* Global error fallback (Compilation Error / Execution Error) */}
+                {terminalOutput && (terminalOutput.includes('Compilation Error') || terminalOutput.includes('Execution Error')) ? (
                   <div className="ie-testcase-content">
-                    <div>
-                      <span className="ie-testcase-label">Input:</span>
-                      <pre className="ie-testcase-pre">{visibleTestCases[activeCaseIdx].input}</pre>
+                    <div className="ie-result-banner ie-result-banner--error" style={{ marginBottom: 'var(--space-3)' }}>
+                      <strong>{terminalOutput.split('\n\n')[0] || 'Error Occurred'}</strong>
                     </div>
-                    {visibleTestCases[activeCaseIdx].expected_output && (
-                      <div>
-                        <span className="ie-testcase-label">Expected Output:</span>
-                        <pre className="ie-testcase-pre ie-testcase-pre--expected">{visibleTestCases[activeCaseIdx].expected_output}</pre>
-                      </div>
-                    )}
-                    {testCaseResults[activeCaseIdx]?.output && (
-                      <div>
-                        <span className="ie-testcase-label">Your Output:</span>
-                        <pre className="ie-testcase-pre ie-testcase-pre--output">{testCaseResults[activeCaseIdx].output}</pre>
-                      </div>
-                    )}
-                    {testCaseResults[activeCaseIdx]?.error && (
-                      <div className="ie-testcase-error">
-                        <span className="ie-testcase-error-title">Error:</span>
-                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{testCaseResults[activeCaseIdx].error}</pre>
-                      </div>
-                    )}
+                    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--danger)', padding: 'var(--space-3)', backgroundColor: 'var(--bg-overlay)', borderRadius: 'var(--radius-md)', border: '1px solid var(--danger-border)' }}>
+                      {terminalOutput.substring(terminalOutput.indexOf('\n\n') + 2) || terminalOutput}
+                    </pre>
                   </div>
                 ) : (
-                  <div className="ie-empty">
-                    <span className="ie-empty-text">No test cases available.</span>
-                  </div>
+                  <>
+                    {/* Testcase tabs */}
+                    <div className="ie-testcase-tabs">
+                      {visibleTestCases.map((tc, idx) => {
+                        const res = testCaseResults[idx];
+                        let tabClass = 'ie-testcase-tab';
+                        if (res?.passed) tabClass += ' ie-testcase-tab--passed';
+                        else if (res && !res.passed) tabClass += ' ie-testcase-tab--failed';
+                        if (activeCaseIdx === idx) tabClass += ' ie-testcase-tab--active';
+
+                        return (
+                          <button
+                            key={tc.id || idx}
+                            onClick={() => setActiveCaseIdx(idx)}
+                            className={tabClass}
+                          >
+                            <span className="ie-testcase-indicator" />
+                            <span>{tc.label || `Case ${idx + 1}`}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active case detail */}
+                    {visibleTestCases[activeCaseIdx] ? (
+                      <div className="ie-testcase-content">
+                        <div>
+                          <span className="ie-testcase-label">Input:</span>
+                          <pre className="ie-testcase-pre">{visibleTestCases[activeCaseIdx].input}</pre>
+                        </div>
+                        {visibleTestCases[activeCaseIdx].expected_output && (
+                          <div>
+                            <span className="ie-testcase-label">Expected Output:</span>
+                            <pre className="ie-testcase-pre ie-testcase-pre--expected">{visibleTestCases[activeCaseIdx].expected_output}</pre>
+                          </div>
+                        )}
+                        {/* Always show "Your Output" if testCaseResults has been populated */}
+                        {testCaseResults[activeCaseIdx] && (
+                          <div>
+                            <span className="ie-testcase-label">Your Output:</span>
+                            <pre className="ie-testcase-pre ie-testcase-pre--output">
+                              {testCaseResults[activeCaseIdx].output !== undefined && testCaseResults[activeCaseIdx].output !== null
+                                ? (testCaseResults[activeCaseIdx].output === "" ? "(no output)" : testCaseResults[activeCaseIdx].output)
+                                : "(no output)"}
+                            </pre>
+                          </div>
+                        )}
+                        {testCaseResults[activeCaseIdx]?.error && (
+                          <div className="ie-testcase-error">
+                            <span className="ie-testcase-error-title">Error:</span>
+                            <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{testCaseResults[activeCaseIdx].error}</pre>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="ie-empty">
+                        <span className="ie-empty-text">No test cases available.</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -308,6 +398,17 @@ export function InteractiveEditor({
 
       {/* ── Bottom Action Toolbar ─────────────────────────────────────────── */}
       <div className="ie-action-bar">
+        <button
+          className={`ie-btn ie-btn--ghost ${isTerminalOpen ? 'ie-btn--active' : ''}`}
+          onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+          title={isTerminalOpen ? "Close console panel" : "Open console panel"}
+          id="btn-toggle-console"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: isTerminalOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', marginRight: '4px' }}>
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Console
+        </button>
         <div className="ie-action-spacer" />
         <div className="ie-action-buttons">
           <button

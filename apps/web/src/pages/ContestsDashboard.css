@@ -1,6 +1,6 @@
 /* src/pages/ContestsDashboard.css */
 
-.cd-page {
+.cd-db-page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -9,7 +9,7 @@
   font-family: var(--font-ui);
 }
 
-.cd-body {
+.cd-db-body {
   flex: 1;
   width: 100%;
   max-width: 1200px;
@@ -21,44 +21,43 @@
 }
 
 /* Page header */
-.cd-page-header { 
+.cd-db-page-header { 
   display: flex; 
   flex-direction: column; 
   gap: var(--space-2); 
   margin-bottom: var(--space-3);
 }
-.cd-page-title  { 
+.cd-db-page-title  { 
   font-size: var(--text-xl); 
   font-weight: 700; 
   color: var(--text-primary); 
   letter-spacing: -0.02em; 
   line-height: var(--leading-tight);
 }
-.cd-page-sub    { 
+.cd-db-page-sub    { 
   font-size: var(--text-md); 
   color: var(--text-secondary); 
   line-height: var(--leading-normal);
 }
 
 /* 2-col grid: 2fr | 1fr */
-.cd-grid {
+.cd-db-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1fr 340px;
   gap: var(--space-5);
-  align-items: start;
 }
 
 @media (max-width: 768px) {
-  .cd-grid { grid-template-columns: 1fr; }
-  .cd-side  { display: none; }
+  .cd-db-grid { grid-template-columns: 1fr; }
+  .cd-db-side  { display: none; }
 }
 
-.cd-main { display: flex; flex-direction: column; gap: var(--space-4); }
-.cd-side  { display: flex; flex-direction: column; }
-.cd-side-sticky { position: sticky; top: calc(var(--h-navbar) + var(--space-4)); }
+.cd-db-main { display: flex; flex-direction: column; gap: var(--space-4); }
+.cd-db-side  { display: flex; flex-direction: column; position: relative; align-self: stretch; }
+.cd-db-side-sticky { box-sizing: border-box; }
 
 /* Filter tabs */
-.cd-filters {
+.cd-db-filters {
   display: flex;
   gap: var(--space-2);
   padding: var(--space-2);
@@ -67,7 +66,7 @@
   border-radius: var(--radius-lg);
 }
 
-.cd-filter-btn {
+.cd-db-filter-btn {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -85,19 +84,19 @@
   white-space: nowrap;
 }
 
-.cd-filter-btn:hover {
+.cd-db-filter-btn:hover {
   color: var(--text-primary);
   background-color: var(--bg-overlay);
 }
 
-.cd-filter-btn--active {
+.cd-db-filter-btn--active {
   color: var(--accent);
   background-color: var(--accent-subtle);
   border-color: var(--accent-border);
 }
 
 /* Center state (loading) */
-.cd-center-state {
+.cd-db-center-state {
   display: flex;
   align-items: center;
   justify-content: center;

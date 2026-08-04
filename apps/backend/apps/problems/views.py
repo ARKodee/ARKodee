@@ -39,28 +39,85 @@ def problems_list(request):
     search_query = request.query_params.get("search", "").strip()
     difficulty_query = request.query_params.get("difficulty", "").strip().lower()
     
+    # Calculate global metrics on database level (extremely cheap & indexed count queries)
+    total_problems = Problem.objects.filter(status="approved").count()
+    solved_count = UserProblemStats.objects.filter(user=request.user, status="solved").count()
+    attempted_count = UserProblemStats.objects.filter(user=request.user).exclude(status="solved").count()
+    
+    # Calculate global score (Easy=100, Medium=200, Hard=300) dynamically via DB annotations
+    from django.db.models import Case, When, Value, IntegerField, Sum
+    solved_problems = Problem.objects.filter(
+        status="approved",
+        user_stats__user=request.user,
+        user_stats__status="solved"
+    )
+    total_score = solved_problems.annotate(
+        pts=Case(
+            When(difficulty="easy", then=Value(100)),
+            When(difficulty="medium", then=Value(200)),
+            default=Value(300),
+            output_field=IntegerField()
+        )
+    ).aggregate(total=Sum("pts"))["total"] or 0
+    
     problems = Problem.objects.filter(status="approved").prefetch_related("tags")
     
     if search_query:
-        problems = problems.filter(
-            Q(title__icontains=search_query) | Q(description__icontains=search_query)
-        )
+        if search_query.isdigit():
+            problems = problems.filter(
+                Q(serial_no=int(search_query)) | Q(title__icontains=search_query)
+            )
+        else:
+            problems = problems.filter(Q(title__icontains=search_query))
         
     if difficulty_query and difficulty_query != "all":
         problems = problems.filter(difficulty=difficulty_query)
         
-    # Get user problem stats
+    total_filtered_count = problems.count()
+    
+    # Parse pagination parameters
+    try:
+        page = int(request.query_params.get("page", 1))
+        if page < 1:
+            page = 1
+    except ValueError:
+        page = 1
+        
+    try:
+        page_size = int(request.query_params.get("page_size", 15))
+        if page_size < 1:
+            page_size = 15
+    except ValueError:
+        page_size = 15
+        
+    start_idx = (page - 1) * page_size
+    end_idx = page * page_size
+    
+    # Slice the query set to only load displayed window
+    paginated_problems = problems.order_by("serial_no")[start_idx:end_idx]
+    
+    # Fetch progress status ONLY for the sliced problem set (huge query cost saver!)
+    paginated_problem_ids = [p.id for p in paginated_problems]
     stats = {
         s.problem_id: s.status
-        for s in UserProblemStats.objects.filter(user=request.user)
+        for s in UserProblemStats.objects.filter(user=request.user, problem_id__in=paginated_problem_ids)
     }
     
     serializer = ProblemListSerializer(
-        problems,
+        paginated_problems,
         many=True,
         context={"user_stats": stats}
     )
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response({
+        "results": serializer.data,
+        "total_problems": total_problems,
+        "solved_count": solved_count,
+        "attempted_count": attempted_count,
+        "total_filtered_count": total_filtered_count,
+        "page": page,
+        "page_size": page_size,
+        "total_score": total_score
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
@@ -174,7 +231,7 @@ def submit_code(request, problem_slug):
         pass
     starter_code = templates.get("python", "")
     
-    verdict, results, compile_error = run_code_in_sandbox(code, language, all_cases, problem.time_limit_ms, starter_code)
+    verdict, results, compile_error = run_code_in_sandbox(code, language, all_cases, problem.time_limit_ms, starter_code, stop_on_first_fail=True)
     
     # Calculate passed test cases count
     passed_count = sum(1 for r in results if r.get("passed"))

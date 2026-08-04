@@ -23,6 +23,7 @@ class ProblemListSerializer(serializers.ModelSerializer):
             "is_solved",
             "is_attempted",
             "tags",
+            "serial_no",
         ]
 
     def get_difficulty(self, obj):
@@ -71,6 +72,7 @@ class ProblemDetailSerializer(serializers.ModelSerializer):
             "time_limit_ms",
             "memory_limit_mb",
             "boilerplate",
+            "serial_no",
         ]
 
     def get_difficulty(self, obj):

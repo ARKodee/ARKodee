@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
+import { useTheme } from '../store/ThemeContext';
 import { ArrowLeft, Terminal, AlertTriangle, Check, X, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
 import { getBugDetails, runBugCode, submitBugCode } from '../lib/bugs';
@@ -121,6 +122,7 @@ function FailedModal({ reason, onInspect, onRetry, onClose }) {
 
 // ─── Main Page Component ───────────────────────────────────────────────────────
 export function DebugArenaPage() {
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const { bugId } = useParams();
 
@@ -380,7 +382,7 @@ export function DebugArenaPage() {
                   language={language === 'cpp' ? 'cpp' : language}
                   value={currentCode}
                   onChange={handleCodeChange}
-                  theme="vs-dark"
+                  theme={theme === 'dark' ? 'vs-dark' : 'light'}
                   options={{
                     fontSize: 13,
                     fontFamily: "'JetBrains Mono', monospace",

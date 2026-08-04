@@ -2,11 +2,11 @@
 // Split-Canvas Conductor Page Layout — resizable IDE workspace.
 // Uses design system tokens and provides collapsible/collapsible panels.
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useProblemDetails } from '../hooks/useProblemDetails';
 import { ProblemDescription } from '../components/practice/ProblemDescription';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Columns } from 'lucide-react';
 import './ProblemWorkspace.css';
 
 // ─── Language Options ──────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ const LANGUAGES = [
 ];
 
 // ─── Initial Panel Widths ──────────────────────────────────────────────────────
-const INITIAL_LEFT_WIDTH = 45;
+const INITIAL_LEFT_WIDTH = 38;
 const MIN_LEFT_WIDTH = 30;
 const MAX_LEFT_WIDTH = 60;
 
@@ -116,15 +116,15 @@ function ResizeHandle({ onResize, containerRef, currentWidth }) {
 
 
 // ─── Collapse Toggle Component ─────────────────────────────────────────────────
-function CollapseToggle({ isCollapsed, onToggle, position }) {
+function CollapseToggle({ isCollapsed, onToggle }) {
   return (
     <button
-      className={`pw-collapse-toggle ${isCollapsed ? 'pw-collapse-toggle--collapsed' : ''}`}
+      className="pw-collapse-toggle"
       onClick={onToggle}
       title={isCollapsed ? 'Expand panel' : 'Collapse panel'}
       aria-label={isCollapsed ? 'Expand problem description' : 'Collapse problem description'}
     >
-      <ChevronRight size={14} />
+      {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
     </button>
   );
 }
@@ -133,10 +133,10 @@ function CollapseToggle({ isCollapsed, onToggle, position }) {
 export function ProblemWorkspace() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const containerRef = useRef(null);
   const [leftWidth, setLeftWidth] = useState(INITIAL_LEFT_WIDTH);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
-  const [isLeftHovered, setIsLeftHovered] = useState(false);
 
   const {
     problem,
@@ -167,7 +167,11 @@ export function ProblemWorkspace() {
   } = useProblemDetails(slug);
 
   const handleBack = () => {
-    navigate('/practice');
+    if (location.state?.fromContest) {
+      navigate(`/contests/${location.state.fromContest}`);
+    } else {
+      navigate('/practice');
+    }
   };
 
   const handleLanguageChange = (e) => {
@@ -186,17 +190,8 @@ export function ProblemWorkspace() {
     setIsLeftCollapsed(!isLeftCollapsed);
   };
 
-  // Auto-expand on hover when collapsed
-  const handleMouseEnter = () => {
-    setIsLeftHovered(true);
-  };
-
-  const handleMouseLeave = () => {
-    setIsLeftHovered(false);
-  };
-
   // Calculate actual left panel width
-  const actualLeftWidth = isLeftCollapsed && !isLeftHovered ? 0 : leftWidth;
+  const actualLeftWidth = isLeftCollapsed ? 0 : leftWidth;
 
   return (
     <main className="pw-root" id="problem-workspace">
@@ -213,12 +208,26 @@ export function ProblemWorkspace() {
           >
             <ChevronLeft size={18} />
           </button>
+          
           <span className="pw-toolbar-sep" aria-hidden="true" />
+          
+          {/* Centralized explicit show/hide description toggle */}
+          <button
+            onClick={handleCollapseToggle}
+            className="pw-back-btn"
+            title={isLeftCollapsed ? "Show description panel" : "Hide description panel"}
+            style={{ color: !isLeftCollapsed ? 'var(--accent)' : 'var(--text-secondary)' }}
+          >
+            <Columns size={16} />
+          </button>
+          
+          <span className="pw-toolbar-sep" aria-hidden="true" />
+          
           <h1 className="pw-toolbar-title">
             {loading ? (
               <span className="pw-skel pw-skel--inline-title" />
             ) : (
-              problem?.title ?? 'Problem'
+              problem ? `#${problem.serial_no} ${problem.title}` : 'Problem'
             )}
           </h1>
         </div>
@@ -247,12 +256,10 @@ export function ProblemWorkspace() {
         <WorkspaceSkeleton />
       ) : (
         <div className="pw-canvas" ref={containerRef}>
-          {/* Left Pane — Problem Description (Resizable) */}
+          {/* Left Pane — Problem Description (Resizable, hides completely when collapsed) */}
           <section
             className="pw-pane pw-pane--left"
-            style={{ width: `${actualLeftWidth}%` }}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
+            style={{ width: isLeftCollapsed ? '0%' : `${leftWidth}%`, display: isLeftCollapsed ? 'none' : 'flex' }}
             aria-label="Problem description"
           >
             <ProblemDescription
@@ -279,16 +286,16 @@ export function ProblemWorkspace() {
           {/* Right Pane — Interactive Editor */}
           <section
             className="pw-pane pw-pane--right"
+            style={{ width: isLeftCollapsed ? '100%' : `${100 - leftWidth}%` }}
             aria-label="Code editor"
           >
-            {isLeftCollapsed && !isLeftHovered && (
+            {isLeftCollapsed && (
               <button
-                className="pw-expand-hint"
+                className="pw-collapsed-expand-btn"
                 onClick={handleCollapseToggle}
                 title="Expand problem description"
               >
-                <Maximize2 size={14} />
-                <span>Problem</span>
+                <ChevronRight size={14} />
               </button>
             )}
             <InteractiveEditor
@@ -318,3 +325,5 @@ export function ProblemWorkspace() {
     </main>
   );
 }
+
+export default ProblemWorkspace;

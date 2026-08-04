@@ -996,3 +996,112 @@
 .a1-console-toggle:hover {
   color: var(--text-secondary);
 }
+
+
+/* 1v1 Arena Theme Cockpit Tokens & Custom Resizer Pane Layouts */
+:root {
+  --arena-bg: #030307;
+  --arena-panel: rgba(10, 10, 16, 0.75);
+  --arena-border: rgba(38, 38, 58, 0.4);
+  --color-easy: #10b981;
+  --color-medium: #f59e0b;
+  --color-hard: #ef4444;
+  --text-glow-easy: 0 0 10px rgba(16, 185, 129, 0.3);
+  --text-glow-medium: 0 0 10px rgba(245, 158, 11, 0.3);
+  --text-glow-hard: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+/* Glass panel elements */
+.arena-panel {
+  background: var(--arena-panel);
+  border: 1px solid var(--arena-border);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Transitions for collapsing sidebars */
+.resizable-panel {
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+/* Monaco Sabotage Blur state */
+.sabotage-blurred {
+  filter: blur(12px) grayscale(40%);
+  pointer-events: none;
+  transition: filter 0.4s ease;
+}
+
+/* AP / Mana Bar indicator style */
+.mana-bar-track {
+  background: rgba(30, 30, 46, 0.8);
+  border: 1px solid rgba(63, 63, 94, 0.5);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+}
+
+.mana-bar-fill {
+  background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%);
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.6);
+  transition: width 0.4s cubic-bezier(0.1, 0.8, 0.3, 1);
+}
+
+/* Pulse animation for active telemetry typing logs */
+.active-typing-pulse {
+  box-shadow: 0 0 8px #10b981;
+}
+
+/* Score highlight glow */
+.score-value {
+  text-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+}
+
+/* Difficulty Badge styling */
+.difficulty-badge {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.difficulty-badge.easy {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-easy);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  text-shadow: var(--text-glow-easy);
+}
+
+.difficulty-badge.medium {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--color-medium);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  text-shadow: var(--text-glow-medium);
+}
+
+.difficulty-badge.hard {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-hard);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  text-shadow: var(--text-glow-hard);
+}
+
+/* Sabotage active warning */
+.sabotage-overlay {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.1);
+}
+
+/* Drag handle dividers */
+.resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: rgba(38, 38, 58, 0.25);
+  transition: background 0.15s ease;
+  position: relative;
+  z-index: 10;
+  align-self: stretch;
+}
+.resize-handle:hover, .resize-handle:active {
+  background: #6366f1;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.7);
+}
