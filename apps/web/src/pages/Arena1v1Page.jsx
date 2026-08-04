@@ -556,7 +556,7 @@ export function Arena1v1Page() {
 
       {/* Toast Notification HUD */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 p-4 rounded-xl border font-mono text-xs shadow-2xl bg-indigo-950/90 border-indigo-500/30 text-indigo-300 animate-pulse">
+        <div className="a1-toast">
           <span>{toastMessage}</span>
         </div>
       )}
@@ -571,27 +571,59 @@ export function Arena1v1Page() {
       )}
 
       <div className="a1-body">
-        {/* Header */}
+        {/* Header — 3 columns: left | SCOREBOARD | right */}
         <header className="a1-header">
+          {/* Left — exit + match id */}
           <div className="a1-header-left">
             <button className="a1-back-btn" onClick={handleLeaveArena}>
               <ArrowLeft size={14} />
               <span>Exit</span>
             </button>
             <span className="a1-header-sep" />
-            <div className="a1-match-info">
-              <span className="a1-match-id">#{matchId?.substring(0, 8) || 'RANKED'}</span>
-              <span className="a1-vs-divider">vs</span>
-              <span className="a1-opponent-name">{opponentProfile?.username || 'Challenger'}</span>
+            <span className="a1-match-id">#{matchId?.substring(0, 8) || 'RANKED'}</span>
+          </div>
+
+          {/* Center — live duel scoreboard */}
+          <div className="a1-scoreboard">
+            {/* Me */}
+            <div className="a1-scoreboard-player a1-scoreboard-player--me">
+              <span className="a1-scoreboard-name">{activeUsername}</span>
+              <span className="a1-scoreboard-score">{myScore}</span>
+              <div className="a1-scoreboard-ap-bar">
+                <div className="a1-scoreboard-ap-fill a1-scoreboard-ap-fill--me" style={{ width: `${Math.min(myAp, 100)}%` }} />
+              </div>
+              <span className="a1-scoreboard-ap-label">{myAp} AP</span>
+            </div>
+
+            {/* Center divider with lead indicator */}
+            <div className="a1-scoreboard-center">
+              <div className={`a1-scoreboard-lead ${
+                myScore > opponentScore ? 'a1-scoreboard-lead--winning'
+                : myScore < opponentScore ? 'a1-scoreboard-lead--losing'
+                : 'a1-scoreboard-lead--tied'
+              }`}>
+                {myScore > opponentScore ? '▲ LEADING' : myScore < opponentScore ? '▼ BEHIND' : 'TIED'}
+              </div>
+              <div className="a1-scoreboard-vs">VS</div>
+            </div>
+
+            {/* Opponent */}
+            <div className="a1-scoreboard-player a1-scoreboard-player--opp">
+              <span className="a1-scoreboard-name">{opponentProfile?.username || 'Opponent'}</span>
+              <span className="a1-scoreboard-score">{opponentScore}</span>
+              <div className="a1-scoreboard-ap-bar">
+                <div className="a1-scoreboard-ap-fill a1-scoreboard-ap-fill--opp" style={{ width: `${Math.min(opponentAp ?? 0, 100)}%` }} />
+              </div>
+              <span className="a1-scoreboard-ap-label">{opponentAp ?? 0} AP</span>
             </div>
           </div>
 
+          {/* Right — timer + language */}
           <div className="a1-header-right">
             <div className={getTimerClass()}>
               <Clock size={14} />
               <span>{formatTimer(elapsedSeconds)}</span>
             </div>
-
             <select
               className="a1-lang-select"
               value={currentLanguage}
