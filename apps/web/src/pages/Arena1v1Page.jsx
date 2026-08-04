@@ -496,45 +496,43 @@ export function Arena1v1Page() {
     <div className="a1-root">
       {/* Match Finished Victory overlay portal */}
       {matchFinishedData && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-[#0b0b10] border border-zinc-800 p-8 rounded-2xl w-full max-w-md text-center shadow-2xl relative overflow-hidden">
-            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-            
-            <div className="inline-flex p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-indigo-400 mb-6">
+        <div className="a1-victory-overlay">
+          <div className="a1-victory-card">
+            <div className="a1-victory-icon-wrapper">
               <Swords size={32} />
             </div>
 
-            <h2 className="text-xl font-black uppercase tracking-wider text-white font-mono">
+            <h2 className="a1-victory-title">
               Match Completed
             </h2>
-            <p className="text-xs text-zinc-400 font-mono mt-2">
+            <p className="a1-victory-subtitle">
               Authoritative points evaluation threshold checked.
             </p>
 
-            <div className="bg-zinc-950/60 border border-zinc-900 rounded-xl p-4 my-6 flex flex-col gap-3 font-mono">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500 uppercase">Winner:</span>
-                <span className="text-emerald-400 font-bold text-sm">
+            <div className="a1-victory-stats-box">
+              <div className="a1-victory-stat-row">
+                <span className="a1-victory-stat-label">Winner:</span>
+                <span className="a1-victory-stat-value a1-victory-stat-value--winner">
                   {matchFinishedData.winnerId === activeUserId ? activeUsername : (opponentProfile?.username || 'Opponent')}
                 </span>
               </div>
-              <div className="border-t border-zinc-900 my-1" />
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500 uppercase">Your Final Score:</span>
-                <span className="text-indigo-300 font-bold">{myScore} pts</span>
+              <div className="a1-victory-divider" />
+              <div className="a1-victory-stat-row">
+                <span className="a1-victory-stat-label">Your Final Score:</span>
+                <span className="a1-victory-stat-value a1-victory-stat-value--me">{myScore} pts</span>
               </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500 uppercase">Opponent Score:</span>
-                <span className="text-zinc-300 font-bold">{opponentScore} pts</span>
+              <div className="a1-victory-stat-row">
+                <span className="a1-victory-stat-label">Opponent Score:</span>
+                <span className="a1-victory-stat-value a1-victory-stat-value--opponent">{opponentScore} pts</span>
               </div>
-              <div className="border-t border-zinc-900 my-1" />
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500 uppercase">ELO Adjustment:</span>
-                <span className={`font-bold ${
+              <div className="a1-victory-divider" />
+              <div className="a1-victory-stat-row">
+                <span className="a1-victory-stat-label">ELO Adjustment:</span>
+                <span className={`a1-victory-stat-value ${
                   (() => {
                     const scoreObj = matchFinishedData.scores?.find((p) => String(p.userId) === String(activeUserId));
                     const delta = scoreObj ? scoreObj.eloDelta : 0;
-                    return delta >= 0 ? 'text-emerald-400' : 'text-red-400';
+                    return delta >= 0 ? 'a1-victory-stat-value--up' : 'a1-victory-stat-value--down';
                   })()
                 }`}>
                   {(() => {
@@ -548,7 +546,7 @@ export function Arena1v1Page() {
 
             <button
               onClick={() => navigate('/matchmaking')}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-xs uppercase rounded-xl transition-all"
+              className="a1-victory-btn"
             >
               Return to Matchmaking Arena
             </button>
@@ -642,37 +640,29 @@ export function Arena1v1Page() {
                 style={{ width: isLeftPanelCollapsed ? 0 : `${leftPanelWidth}px` }}
               >
                 {/* Collapsible Header */}
-                <div className="p-3 bg-zinc-950/80 border-b border-zinc-900 flex items-center justify-between">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                <div className="a1-workspace-panel-header">
+                  <span className="a1-workspace-panel-title">
                     // Workspace Panel
                   </span>
                   <button
                     onClick={() => setIsLeftPanelCollapsed(true)}
-                    className="p-1 hover:text-white text-zinc-500 rounded bg-zinc-900 transition-colors"
+                    className="a1-workspace-panel-close"
                   >
                     <ChevronLeft size={14} />
                   </button>
                 </div>
 
                 {/* Sub-Tab selection */}
-                <div className="flex border-b border-zinc-900 bg-zinc-950 text-[10px] font-mono shrink-0">
+                <div className="a1-subtabs">
                   <button
                     onClick={() => setActiveLeftTab('description')}
-                    className={`flex-1 py-2 text-center border-b-2 uppercase font-bold transition-all ${
-                      activeLeftTab === 'description'
-                        ? 'border-indigo-500 text-indigo-400 bg-zinc-900/40'
-                        : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                    }`}
+                    className={`a1-subtab ${activeLeftTab === 'description' ? 'a1-subtab--active' : ''}`}
                   >
                     Description
                   </button>
                   <button
                     onClick={() => setActiveLeftTab('submissions')}
-                    className={`flex-1 py-2 text-center border-b-2 uppercase font-bold transition-all ${
-                      activeLeftTab === 'submissions'
-                        ? 'border-indigo-500 text-indigo-400 bg-zinc-900/40'
-                        : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                    }`}
+                    className={`a1-subtab ${activeLeftTab === 'submissions' ? 'a1-subtab--active' : ''}`}
                   >
                     Submissions ({problemSubmissions.length})
                   </button>
@@ -700,44 +690,46 @@ export function Arena1v1Page() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3 font-mono">
-                      <h3 className="text-xs font-bold text-zinc-300 uppercase mb-1">
+                    <div className="a1-submissions-ledger">
+                      <h3 className="a1-submissions-title">
                         Submission Ledger for P{activeProblemIndex + 1}
                       </h3>
                       
                       {problemSubmissions.length === 0 ? (
-                        <div className="text-zinc-500 text-[10px] py-8 text-center border border-dashed border-zinc-900 rounded">
+                        <div className="a1-submissions-empty">
                           No submissions recorded for this problem yet.
                         </div>
                       ) : (
                         problemSubmissions.map((sub) => {
                           const isExpanded = expandedSubId === sub.id;
+                          const verdictLower = String(sub.verdict).toLowerCase();
+                          const isAccepted = ['accepted', 'ac', 'accepted! solution passed all test cases.'].includes(verdictLower);
                           return (
                             <div
                               key={sub.id}
-                              className={`border rounded p-3 flex flex-col gap-2 transition-all ${
-                                sub.verdict === 'ACCEPTED'
-                                  ? 'bg-emerald-950/10 border-emerald-900/40 text-emerald-400'
-                                  : 'bg-red-950/10 border-red-900/40 text-red-400'
+                              className={`a1-submission-item ${
+                                isAccepted
+                                  ? 'a1-submission-item--accepted'
+                                  : 'a1-submission-item--rejected'
                               }`}
                             >
-                              <div className="flex items-center justify-between text-[10px]">
-                                <span className="font-bold flex items-center gap-1">
-                                  {sub.verdict === 'ACCEPTED' ? (
-                                    <CheckCircle2 size={12} className="text-emerald-400" />
+                              <div className="a1-submission-item-header">
+                                <span className="a1-submission-verdict-wrapper">
+                                  {isAccepted ? (
+                                    <CheckCircle2 size={12} />
                                   ) : (
-                                    <AlertTriangle size={12} className="text-red-400" />
+                                    <AlertTriangle size={12} />
                                   )}
                                   {sub.verdict}
                                 </span>
-                                <span className="text-zinc-500">{sub.timestamp}</span>
+                                <span className="a1-submission-time">{sub.timestamp}</span>
                               </div>
                               
-                              <div className="flex justify-between items-center text-[9px] text-zinc-500">
+                              <div className="a1-submission-item-meta">
                                 <span>Lang: {sub.language?.toUpperCase()}</span>
                                 <button
                                   onClick={() => setExpandedSubId(isExpanded ? null : sub.id)}
-                                  className="text-indigo-400 hover:text-indigo-300 font-bold underline flex items-center gap-0.5"
+                                  className="a1-submission-item-toggle"
                                 >
                                   <Code size={10} />
                                   {isExpanded ? 'Hide Code' : 'View Code'}
@@ -745,7 +737,7 @@ export function Arena1v1Page() {
                               </div>
 
                               {isExpanded && (
-                                <pre className="mt-1.5 p-2 bg-zinc-950 text-[9px] text-zinc-300 border border-zinc-900 rounded overflow-x-auto select-text font-mono max-h-40 leading-relaxed whitespace-pre-wrap">
+                                <pre className="a1-submission-item-code">
                                   {sub.code}
                                 </pre>
                               )}
@@ -774,10 +766,10 @@ export function Arena1v1Page() {
                     setIsLeftPanelCollapsed(false);
                     setActiveLeftTab('description');
                   }}
-                  className="absolute left-[36px] top-1/2 -translate-y-1/2 z-30 bg-zinc-950 hover:bg-zinc-900 border-r border-t border-b border-zinc-800 text-zinc-400 hover:text-white px-1.5 py-4 rounded-r-md flex flex-col items-center gap-2 text-[10px] font-mono tracking-widest cursor-pointer"
+                  className="a1-restore-tab"
                 >
                   <ChevronRight size={14} />
-                  <span className="writing-mode-vertical uppercase">Problems</span>
+                  <span className="a1-restore-tab-text">Problems</span>
                 </button>
               )}
 
@@ -859,7 +851,7 @@ export function Arena1v1Page() {
           />
 
           {/* Right Sidebar - Telemetry & Shop Panel */}
-          <aside className="a1-opponent-panel flex flex-col p-4 gap-4 shrink-0 overflow-y-auto" style={{ width: `${rightPanelWidth}px` }}>
+          <aside className="a1-opponent-panel" style={{ width: `${rightPanelWidth}px` }}>
             {/* Opponent Identity Details */}
             <div className="a1-opponent-header">
               <div className="a1-opponent-avatar">
@@ -872,162 +864,162 @@ export function Arena1v1Page() {
             </div>
 
             {/* Telemetry section: Scores */}
-            <div className="bg-zinc-950/80 border border-zinc-900 rounded-xl p-4 flex flex-col gap-3 shrink-0 font-mono text-xs">
-              <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+            <div className="a1-telemetry">
+              <span className="a1-telemetry-section-title">
                 // Combat Telemetry
               </span>
               
               {/* Me Score */}
-              <div className="flex justify-between items-center">
-                <div className="flex flex-col">
-                  <span className="font-bold text-white">{activeUsername} (You)</span>
-                  <span className="text-[9px] text-zinc-500">Status: Active</span>
+              <div className="a1-telemetry-row">
+                <div className="a1-telemetry-user">
+                  <span className="a1-telemetry-user-name">{activeUsername} (You)</span>
+                  <span className="a1-telemetry-user-status">Status: Active</span>
                 </div>
-                <span className="text-base font-black text-indigo-400 score-value">{myScore} pts</span>
+                <span className="a1-telemetry-score">{myScore} pts</span>
               </div>
 
               {/* Mana AP Bar */}
-              <div className="flex flex-col gap-1 mt-1">
-                <div className="flex justify-between text-[9px] text-zinc-400">
+              <div className="a1-mana-container">
+                <div className="a1-mana-header">
                   <span>AP (Mana) Bar:</span>
                   <span>{myAp} / 100</span>
                 </div>
-                <div className="w-full h-2 rounded-full mana-bar-track relative overflow-hidden">
-                  <div className="h-full rounded-full mana-bar-fill" style={{ width: `${myAp}%` }} />
+                <div className="a1-mana-track">
+                  <div className="a1-mana-fill" style={{ width: `${myAp}%` }} />
                 </div>
               </div>
 
-              <div className="border-t border-zinc-900/60 my-1" />
+              <div className="a1-telemetry-divider" />
 
               {/* Opponent Score */}
-              <div className="flex justify-between items-center">
-                <div className="flex flex-col">
-                  <span className="font-bold text-zinc-300 flex items-center gap-1.5">
+              <div className="a1-telemetry-row">
+                <div className="a1-telemetry-user">
+                  <span className="a1-telemetry-user-name flex-row">
                     {opponentProfile?.username || 'Opponent'}
-                    <span className="relative flex w-1.5 h-1.5">
-                      <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative block w-1.5 h-1.5 rounded-full bg-emerald-500 active-typing-pulse"></span>
+                    <span className="a1-pulse-container">
+                      <span className="a1-pulse-ping"></span>
+                      <span className="a1-pulse-dot"></span>
                     </span>
                   </span>
-                  <span className="text-[9px] text-zinc-500">
+                  <span className="a1-telemetry-user-status">
                     Problems: [{opponentProfile?.solvedCount || 0}/4]
                   </span>
                 </div>
-                <span className="font-bold text-zinc-400">{opponentScore} pts</span>
+                <span className="a1-telemetry-score-opp">{opponentScore} pts</span>
               </div>
             </div>
 
             {/* Tactical Shop controls */}
-            <div className="flex-1 flex flex-col bg-zinc-950/80 border border-zinc-900 rounded-xl p-4 gap-3 min-h-[280px] font-mono text-xs">
-              <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-900 pb-2">
-                <Sparkles size={11} className="text-indigo-400 font-bold" />
+            <div className="a1-shop">
+              <span className="a1-shop-title">
+                <Sparkles size={11} className="a1-shop-title-icon" />
                 <span>Tactical Shop</span>
               </span>
 
-              <div className="flex flex-col gap-2 overflow-y-auto pr-1">
+              <div className="a1-shop-items">
                 {/* Autocomplete */}
-                <div className="flex flex-col gap-1 p-2 bg-zinc-900/40 border border-zinc-900/60 rounded">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-200 flex items-center gap-1">
-                      <Keyboard size={11} className="text-emerald-400" />
+                <div className="a1-shop-item">
+                  <div className="a1-shop-item-header">
+                    <span className="a1-shop-item-name">
+                      <Keyboard size={11} />
                       Suggestions
                     </span>
-                    <span className="text-[9px] text-indigo-400">30 AP</span>
+                    <span className="a1-shop-item-cost">30 AP</span>
                   </div>
                   <button
                     disabled={myAp < 30 || isSuggestionsEnabled}
                     onClick={handleBuyAutocomplete}
-                    className="w-full mt-1.5 py-1.5 bg-zinc-950 hover:bg-zinc-900 disabled:bg-zinc-950/20 disabled:text-zinc-600 disabled:border-zinc-950/10 text-white border border-zinc-800 rounded text-[9px] uppercase font-bold cursor-pointer"
+                    className="a1-shop-btn"
                   >
                     {isSuggestionsEnabled ? 'Active' : 'Buy (60s)'}
                   </button>
                 </div>
 
                 {/* Hint */}
-                <div className="flex flex-col gap-1 p-2 bg-zinc-900/40 border border-zinc-900/60 rounded">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-200 flex items-center gap-1">
-                      <HelpCircle size={11} className="text-amber-400" />
+                <div className="a1-shop-item">
+                  <div className="a1-shop-item-header">
+                    <span className="a1-shop-item-name">
+                      <HelpCircle size={11} />
                       Problem Hint
                     </span>
-                    <span className="text-[9px] text-indigo-400">35 AP</span>
+                    <span className="a1-shop-item-cost">35 AP</span>
                   </div>
                   <button
                     disabled={myAp < 35}
                     onClick={handleBuyHint}
-                    className="w-full mt-1.5 py-1.5 bg-zinc-950 hover:bg-zinc-900 disabled:bg-zinc-950/20 disabled:text-zinc-600 disabled:border-zinc-950/10 text-white border border-zinc-800 rounded text-[9px] uppercase font-bold cursor-pointer"
+                    className="a1-shop-btn"
                   >
                     Reveal Hint
                   </button>
                 </div>
 
                 {/* Editor Lock */}
-                <div className="flex flex-col gap-1 p-2 bg-zinc-900/40 border border-zinc-900/60 rounded">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-200 flex items-center gap-1">
-                      <Lock size={11} className="text-red-400" />
+                <div className="a1-shop-item">
+                  <div className="a1-shop-item-header">
+                    <span className="a1-shop-item-name">
+                      <Lock size={11} />
                       Editor Jam
                     </span>
-                    <span className="text-[9px] text-indigo-400">50 AP</span>
+                    <span className="a1-shop-item-cost">50 AP</span>
                   </div>
                   <button
                     disabled={myAp < 50}
                     onClick={handleCastJam}
-                    className="w-full mt-1.5 py-1.5 bg-red-950/20 hover:bg-red-950/40 disabled:bg-zinc-950/20 disabled:text-zinc-600 disabled:border-zinc-950/10 text-red-300 border border-red-900/20 rounded text-[9px] uppercase font-bold cursor-pointer"
+                    className="a1-shop-btn a1-shop-btn--danger"
                   >
                     Cast Jam (5s)
                   </button>
                 </div>
 
                 {/* Blur screen */}
-                <div className="flex flex-col gap-1 p-2 bg-zinc-900/40 border border-zinc-900/60 rounded">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-200 flex items-center gap-1">
-                      <EyeOff size={11} className="text-red-400" />
+                <div className="a1-shop-item">
+                  <div className="a1-shop-item-header">
+                    <span className="a1-shop-item-name">
+                      <EyeOff size={11} />
                       Blur Canvas
                     </span>
-                    <span className="text-[9px] text-indigo-400">40 AP</span>
+                    <span className="a1-shop-item-cost">40 AP</span>
                   </div>
                   <button
                     disabled={myAp < 40}
                     onClick={handleCastBlur}
-                    className="w-full mt-1.5 py-1.5 bg-red-950/20 hover:bg-red-950/40 disabled:bg-zinc-950/20 disabled:text-zinc-600 disabled:border-zinc-950/10 text-red-300 border border-red-900/20 rounded text-[9px] uppercase font-bold cursor-pointer"
+                    className="a1-shop-btn a1-shop-btn--danger"
                   >
                     Cast Haze (10s)
                   </button>
                 </div>
 
                 {/* Blindfold */}
-                <div className="flex flex-col gap-1 p-2 bg-zinc-900/40 border border-zinc-900/60 rounded">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-200 flex items-center gap-1">
-                      <AlertTriangle size={11} className="text-red-400" />
+                <div className="a1-shop-item">
+                  <div className="a1-shop-item-header">
+                    <span className="a1-shop-item-name">
+                      <AlertTriangle size={11} />
                       Blindfold
                     </span>
-                    <span className="text-[9px] text-indigo-400">60 AP</span>
+                    <span className="a1-shop-item-cost">60 AP</span>
                   </div>
                   <button
                     disabled={myAp < 60}
                     onClick={handleCastBlindfold}
-                    className="w-full mt-1.5 py-1.5 bg-red-950/20 hover:bg-red-950/40 disabled:bg-zinc-950/20 disabled:text-zinc-600 disabled:border-zinc-950/10 text-red-300 border border-red-900/20 rounded text-[9px] uppercase font-bold cursor-pointer"
+                    className="a1-shop-btn a1-shop-btn--danger"
                   >
                     Cast Blindfold (60s)
                   </button>
                 </div>
 
                 {/* Shield */}
-                <div className="flex flex-col gap-1 p-2 bg-zinc-900/40 border border-zinc-900/60 rounded">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-200 flex items-center gap-1">
-                      <Shield size={11} className="text-indigo-400" />
+                <div className="a1-shop-item">
+                  <div className="a1-shop-item-header">
+                    <span className="a1-shop-item-name">
+                      <Shield size={11} />
                       Immunity Shield
                     </span>
-                    <span className="text-[9px] text-indigo-400">40 AP</span>
+                    <span className="a1-shop-item-cost">40 AP</span>
                   </div>
                   <button
                     disabled={myAp < 40}
                     onClick={handleCastImmunity}
-                    className="w-full mt-1.5 py-1.5 bg-indigo-950/20 hover:bg-indigo-950/40 disabled:bg-zinc-950/20 disabled:text-zinc-600 disabled:border-zinc-950/10 text-indigo-300 border border-indigo-900/20 rounded text-[9px] uppercase font-bold cursor-pointer"
+                    className="a1-shop-btn a1-shop-btn--shield"
                   >
                     Activate (15s)
                   </button>
@@ -1039,9 +1031,9 @@ export function Arena1v1Page() {
 
         {/* Sabotage overlay warning banner on screen bottom */}
         {activeSabotage && (
-          <footer className="a1-footer font-mono text-xs bg-red-950/80 border-t border-red-900/40 text-red-300 flex items-center justify-between px-4 shrink-0">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={14} className="text-red-400 animate-bounce" />
+          <footer className="a1-footer">
+            <div className="a1-footer-info">
+              <AlertTriangle size={14} className="a1-footer-warning-icon" />
               <span>
                 WARNING: Casted {activeSabotage?.toUpperCase()}! Time left: {sabotageTimeLeft}s
               </span>
@@ -1049,7 +1041,7 @@ export function Arena1v1Page() {
             {myAp >= 20 && (
               <button
                 onClick={handleCastCleanse}
-                className="px-3 py-1 bg-red-500 hover:bg-red-400 text-white rounded text-[10px] font-bold uppercase transition-all shadow-md cursor-pointer"
+                className="a1-footer-cleanse-btn"
               >
                 Cleanse (20 AP)
               </button>

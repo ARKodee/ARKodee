@@ -9,7 +9,17 @@ import { MatchmakerControls } from '../components/arena/MatchmakerControls';
 import { PastMatchesList } from '../components/arena/PastMatchesList';
 import { CustomRoomModal } from '../components/arena/CustomRoomModal';
 import { getDuelHistory, getUserProfile } from '../lib/auth';
+import { Navbar } from '../components/layout/Navbar';
 import './MatchmakingArena.css';
+
+function getRatingTitle(rating = 1200) {
+  if (rating >= 2100) return 'Grandmaster';
+  if (rating >= 1900) return 'Master';
+  if (rating >= 1600) return 'Expert';
+  if (rating >= 1400) return 'Specialist';
+  if (rating >= 1200) return 'Pupil';
+  return 'Newbie';
+}
 
 export function MatchmakingArena() {
   const { token, user } = useAuth();
@@ -72,31 +82,39 @@ export function MatchmakingArena() {
 
   return (
     <div className="ma-root">
+      <Navbar />
       <div className="ma-body">
         {/* Header */}
         <header className="ma-header">
-          <div className="ma-header-left">
-            <div className="ma-header-icon">
-              <Swords size={20} />
-            </div>
-            <div>
-              <h1 className="ma-title">Combat Headquarters</h1>
-              <p className="ma-subtitle">NODE GATEWAY: ONLINE // USER: {(user?.firstName || user?.username || 'Guest').toUpperCase()}</p>
-            </div>
-          </div>
-          <div className="ma-elo-badge">
-            <Trophy size={16} />
-            <div className="ma-elo-label">
-              <span className="ma-elo-label-text">Global ELO</span>
-              <span className="ma-elo-value">{eloRating.toLocaleString()} pts</span>
-            </div>
-          </div>
+          <h1 className="ma-title">
+            <Swords size={20} />
+            <span>Combat Headquarters</span>
+          </h1>
+          <p className="ma-subtitle">
+            Real-time 1v1 matchmaking arena. Challenge other users, gain ELO rating points, and climb the competitive ladder rankings.
+          </p>
         </header>
 
         {/* Main Grid */}
         <div className="ma-grid">
           {/* Left: Matchmaker Controls */}
           <div className="ma-controls">
+            {/* Operative Profile Card */}
+            <div className="ma-profile-card">
+              <div className="ma-profile-avatar">
+                {(user?.username || 'P')[0].toUpperCase()}
+              </div>
+              <div className="ma-profile-details">
+                <span className="ma-profile-title">Active Operative</span>
+                <span className="ma-profile-username">{user?.username || 'Player'}</span>
+              </div>
+              <div className="ma-profile-rank">
+                <Trophy size={16} />
+                <span className="ma-profile-tier">{getRatingTitle(eloRating)}</span>
+                <span className="ma-profile-elo">{eloRating.toLocaleString()} ELO</span>
+              </div>
+            </div>
+
             <MatchmakerControls
               onOpenCustomModal={() => setIsModalOpen(true)}
             />
