@@ -3,6 +3,7 @@
 // Mounts Monaco code editor with custom IDE theme and action toolbar.
 import React, { useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
+import { useTheme } from '../../store/ThemeContext';
 import './InteractiveEditor.css';
 
 // ─── Language → File Extension Map ─────────────────────────────────────────────
@@ -51,6 +52,35 @@ const ARKODEE_DARK_THEME = {
   },
 };
 
+const ARKODEE_LIGHT_THEME = {
+  base: 'vs',
+  inherit: true,
+  rules: [
+    { token: '', foreground: '0f0f14', background: 'f9f9fb' },
+    { token: 'comment', foreground: '9292a0', fontStyle: 'italic' },
+    { token: 'keyword', foreground: '6d58f5' },
+    { token: 'string', foreground: '059669' },
+    { token: 'number', foreground: 'd97706' },
+    { token: 'type', foreground: '6d58f5' },
+    { token: 'function', foreground: '0f0f14' },
+  ],
+  colors: {
+    'editor.background':                 '#f9f9fb',
+    'editor.foreground':                 '#0f0f14',
+    'editor.lineHighlightBackground':    '#f0f0f5',
+    'editor.selectionBackground':        '#e4e4ec',
+    'editorLineNumber.foreground':       '#9292a0',
+    'editorLineNumber.activeForeground': '#52525e',
+    'editorGutter.background':           '#f9f9fb',
+    'editorWidget.background':           '#ffffff',
+    'editorWidget.border':               '#e4e4ec',
+    'editor.inactiveSelectionBackground':'#ededf5',
+    'editorCursor.foreground':           '#6d58f5',
+    'editorIndentGuide.background':      '#e4e4ec',
+    'editorIndentGuide.activeBackground':'#c8c8d8',
+  },
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 /**
@@ -81,6 +111,7 @@ export function InteractiveEditor({
   readOnly = false,
   enableSuggestions = true
 }) {
+  const { theme } = useTheme();
   const editorRef = useRef(null);
   const [activeCaseIdx, setActiveCaseIdx] = useState(0);
   const [terminalHeight, setTerminalHeight] = useState('38%');
@@ -117,12 +148,13 @@ export function InteractiveEditor({
 
   /**
    * handleEditorMount — Fires once when Monaco finishes bootstrapping.
-   * Registers the custom ARKodee dark theme globally.
+   * Registers custom light and dark themes.
    */
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
     monaco.editor.defineTheme('arkodee-dark', ARKODEE_DARK_THEME);
-    monaco.editor.setTheme('arkodee-dark');
+    monaco.editor.defineTheme('arkodee-light', ARKODEE_LIGHT_THEME);
+    monaco.editor.setTheme(theme === 'dark' ? 'arkodee-dark' : 'arkodee-light');
   };
 
   const handleAddFailedToTestcases = (tcResult) => {
@@ -171,7 +203,7 @@ export function InteractiveEditor({
           value={code}
           onChange={(value) => !readOnly && setCode(value ?? '')}
           onMount={handleEditorMount}
-          theme="arkodee-dark"
+          theme={theme === 'dark' ? 'arkodee-dark' : 'arkodee-light'}
           options={{
             readOnly: readOnly,
             contextmenu: false,

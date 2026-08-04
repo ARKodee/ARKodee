@@ -148,15 +148,53 @@
   border-radius: var(--radius-md);
 }
 
-.pdsc-paragraph {
+.pdsc-paragraph,
+.pdsc-section-body p {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: var(--leading-body);
   margin-bottom: var(--space-2);
 }
 
-.pdsc-paragraph:last-child {
+.pdsc-paragraph:last-child,
+.pdsc-section-body p:last-child {
   margin-bottom: 0;
+}
+
+.pdsc-section-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background-color: var(--bg-overlay);
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+}
+
+.pdsc-section-body pre {
+  margin: var(--space-2) 0;
+  padding: var(--space-3);
+  background-color: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.pdsc-section-body pre code {
+  background-color: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.pdsc-section-body ul,
+.pdsc-section-body ol {
+  margin-bottom: var(--space-2);
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.pdsc-section-body li {
+  margin-bottom: var(--space-1);
 }
 
 /* ── Examples Section ────────────────────────────────────────────────────────── */
