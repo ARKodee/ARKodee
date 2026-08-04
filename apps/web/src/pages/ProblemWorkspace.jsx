@@ -2,7 +2,7 @@
 // Split-Canvas Conductor Page Layout — resizable IDE workspace.
 // Uses design system tokens and provides collapsible/collapsible panels.
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useProblemDetails } from '../hooks/useProblemDetails';
 import { ProblemDescription } from '../components/practice/ProblemDescription';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
@@ -133,6 +133,7 @@ function CollapseToggle({ isCollapsed, onToggle }) {
 export function ProblemWorkspace() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const containerRef = useRef(null);
   const [leftWidth, setLeftWidth] = useState(INITIAL_LEFT_WIDTH);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
@@ -166,7 +167,11 @@ export function ProblemWorkspace() {
   } = useProblemDetails(slug);
 
   const handleBack = () => {
-    navigate('/practice');
+    if (location.state?.fromContest) {
+      navigate(`/contests/${location.state.fromContest}`);
+    } else {
+      navigate('/practice');
+    }
   };
 
   const handleLanguageChange = (e) => {

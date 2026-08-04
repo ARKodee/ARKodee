@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { useAuth } from '../store/AuthContext';
+import { useTheme } from '../store/ThemeContext';
 import { useMatchSocket, DEFAULT_ARENA_PROBLEMS } from '../hooks/useMatchSocket';
 import { ProblemDescription } from '../components/practice/ProblemDescription';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
@@ -60,6 +61,7 @@ function ProblemStatusIcon({ status }) {
 
 // ─── Main Page Component ───────────────────────────────────────────────────────
 export function Arena1v1Page() {
+  const { theme } = useTheme();
   const { matchId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -787,7 +789,7 @@ export function Arena1v1Page() {
                     language={LANGUAGES.find((l) => l.id === currentLanguage)?.monaco}
                     value={currentCode}
                     onChange={handleCodeChange}
-                    theme="vs-dark"
+                    theme={theme === 'dark' ? 'vs-dark' : 'light'}
                     options={{
                       readOnly: isEditorLocked || activeSabotage === 'jam',
                       fontSize: 13,
