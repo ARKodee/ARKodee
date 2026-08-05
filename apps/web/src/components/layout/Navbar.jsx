@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../store/ThemeContext';
-import { getUserProfile, logoutUser } from '../../lib/auth';
+import { logoutUser } from '../../lib/auth';
+import { getProfileStats } from '../../lib/users';
 import './Navbar.css';
 
 /* Icons as minimal inline SVG so no extra dependency */
@@ -44,6 +45,12 @@ const IconShield = () => (
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
   </svg>
 );
+const IconUser = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 21a8 8 0 1 0-16 0" />
+    <circle cx="12" cy="8" r="4" />
+  </svg>
+);
 
 const NAV_LINKS = [
   { name: 'Dashboard', path: '/dashboard' },
@@ -64,14 +71,14 @@ export function Navbar() {
   const location  = useLocation();
   const navigate  = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const [user, setUser]               = useState(null);
+  const [profile, setProfile]         = useState(null);
   const [menuOpen, setMenuOpen]       = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
-    getUserProfile()
-      .then((d) => alive && d && setUser(d))
+    getProfileStats()
+      .then((d) => alive && d && setProfile(d))
       .catch(() => {});
     return () => { alive = false; };
   }, [location.pathname]);
@@ -92,9 +99,11 @@ export function Navbar() {
     navigate('/auth');
   };
 
-  const initial = (user?.username || 'U')[0].toUpperCase();
-  const rating  = user?.contest_rating || 1200;
-  const streak  = user?.streak_count   || 0;
+  const user = profile?.user;
+  const stats = profile?.stats;
+  const initial = (user?.username || user?.fullName || 'U')[0].toUpperCase();
+  const rating  = stats?.contest_rating ?? 0;
+  const streak  = stats?.streak ?? 0;
 
   return (
     <header className="navbar">
@@ -160,16 +169,26 @@ export function Navbar() {
               aria-label="User menu"
             >
               <span className="navbar__avatar">{initial}</span>
-              <span>{user?.username || 'Account'}</span>
+              <span>{user?.username || user?.fullName || 'Account'}</span>
               <IconChevron />
             </button>
 
             {menuOpen && (
               <div className="navbar__dropdown" role="menu">
                 <div className="navbar__dropdown-header">
-                  <p className="navbar__dropdown-username">{user?.username || 'User'}</p>
+                  <p className="navbar__dropdown-username">{user?.fullName || user?.username || 'User'}</p>
                   <p className="navbar__dropdown-email">{user?.email || ''}</p>
                 </div>
+
+                <Link
+                  to="/profile"
+                  className="navbar__dropdown-item"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <IconUser />
+                  View profile
+                </Link>
 
                 <button
                   className="navbar__dropdown-item navbar__dropdown-item--danger"

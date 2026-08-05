@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { getUserProfile } from '../lib/auth';
+import { getProfileStats } from '../lib/users';
 import { Navbar }          from '../components/layout/Navbar';
 import { DailyBugCard }    from '../components/dashboard/DailyBugCard';
 import { GlobalLeaderboard } from '../components/dashboard/GlobalLeaderboard';
@@ -46,6 +46,15 @@ const FEED_COLORS = {
 };
 function pad(n) { return String(n).padStart(2, '0'); }
 
+function getRatingTitle(rating = 0) {
+  if (rating >= 2100) return 'Grandmaster';
+  if (rating >= 1900) return 'Master';
+  if (rating >= 1600) return 'Expert';
+  if (rating >= 1400) return 'Specialist';
+  if (rating >= 1200) return 'Pupil';
+  return 'Newbie';
+}
+
 /* ── Quick nav tiles ─────────────────────────────────────────────────────────── */
 const NAV_TILES = [
   { to: '/practice',   icon: IconBook,   iconVariant: 'accent',  name: 'Practice',  desc: 'Solve problems and build problem-solving skills.' },
@@ -64,7 +73,7 @@ export function Dashboard() {
   /* Fetch real user profile */
   useEffect(() => {
     let alive = true;
-    getUserProfile()
+    getProfileStats()
       .then((d) => alive && (setProfile(d), setLoading(false)))
       .catch(() => alive && setLoading(false));
     return () => { alive = false; };
@@ -86,19 +95,24 @@ export function Dashboard() {
   }, [feed]);
 
   /* Derive display values */
-  const username     = profile?.username || authUser?.username || authUser?.name || 'Coder';
-  const rating       = profile?.contest_rating ?? 1200;
-  const streak       = profile?.streak_count   ?? 0;
-  const solved       = profile?.problems_solved ?? 0;
-  const totalMatches = profile?.total_matches   ?? 0;
-  const winRate      = profile?.win_rate != null ? `${Math.round(profile.win_rate)}%` : '—';
+  const username = profile?.user?.username || profile?.user?.fullName || authUser?.username || authUser?.name || 'Coder';
+  const rating = profile?.stats?.contest_rating ?? null;
+  const streak = profile?.stats?.streak ?? 0;
+  const solved = profile?.problem_stats?.total_solved ?? 0;
+  const totalMatches = profile?.stats
+    ? (profile.stats.total_wins + profile.stats.total_losses + profile.stats.total_draws)
+    : 0;
+  const winRate = profile?.stats && (profile.stats.total_wins + profile.stats.total_losses) > 0
+    ? `${Math.round((profile.stats.total_wins / (profile.stats.total_wins + profile.stats.total_losses)) * 100)}%`
+    : '—';
+  const contestRatingLabel = rating != null ? getRatingTitle(rating) : '—';
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const STATS = [
-    { label: 'Problems solved', value: solved,       icon: <IconCode />,   iconVariant: 'accent',  trend: '+12 this week', trendDir: 'up' },
-    { label: 'Contest rating',  value: rating,       icon: <IconTarget />, iconVariant: 'warning', trend: 'Pupil',         trendDir: 'flat' },
+    { label: 'Problems solved', value: solved,       icon: <IconCode />,   iconVariant: 'accent',  trend: 'Profile stats', trendDir: 'up' },
+    { label: 'Contest rating',  value: rating ?? '—',       icon: <IconTarget />, iconVariant: 'warning', trend: contestRatingLabel,         trendDir: 'flat' },
     { label: 'Win rate',        value: winRate,      icon: <IconSwords />, iconVariant: 'success', trend: `${totalMatches} matches`,  trendDir: 'up' },
     { label: 'Day streak',      value: `${streak}d`, icon: <IconFlame />,  iconVariant: 'info',    trend: streak > 0 ? 'Keep it up!' : 'Start today', trendDir: streak > 0 ? 'up' : 'flat' },
   ];
@@ -121,6 +135,7 @@ export function Dashboard() {
           </div>
           <div className="dash__hero-actions">
             <Button as={Link} to="/practice" variant="secondary">Practice</Button>
+            <Button as={Link} to="/profile" variant="secondary">Profile</Button>
             <Button as={Link} to="/matchmaking" variant="primary">Find Match</Button>
           </div>
         </div>

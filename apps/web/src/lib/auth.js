@@ -1,5 +1,6 @@
 // apps/web/src/lib/auth.js
 import { apiClient, getTokenStatus } from './apiClient'
+import { invalidateProfileCache } from './users'
 
 /**
  * Step 1: Check if email exists in the database
@@ -79,6 +80,7 @@ export const logoutUser = async () => {
   } catch (error) {
     console.warn('Logout API call failed, clearing local data anyway:', error.message);
   } finally {
+    invalidateProfileCache()
     // Always clear local storage even if API call fails
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
