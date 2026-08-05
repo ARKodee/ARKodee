@@ -62,6 +62,28 @@ const NAV_TILES = [
   { to: '/matchmaking',icon: IconSwords, iconVariant: 'success', name: '1v1 Arena', desc: 'Challenge others in real-time ranked matches.'  },
 ];
 
+function getUserDisplayName(userObj, authObj) {
+  const u = userObj || authObj || {};
+  const first = u.first_name || authObj?.first_name || '';
+  const last  = u.last_name || authObj?.last_name || '';
+  const full  = `${first} ${last}`.trim();
+  if (full) return full;
+
+  const fn = u.fullName || authObj?.fullName || u.name || authObj?.name;
+  if (fn && !fn.includes('@')) return fn;
+
+  const un = u.username || authObj?.username;
+  if (un && !un.includes('@')) return un;
+
+  const email = u.email || authObj?.email || un;
+  if (email && email.includes('@')) {
+    const raw = email.split('@')[0];
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  return 'Coder';
+}
+
 /* ── Main Component ─────────────────────────────────────────────────────────── */
 export function Dashboard() {
   const { user: authUser } = useAuth();
@@ -95,7 +117,7 @@ export function Dashboard() {
   }, [feed]);
 
   /* Derive display values */
-  const username = profile?.user?.username || profile?.user?.fullName || authUser?.username || authUser?.name || 'Coder';
+  const username = getUserDisplayName(profile?.user, authUser);
   const rating = profile?.stats?.contest_rating ?? null;
   const streak = profile?.stats?.streak ?? 0;
   const solved = profile?.problem_stats?.total_solved ?? 0;
@@ -135,7 +157,6 @@ export function Dashboard() {
           </div>
           <div className="dash__hero-actions">
             <Button as={Link} to="/practice" variant="secondary">Practice</Button>
-            <Button as={Link} to="/profile" variant="secondary">Profile</Button>
             <Button as={Link} to="/matchmaking" variant="primary">Find Match</Button>
           </div>
         </div>

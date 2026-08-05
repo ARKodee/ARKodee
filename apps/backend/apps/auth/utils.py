@@ -1,7 +1,7 @@
 """
 Utility functions for profile data aggregation and calculations.
 """
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Avg, Sum
 from django.contrib.auth.models import User
 from apps.problems.models import UserProblemStats, Submission
 from apps.contests.models import ContestParticipant
@@ -9,19 +9,9 @@ from apps.contests.models import ContestParticipant
 
 def get_user_problem_stats(user: User) -> dict:
     """
-    Aggregates user's problem statistics by difficulty level.
-    
-    Returns aggregated data:
-    - Total solved/attempted by difficulty (Easy/Medium/Hard)
-    - Overall success rate
-    
-    Args:
-        user: Django User instance
-        
-    Returns:
-        dict: Problem statistics breakdown by difficulty
+    Aggregates user's problem statistics by difficulty level using efficient database values.
     """
-    problem_stats = UserProblemStats.objects.filter(user=user).select_related('problem')
+    stats_qs = UserProblemStats.objects.filter(user=user).select_related('problem').only('status', 'problem__difficulty')
     
     stats_by_difficulty = {
         'easy': {'solved': 0, 'attempted': 0},
@@ -32,8 +22,10 @@ def get_user_problem_stats(user: User) -> dict:
     total_solved = 0
     total_attempted = 0
     
-    for stat in problem_stats:
-        difficulty = stat.problem.difficulty.lower()
+    for stat in stats_qs:
+        difficulty = (stat.problem.difficulty or 'easy').lower()
+        if difficulty not in stats_by_difficulty:
+            difficulty = 'easy'
         
         if stat.status == 'solved':
             stats_by_difficulty[difficulty]['solved'] += 1
@@ -42,7 +34,6 @@ def get_user_problem_stats(user: User) -> dict:
             stats_by_difficulty[difficulty]['attempted'] += 1
             total_attempted += 1
     
-    # Calculate success rate
     total_attempts = total_solved + total_attempted
     success_rate = (total_solved / total_attempts * 100) if total_attempts > 0 else 0
     
@@ -57,19 +48,12 @@ def get_user_problem_stats(user: User) -> dict:
 def get_user_recent_activity(user: User, limit: int = 5) -> dict:
     """
     Fetches user's recent activity including submissions and contests.
-    
-    Args:
-        user: Django User instance
-        limit: Maximum number of items to return (default: 5)
-        
-    Returns:
-        dict: Recent submissions and contest participations
     """
-    # Get recent submissions so the UI reflects the user's actual activity mix.
     recent_submissions = (
         Submission.objects
         .filter(user=user)
         .select_related('problem')
+        .only('id', 'problem__title', 'problem__slug', 'language', 'verdict', 'runtime_ms', 'submitted_at')
         .order_by('-submitted_at')[:limit]
     )
     
@@ -86,11 +70,11 @@ def get_user_recent_activity(user: User, limit: int = 5) -> dict:
         for sub in recent_submissions
     ]
     
-    # Get recent contest participations
     recent_contests = (
         ContestParticipant.objects
         .filter(user=user)
         .select_related('contest')
+        .only('id', 'contest__title', 'contest__slug', 'rank', 'total_score', 'elo_change', 'joined_at')
         .order_by('-joined_at')[:limit]
     )
     
@@ -115,33 +99,23 @@ def get_user_recent_activity(user: User, limit: int = 5) -> dict:
 
 def get_contest_stats(user: User) -> dict:
     """
-    Aggregates user's contest performance statistics.
-    
-    Args:
-        user: Django User instance
-        
-    Returns:
-        dict: Contest performance metrics
+    Aggregates user's contest performance statistics via SQL aggregates.
     """
-    contest_data = ContestParticipant.objects.filter(user=user)
+    contest_qs = ContestParticipant.objects.filter(user=user)
+    agg = contest_qs.aggregate(
+        total_contests=Count('id'),
+        avg_score=Avg('total_score'),
+        total_elo_change=Sum('elo_change')
+    )
     
-    total_contests = contest_data.count()
-    ranked_contests = contest_data.filter(rank__isnull=False)
-    best_rank = ranked_contests.order_by('rank').values_list('rank', flat=True).first()
-    
-    # Calculate average score and ELO change
-    avg_score = 0
-    total_elo_change = 0
-    
-    if total_contests > 0:
-        avg_score = sum(cp.total_score for cp in contest_data) / total_contests
-        total_elo_change = sum(cp.elo_change or 0 for cp in contest_data)
+    total_contests = agg['total_contests'] or 0
+    best_rank = contest_qs.filter(rank__isnull=False).order_by('rank').values_list('rank', flat=True).first()
     
     return {
         'total_contests': total_contests,
         'best_rank': best_rank,
-        'average_score': round(avg_score, 2),
-        'total_elo_change': total_elo_change,
+        'average_score': round(agg['avg_score'] or 0, 2),
+        'total_elo_change': agg['total_elo_change'] or 0,
     }
 
 

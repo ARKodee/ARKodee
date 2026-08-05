@@ -31,46 +31,43 @@ export function useProfileStats() {
   useEffect(() => {
     let isMounted = true
 
-    const fetchProfileData = async () => {
+    const fetchProfileData = () => {
       setIsLoading(true)
       setIsLoadingCalendar(true)
       setError(null)
       setCalendarError(null)
 
-      try {
-        const [profileResult, calendarResult] = await Promise.allSettled([
-          getProfileStats(),
-          getSubmissionCalendar(),
-        ])
+      // 1. Fetch main profile stats (renders header, problem stats, badges immediately)
+      getProfileStats()
+        .then((data) => {
+          if (isMounted) {
+            setProfileData(data)
+            setIsLoading(false)
+          }
+        })
+        .catch((err) => {
+          if (isMounted) {
+            setError(err.message ?? 'Failed to load profile data.')
+            setProfileData(null)
+            setIsLoading(false)
+          }
+        })
 
-        if (!isMounted) return
-
-        if (profileResult.status === 'fulfilled') {
-          setProfileData(profileResult.value)
-        } else {
-          console.error('Profile fetch error:', profileResult.reason)
-          setError(profileResult.reason.message ?? 'Failed to load profile data.')
-          setProfileData(null)
-        }
-
-        if (calendarResult.status === 'fulfilled') {
-          setSubmissionCalendar(calendarResult.value ?? {})
-        } else {
-          console.warn('Profile calendar fetch error:', calendarResult.reason)
-          setSubmissionCalendar({})
-          setCalendarError(calendarResult.reason.message ?? 'Failed to load activity heatmap.')
-        }
-      } catch (err) {
-        if (!isMounted) return
-
-        setError(err.message ?? 'Failed to load profile data.')
-        setProfileData(null)
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-          setIsLoadingCalendar(false)
-        }
-      }
+      // 2. Fetch submission calendar (heatmap) concurrently
+      getSubmissionCalendar()
+        .then((cal) => {
+          if (isMounted) {
+            setSubmissionCalendar(cal ?? {})
+            setIsLoadingCalendar(false)
+          }
+        })
+        .catch((err) => {
+          if (isMounted) {
+            setSubmissionCalendar({})
+            setCalendarError(err.message ?? 'Failed to load activity heatmap.')
+            setIsLoadingCalendar(false)
+          }
+        })
     }
 
     fetchProfileData()

@@ -101,7 +101,29 @@ export function Navbar() {
 
   const user = profile?.user;
   const stats = profile?.stats;
-  const initial = (user?.username || user?.fullName || 'U')[0].toUpperCase();
+
+  const displayName = (() => {
+    if (!user) return 'Account';
+    const first = user.first_name || '';
+    const last  = user.last_name || '';
+    const full  = `${first} ${last}`.trim();
+    if (full) return full;
+
+    const fn = user.fullName || user.name;
+    if (fn && !fn.includes('@')) return fn;
+
+    const un = user.username;
+    if (un && !un.includes('@')) return un;
+
+    const email = user.email || un;
+    if (email && email.includes('@')) {
+      const raw = email.split('@')[0];
+      return raw.charAt(0).toUpperCase() + raw.slice(1);
+    }
+    return 'Account';
+  })();
+
+  const initial = displayName[0].toUpperCase();
   const rating  = stats?.contest_rating ?? 0;
   const streak  = stats?.streak ?? 0;
 
@@ -109,12 +131,11 @@ export function Navbar() {
     <header className="navbar">
       <div className="navbar__inner">
 
-        {/* ── Logo ────────────────────────────────────────────────────────── */}
-        <Link to="/dashboard" className="navbar__logo" aria-label="ARKodee home">
-          <span className="navbar__logo-icon">
-            <IconCode />
-          </span>
-          <span className="navbar__logo-name">ARKodee</span>
+        {/* ── Brand ────────────────────────────────────────────────────────── */}
+        <Link to="/" className="navbar__brand">
+          <span className="navbar__brand-icon">⚡</span>
+          <span className="navbar__brand-name">ARKodee</span>
+          <span className="navbar__brand-badge">BETA</span>
         </Link>
 
         {/* ── Nav Links ───────────────────────────────────────────────────── */}
@@ -138,23 +159,26 @@ export function Navbar() {
 
           {/* Streak */}
           {streak > 0 && (
-            <div className="navbar__stat" title="Daily streak">
-              <IconFlame />
+            <div className="navbar__streak" title="Daily streak active">
+              <span className="navbar__streak-icon">🔥</span>
               <span>{streak}d</span>
             </div>
           )}
 
-          {/* Rating */}
-          <div className="navbar__stat" title={`Rating: ${rating}`}>
-            <IconShield />
-            <span>{getRatingTitle(rating)}</span>
-          </div>
+          {/* ELO Rating Badge */}
+          {rating > 0 && (
+            <div className="navbar__elo" title="Contest ELO Rating">
+              <span className="navbar__elo-label">ELO</span>
+              <span className="navbar__elo-val">{rating}</span>
+            </div>
+          )}
 
           {/* Theme toggle */}
           <button
-            className="navbar__theme-btn"
+            className="navbar__icon-btn"
             onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            aria-label="Toggle theme"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           >
             {theme === 'dark' ? <IconSun /> : <IconMoon />}
           </button>
@@ -169,14 +193,14 @@ export function Navbar() {
               aria-label="User menu"
             >
               <span className="navbar__avatar">{initial}</span>
-              <span>{user?.username || user?.fullName || 'Account'}</span>
+              <span>{displayName}</span>
               <IconChevron />
             </button>
 
             {menuOpen && (
               <div className="navbar__dropdown" role="menu">
                 <div className="navbar__dropdown-header">
-                  <p className="navbar__dropdown-username">{user?.fullName || user?.username || 'User'}</p>
+                  <p className="navbar__dropdown-username">{displayName}</p>
                   <p className="navbar__dropdown-email">{user?.email || ''}</p>
                 </div>
 
