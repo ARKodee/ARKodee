@@ -167,7 +167,11 @@ def global_leaderboard_view(request):
         
     from apps.auth.models import UserStats
     from .utils import get_rating_badge_info
-    stats_list = UserStats.objects.select_related("user").filter(user__is_active=True).order_by("-contest_rating")[:limit]
+    stats_list = UserStats.objects.select_related("user").filter(
+        user__is_active=True,
+        user__is_staff=False,
+        user__is_superuser=False
+    ).order_by("-contest_rating")[:limit]
     
     results = []
     for idx, stat in enumerate(stats_list):
@@ -183,3 +187,317 @@ def global_leaderboard_view(request):
         })
         
     return Response(results, status=status.HTTP_200_OK)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODERATOR CONTEST CRUD VIEWS
+# All views below require is_staff or is_superuser.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _require_moderator(request):
+    if not (request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser)):
+        return Response({"detail": "Moderator access required."}, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mod_contests_list(request):
+    """
+    Moderator endpoint: return ALL contests with search, status filter,
+    assigned problem count, and registered participant count.
+    """
+    denied = _require_moderator(request)
+    if denied:
+        return denied
+
+    from django.db.models import Count as DjCount
+    from django.db.models import Q
+
+    search_query = request.query_params.get("search", "").strip()
+    status_query = request.query_params.get("status", "").strip().lower()
+
+    contests = (
+        Contest.objects
+        .annotate(
+            problem_count=DjCount("contest_problems", distinct=True),
+            participant_count=DjCount("participants", distinct=True),
+        )
+        .order_by("-start_time")
+    )
+
+    if search_query:
+        contests = contests.filter(
+            Q(title__icontains=search_query) | Q(description__icontains=search_query)
+        )
+
+    now = timezone.now()
+    if status_query == "live":
+        contests = contests.filter(start_time__lte=now, end_time__gte=now)
+    elif status_query == "upcoming":
+        contests = contests.filter(start_time__gt=now)
+    elif status_query == "ended":
+        contests = contests.filter(end_time__lt=now)
+    elif status_query and status_query != "all":
+        contests = contests.filter(status=status_query)
+
+    data = []
+    for c in contests:
+        # Determine live state
+        if c.start_time <= now <= c.end_time:
+            computed_status = "live"
+        elif now < c.start_time:
+            computed_status = "upcoming"
+        else:
+            computed_status = "ended"
+
+        data.append({
+            "id": str(c.id),
+            "slug": c.slug,
+            "title": c.title,
+            "type": c.type,
+            "scoring_mode": c.scoring_mode,
+            "status": c.status,
+            "computed_status": computed_status,
+            "start_time": c.start_time.isoformat(),
+            "end_time": c.end_time.isoformat(),
+            "access_code": c.access_code or "",
+            "is_rated": c.is_rated,
+            "problem_count": c.problem_count,
+            "participant_count": c.participant_count,
+            "created_at": c.created_at.isoformat(),
+        })
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mod_contest_detail(request, contest_id):
+    """
+    Moderator endpoint: return full contest detail including assigned problem list.
+    """
+    denied = _require_moderator(request)
+    if denied:
+        return denied
+
+    contest = get_object_or_404(Contest, id=contest_id)
+    contest_problems = contest.contest_problems.select_related("problem").order_by("order_index")
+
+    problems_data = [
+        {
+            "id": str(cp.problem.id),
+            "title": cp.problem.title,
+            "slug": cp.problem.slug,
+            "difficulty": cp.problem.difficulty.upper(),
+            "points": cp.points,
+            "order_index": cp.order_index,
+        }
+        for cp in contest_problems
+    ]
+
+    return Response({
+        "id": str(contest.id),
+        "slug": contest.slug,
+        "title": contest.title,
+        "description": contest.description or "",
+        "type": contest.type,
+        "scoring_mode": contest.scoring_mode,
+        "start_time": contest.start_time.isoformat(),
+        "end_time": contest.end_time.isoformat(),
+        "access_code": contest.access_code or "",
+        "is_rated": contest.is_rated,
+        "eligible_class_tier": contest.eligible_class_tier,
+        "status": contest.status,
+        "problems": problems_data,
+    }, status=status.HTTP_200_OK)
+
+
+from django.utils.text import slugify
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mod_contest_create(request):
+    """
+    Moderator endpoint: create/schedule a new contest with assigned problems.
+    If requested by Moderator (is_staff), creates a PENDING ChangeRequest for Superadmin approval.
+    If requested by Superadmin (is_superuser), executes directly.
+    """
+    denied = _require_moderator(request)
+    if denied:
+        return denied
+
+    data = request.data
+    title = data.get("title", "").strip()
+    if not title:
+        return Response({"detail": "Title is required."}, status=status.HTTP_400_BAD_REQUEST)
+    if not data.get("start_time") or not data.get("end_time"):
+        return Response({"detail": "Start time and End time are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # If user is NOT superuser, route to ChangeRequest approval queue
+    if not request.user.is_superuser:
+        from apps.problems.models import ChangeRequest
+        cr = ChangeRequest.objects.create(
+            entity_type="contest",
+            action="CREATE",
+            status="PENDING",
+            title_preview=title,
+            payload=data,
+            requested_by=request.user,
+        )
+        return Response({
+            "detail": "Contest creation request submitted for Superadmin approval.",
+            "pending": True,
+            "request_id": str(cr.id),
+        }, status=status.HTTP_202_ACCEPTED)
+
+    # ── Superadmin Direct Execution ───────────────────────────────────────────
+    base_slug = slugify(title)
+    slug = base_slug
+    counter = 1
+    while Contest.objects.filter(slug=slug).exists():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    contest = Contest.objects.create(
+        title=title,
+        slug=slug,
+        description=data.get("description", "").strip(),
+        type=data.get("type", "public"),
+        scoring_mode=data.get("scoring_mode", "leetcode"),
+        start_time=data.get("start_time"),
+        end_time=data.get("end_time"),
+        access_code=data.get("access_code", "").strip() or None,
+        is_rated=bool(data.get("is_rated", True)),
+        eligible_class_tier=data.get("eligible_class_tier", "all"),
+        status=data.get("status", "approved"),
+    )
+
+    problems_payload = data.get("problems", [])
+    from apps.problems.models import Problem
+    from .models import ContestProblem
+
+    for idx, item in enumerate(problems_payload):
+        prob_id = item.get("id") if isinstance(item, dict) else item
+        points = item.get("points", 100) if isinstance(item, dict) else 100
+        prob = Problem.objects.filter(id=prob_id).first()
+        if prob:
+            ContestProblem.objects.create(
+                contest=contest,
+                problem=prob,
+                points=points,
+                order_index=idx,
+            )
+
+    return Response({"detail": "Contest created.", "id": str(contest.id), "slug": contest.slug}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PUT", "PATCH"])
+@permission_classes([IsAuthenticated])
+def mod_contest_update(request, contest_id):
+    """
+    Moderator endpoint: update contest fields and assigned problems.
+    """
+    denied = _require_moderator(request)
+    if denied:
+        return denied
+
+    contest = get_object_or_404(Contest, id=contest_id)
+    data = request.data
+
+    # If user is NOT superuser, route to ChangeRequest approval queue
+    if not request.user.is_superuser:
+        from apps.problems.models import ChangeRequest
+        cr = ChangeRequest.objects.create(
+            entity_type="contest",
+            action="UPDATE",
+            status="PENDING",
+            target_id=contest.id,
+            title_preview=contest.title,
+            payload=data,
+            requested_by=request.user,
+        )
+        return Response({
+            "detail": f'Update request for contest "{contest.title}" submitted for Superadmin approval.',
+            "pending": True,
+            "request_id": str(cr.id),
+        }, status=status.HTTP_202_ACCEPTED)
+
+    # ── Superadmin Direct Execution ───────────────────────────────────────────
+    if "title" in data:
+        contest.title = data["title"].strip()
+    if "description" in data:
+        contest.description = data["description"].strip()
+    if "type" in data:
+        contest.type = data["type"]
+    if "scoring_mode" in data:
+        contest.scoring_mode = data["scoring_mode"]
+    if "start_time" in data:
+        contest.start_time = data["start_time"]
+    if "end_time" in data:
+        contest.end_time = data["end_time"]
+    if "access_code" in data:
+        contest.access_code = data["access_code"].strip() or None
+    if "is_rated" in data:
+        contest.is_rated = bool(data["is_rated"])
+    if "status" in data:
+        contest.status = data["status"]
+
+    contest.save()
+
+    if "problems" in data:
+        contest.contest_problems.all().delete()
+        from apps.problems.models import Problem
+        from .models import ContestProblem
+
+        for idx, item in enumerate(data["problems"]):
+            prob_id = item.get("id") if isinstance(item, dict) else item
+            points = item.get("points", 100) if isinstance(item, dict) else 100
+            prob = Problem.objects.filter(id=prob_id).first()
+            if prob:
+                ContestProblem.objects.create(
+                    contest=contest,
+                    problem=prob,
+                    points=points,
+                    order_index=idx,
+                )
+
+    return Response({"detail": "Contest updated.", "id": str(contest.id)}, status=status.HTTP_200_OK)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def mod_contest_delete(request, contest_id):
+    """
+    Moderator endpoint: delete a contest.
+    """
+    denied = _require_moderator(request)
+    if denied:
+        return denied
+
+    contest = get_object_or_404(Contest, id=contest_id)
+
+    # If user is NOT superuser, route to ChangeRequest approval queue
+    if not request.user.is_superuser:
+        from apps.problems.models import ChangeRequest
+        cr = ChangeRequest.objects.create(
+            entity_type="contest",
+            action="DELETE",
+            status="PENDING",
+            target_id=contest.id,
+            title_preview=contest.title,
+            payload={},
+            requested_by=request.user,
+        )
+        return Response({
+            "detail": f'Deletion request for contest "{contest.title}" submitted for Superadmin approval.',
+            "pending": True,
+            "request_id": str(cr.id),
+        }, status=status.HTTP_202_ACCEPTED)
+
+    # ── Superadmin Direct Execution ───────────────────────────────────────────
+    title = contest.title
+    contest.delete()
+    return Response({"detail": f'Contest "{title}" deleted.'}, status=status.HTTP_200_OK)
+
+

@@ -110,3 +110,42 @@ export const isUserAuthenticated = () => {
   const { isAuthenticated } = getTokenStatus();
   return isAuthenticated;
 };
+
+/* ─── Superadmin Player Management API ─────────────────────────────────────── */
+export const getAdminPlayersList = async (params = {}) => {
+  const qs = new URLSearchParams()
+  if (params.search?.trim()) qs.append('search', params.search.trim())
+  if (params.role)           qs.append('role', params.role)
+  if (params.status)         qs.append('status', params.status)
+  if (params.page)           qs.append('page', params.page)
+  if (params.pageSize)       qs.append('page_size', params.pageSize)
+
+  return apiClient(`/auth/admin/players/?${qs}`, { method: 'GET' })
+}
+
+export const updateAdminPlayerRole = async (userId, role) => {
+  return apiClient(`/auth/admin/players/${userId}/role/`, {
+    method: 'POST',
+    body: JSON.stringify({ role }),
+  })
+}
+
+export const toggleAdminPlayerBan = async (userId) => {
+  return apiClient(`/auth/admin/players/${userId}/ban/`, {
+    method: 'POST',
+  })
+}
+
+export const toggleAdminPlayerFlag = async (userId, reason = '') => {
+  return apiClient(`/auth/admin/players/${userId}/flag/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+}
+
+export const adjustAdminPlayerRating = async (userId, ratingType, newRating) => {
+  return apiClient(`/auth/admin/players/${userId}/rating/`, {
+    method: 'POST',
+    body: JSON.stringify({ rating_type: ratingType, new_rating: newRating }),
+  })
+}

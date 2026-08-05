@@ -34,6 +34,9 @@ class UserStats(models.Model):
     streak = models.IntegerField(default=0)
     avatar_url = models.URLField(max_length=500, blank=True, null=True)
 
+    is_flagged = models.BooleanField(default=False)
+    flag_reason = models.CharField(max_length=255, blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

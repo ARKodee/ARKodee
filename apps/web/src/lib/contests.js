@@ -99,3 +99,47 @@ export const startVirtualContest = async (slug) => {
     method: 'POST',
   })
 }
+
+
+// ─── Moderator CRUD ───────────────────────────────────────────────────────────
+
+/** Fetch ALL contests for moderator management. Supports search + status filter. */
+export const getModContestsList = async (params = {}) => {
+  const qs = new URLSearchParams()
+  if (params.search?.trim()) qs.append('search', params.search.trim())
+  if (params.status && params.status !== 'all') qs.append('status', params.status)
+  const endpoint = qs.toString() ? `/contests/mod/?${qs}` : '/contests/mod/'
+  return apiClient(endpoint, { method: 'GET' })
+}
+
+/** Fetch full contest detail (including assigned problems) for editing. */
+export const getModContestDetail = async (id) =>
+  apiClient(`/contests/mod/${id}/`, { method: 'GET' })
+
+/** Create a new contest. */
+export const createModContest = async (payload) =>
+  apiClient('/contests/mod/create/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+/** Update an existing contest. */
+export const updateModContest = async (id, payload) =>
+  apiClient(`/contests/mod/${id}/update/`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+
+/** Delete a contest permanently. */
+export const deleteModContest = async (id) =>
+  apiClient(`/contests/mod/${id}/delete/`, { method: 'DELETE' })
+
+/** Fetch approved problems for problem picker inside contest builder with pagination support. */
+export const getModContestProblemsPool = async (search = '', page = 1) => {
+  const qs = new URLSearchParams()
+  qs.append('status', 'approved')  // Only approved problems are contest-eligible
+  if (search.trim()) qs.append('search', search.trim())
+  if (page > 1) qs.append('page', page)
+  return apiClient(`/problems/mod/?${qs}`, { method: 'GET' })
+}
+

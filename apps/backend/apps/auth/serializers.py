@@ -83,14 +83,42 @@ class GoogleLoginSerializer(serializers.Serializer):
 # ==========================================
 class UserSerializer(serializers.ModelSerializer):
     """
-    Serializes basic user metadata for API responses.
+    Serializes user metadata for API responses.
+    Includes computed role tier for frontend routing guards.
+
+    Role Priority Resolution:
+      - is_superuser → 'superadmin'
+      - is_staff / UserStats.role in ('superadmin', 'moderator') → 'moderator'
+      - Default → 'competitor'
     """
     fullName = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["email", "fullName"]
+        fields = ["email", "fullName", "role", "is_staff", "is_superuser"]
 
     def get_fullName(self, obj):
         full_name = f"{obj.first_name} {obj.last_name}".strip()
         return full_name if full_name else (obj.first_name or "User")
+
+    def get_role(self, obj):
+        """
+        Resolves the canonical platform role for this user.
+        Checks Django staff flags first, then falls back to UserStats.role.
+        Returns: 'superadmin' | 'moderator' | 'competitor'
+        """
+        # Django superuser always maps to superadmin tier
+        if obj.is_superuser:
+            return "superadmin"
+
+        # Check UserStats role if available
+        stats_role = getattr(getattr(obj, "stats", None), "role", None)
+
+        if obj.is_staff or stats_role in ("superadmin", "moderator"):
+            # Further distinguish superadmin vs moderator via stats
+            if stats_role == "superadmin":
+                return "superadmin"
+            return "moderator"
+
+        return "competitor"
