@@ -1,32 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Users, Swords } from 'lucide-react';
+import { Zap, Users, Swords, X } from 'lucide-react';
 
-export function MatchmakerControls({ onOpenCustomModal }) {
+export function MatchmakerControls({ socket, onOpenCustomModal }) {
   const navigate = useNavigate();
-  const [isSearching, setIsSearching] = useState(false);
+  const [queueState, setQueueState] = useState('IDLE'); // IDLE | QUEUED | FOUND
   const [searchElapsed, setSearchElapsed] = useState(0);
-  const [matchFound, setMatchFound] = useState(false);
-
-  // Queue elapsed timer — owned locally since search state is component-scoped
-  useEffect(() => {
-    let timer;
-    if (isSearching) {
-      timer = setInterval(() => {
-        setSearchElapsed((prev) => {
-          const nextVal = prev + 1;
-          if (nextVal >= 3) {
-            setMatchFound(true);
-          }
-          return nextVal;
-        });
-      }, 1000);
-    } else {
-      setSearchElapsed(0);
-      setMatchFound(false);
-    }
-    return () => clearInterval(timer);
-  }, [isSearching]);
+  const [matchInfo, setMatchInfo] = useState(null); // { roomId, opponent }
+  const timerRef = useRef(null);
 
   const formatSearchTime = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -34,8 +15,67 @@ export function MatchmakerControls({ onOpenCustomModal }) {
     return `${m}:${s}`;
   };
 
-  const handleStartPublicMatch = () => {
-    navigate('/arena/ranked-1v1');
+  // Wire socket events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleQueueStatus = ({ status }) => {
+      if (status === 'QUEUED') {
+        setQueueState('QUEUED');
+      } else if (status === 'IDLE') {
+        setQueueState('IDLE');
+        setSearchElapsed(0);
+      }
+    };
+
+    const handleMatchFound = ({ roomId, opponent }) => {
+      setMatchInfo({ roomId, opponent });
+      setQueueState('FOUND');
+      clearInterval(timerRef.current);
+    };
+
+    socket.on('queue_status', handleQueueStatus);
+    socket.on('match_found', handleMatchFound);
+
+    return () => {
+      socket.off('queue_status', handleQueueStatus);
+      socket.off('match_found', handleMatchFound);
+    };
+  }, [socket]);
+
+  // Elapsed timer while searching
+  useEffect(() => {
+    clearInterval(timerRef.current);
+    if (queueState === 'QUEUED') {
+      setSearchElapsed(0);
+      timerRef.current = setInterval(() => setSearchElapsed(p => p + 1), 1000);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [queueState]);
+
+  // Auto-navigate once match is found
+  useEffect(() => {
+    if (queueState === 'FOUND' && matchInfo?.roomId) {
+      // Brief 1.5s to show "Match Found!" before redirecting
+      const t = setTimeout(() => {
+        navigate(`/arena/${matchInfo.roomId}`);
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [queueState, matchInfo, navigate]);
+
+  const handleJoinQueue = () => {
+    if (!socket) return;
+    socket.emit('join_queue');
+  };
+
+  const handleLeaveQueue = () => {
+    if (!socket) return;
+    socket.emit('leave_queue');
+    setQueueState('IDLE');
+    setSearchElapsed(0);
+    setMatchInfo(null);
+    clearInterval(timerRef.current);
   };
 
   return (
@@ -60,91 +100,67 @@ export function MatchmakerControls({ onOpenCustomModal }) {
             <Zap
               size={14}
               className={
-                isSearching
-                  ? `animate-pulse ${matchFound ? 'text-emerald-400' : 'text-red-400'}`
+                queueState === 'QUEUED'
+                  ? 'animate-pulse text-red-400'
+                  : queueState === 'FOUND'
+                  ? 'text-emerald-400'
                   : 'text-indigo-400'
               }
             />
-            <span className="mac-section-label">
-              Public Queue
-            </span>
+            <span className="mac-section-label">Public Queue</span>
           </div>
 
-          {isSearching ? (
-            matchFound ? (
-              <div className="mac-queue-box mac-queue-box--success">
-                <div className="mac-queue-status">
-                  <span className="mac-queue-status-ping mac-queue-status-ping--success"></span>
-                  <span className="mac-queue-status-text mac-queue-status-text--success">
-                    Match Identified!
-                  </span>
-                </div>
-                <span className="mac-queue-timer">
-                  Arena Ready
+          {queueState === 'FOUND' ? (
+            <div className="mac-queue-box mac-queue-box--success">
+              <div className="mac-queue-status">
+                <span className="mac-queue-status-ping mac-queue-status-ping--success" />
+                <span className="mac-queue-status-text mac-queue-status-text--success">
+                  Match Found!
                 </span>
-                <div className="mac-queue-actions">
-                  <button
-                    onClick={handleStartPublicMatch}
-                    className="mac-btn-primary"
-                  >
-                    <Swords size={12} />
-                    <span>Enter Match Arena</span>
-                  </button>
-                  <button
-                    onClick={() => setIsSearching(false)}
-                    className="mac-btn-danger"
-                  >
-                    Decline
-                  </button>
-                </div>
               </div>
-            ) : (
-              <div className="mac-queue-box">
-                <div className="mac-queue-status">
-                  <span className="mac-queue-status-ping"></span>
-                  <span className="mac-queue-status-text">
-                    Searching for opponent...
-                  </span>
-                </div>
-                <span className="mac-queue-timer">
-                  [{formatSearchTime(searchElapsed)}]
+              <span className="mac-queue-timer">
+                vs <strong>{matchInfo?.opponent?.username || 'Opponent'}</strong> — Entering arena...
+              </span>
+            </div>
+          ) : queueState === 'QUEUED' ? (
+            <div className="mac-queue-box">
+              <div className="mac-queue-status">
+                <span className="mac-queue-status-ping" />
+                <span className="mac-queue-status-text">
+                  Searching for opponent...
                 </span>
-                <div className="mac-queue-actions">
-                  <button
-                    onClick={() => setIsSearching(false)}
-                    className="mac-btn-danger w-full"
-                  >
-                    Cancel Queue
-                  </button>
-                </div>
               </div>
-            )
+              <span className="mac-queue-timer">
+                [{formatSearchTime(searchElapsed)}]
+              </span>
+              <div className="mac-queue-actions">
+                <button onClick={handleLeaveQueue} className="mac-btn-danger w-full">
+                  <X size={12} /> Cancel Queue
+                </button>
+              </div>
+            </div>
           ) : (
-            <button
-              onClick={() => setIsSearching(true)}
-              className="mac-btn-large"
-            >
+            <button onClick={handleJoinQueue} className="mac-btn-large" disabled={!socket}>
               <Zap size={14} />
-              <span>Find & Start 1v1 Match</span>
+              <span>Find &amp; Start 1v1 Match</span>
             </button>
           )}
         </div>
 
         {/* Divider */}
-        <div className="mac-divider"></div>
+        <div className="mac-divider" />
 
         {/* Section 2: Custom Private Lobby */}
         <div className="mac-section">
           <div className="mac-section-header">
             <Users size={14} className="text-purple-400" />
-            <span className="mac-section-label">
-              Private Lobby
-            </span>
+            <span className="mac-section-label">Private Lobby</span>
           </div>
 
           <button
             onClick={onOpenCustomModal}
             className="mac-btn-large-outline"
+            disabled={queueState === 'QUEUED'}
           >
             Configure Private Custom Lobby
           </button>

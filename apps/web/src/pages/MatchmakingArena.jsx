@@ -1,6 +1,7 @@
 // src/pages/MatchmakingArena.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { MatchmakerControls } from '../components/arena/MatchmakerControls';
 import { PastMatchesList } from '../components/arena/PastMatchesList';
@@ -24,47 +25,73 @@ function getTier(rating = 1200) {
 }
 
 /* ── SVG Icons ──────────────────────────────────────────────────────────────── */
-const IconSwords  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="21" x2="21" y2="7"/></svg>
+const IconSwords = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="21" x2="21" y2="7"/></svg>;
 
 export function MatchmakingArena() {
   const { token, user } = useAuth();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);
 
-  const [pastMatches, setPastMatches]   = useState([]);
-  const [eloRating, setEloRating]       = useState(1200);
+  const [pastMatches, setPastMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(true);
+  const [eloRating, setEloRating] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.allSettled([
+  // ── Fetch live data: always refetch fresh on each navigation to this page ──
+  const fetchLiveData = useCallback(async () => {
+    setMatchesLoading(true);
+    setProfileLoading(true);
+
+    const [histRes, profileRes] = await Promise.allSettled([
       getDuelHistory(),
       getUserProfile(),
-    ]).then(([histRes, profileRes]) => {
-      if (histRes.status === 'fulfilled') setPastMatches(histRes.value || []);
-      if (profileRes.status === 'fulfilled' && profileRes.value?.duelRating !== undefined) {
-        setEloRating(profileRes.value.duelRating);
-      }
-      setProfileLoading(false);
-    });
+    ]);
+
+    if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
+      setPastMatches(histRes.value);
+    } else {
+      setPastMatches([]);
+    }
+
+    if (profileRes.status === 'fulfilled' && profileRes.value?.duelRating !== undefined) {
+      setEloRating(profileRes.value.duelRating);
+    } else if (profileRes.status === 'fulfilled' && profileRes.value?.duel_rating !== undefined) {
+      setEloRating(profileRes.value.duel_rating);
+    }
+
+    setMatchesLoading(false);
+    setProfileLoading(false);
   }, []);
+
+  // Re-fetch every time the user navigates TO this page (location.key changes on every push)
+  useEffect(() => {
+    fetchLiveData();
+  }, [location.key, fetchLiveData]);
 
   // Socket connection
   useEffect(() => {
+    if (!token || !user) return;
+
     const socketUrl = import.meta.env.VITE_WS_URL || 'http://127.0.0.1:3000';
-    const activeUserId = user?.id || user?.userId || 'user-1';
+    const activeUserId = user?.id || user?.userId;
     const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
 
-    const socket = io(socketUrl, {
-      query: { token: token || `token_${activeUserId}`, userId: activeUserId, username: activeUsername },
+    const newSocket = io(socketUrl, {
+      query: { token, userId: activeUserId, username: activeUsername },
       transports: ['websocket', 'polling'],
     });
-    socketRef.current = socket;
-    return () => { socket.disconnect(); };
+    socketRef.current = newSocket;
+    newSocket.on('connect', () => setSocket(newSocket));
+    newSocket.on('disconnect', () => setSocket(null));
+    return () => { newSocket.disconnect(); };
   }, [token, user]);
 
-  const tier = getTier(eloRating);
+  const displayRating = eloRating ?? 1200;
+  const tier = getTier(displayRating);
   const username = user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
-  const initial  = username[0].toUpperCase();
+  const initial = username[0]?.toUpperCase() || '?';
 
   return (
     <div className="ma-root">
@@ -100,23 +127,23 @@ export function MatchmakingArena() {
               </div>
               <div className="ma-profile-rank">
                 {profileLoading ? (
-                  <Skeleton width="60px" height="var(--text-xs)" />
+                  <Skeleton width="80px" height="var(--text-xs)" />
                 ) : (
                   <>
                     <span className="ma-profile-tier" style={{ color: tier.color }}>{tier.label}</span>
-                    <span className="ma-profile-elo">{eloRating.toLocaleString()} ELO</span>
+                    <span className="ma-profile-elo">{displayRating.toLocaleString()} ELO</span>
                   </>
                 )}
               </div>
             </div>
 
             {/* Matchmaker controls (queue, custom room) */}
-            <MatchmakerControls onOpenCustomModal={() => setIsModalOpen(true)} />
+            <MatchmakerControls socket={socket} onOpenCustomModal={() => setIsModalOpen(true)} />
           </div>
 
           {/* Right — past matches */}
           <div className="ma-past-matches">
-            <PastMatchesList matches={pastMatches} />
+            <PastMatchesList matches={pastMatches} loading={matchesLoading} />
           </div>
         </div>
 

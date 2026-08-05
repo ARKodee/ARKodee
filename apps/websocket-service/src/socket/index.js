@@ -12,7 +12,6 @@ import {
   registerSocketToRoom,
   setRoomDocument,
   getRoomDocument,
-  DEFAULT_ARENA_PROBLEMS,
   setupMatchmakerListeners,
   handleRequestStartMatch,
   finishMatch,
@@ -45,6 +44,58 @@ function generateRoomCode() {
   }
   return result;
 }
+
+// ── Matchmaking Queue ────────────────────────────────────────────────────────
+// Simple in-memory queue: array of { socketId, userId, username, rating }
+const waitingQueue = [];
+
+/**
+ * Attempts to pair two players from the waiting queue.
+ * If a pair is found, creates a room, starts the match, and removes them from the queue.
+ */
+function tryPairPlayers(io) {
+  if (waitingQueue.length < 2) return;
+
+  // Take the first two players
+  const [playerA, playerB] = waitingQueue.splice(0, 2);
+
+  const roomCode = generateRoomCode();
+  logger.info(`[Queue] Pairing ${playerA.username} vs ${playerB.username} into room ${roomCode}`);
+
+  const roomEntry = {
+    id: roomCode,
+    isRanked: true,
+    hostId: playerA.userId,
+    hostName: playerA.username,
+    players: [
+      { socketId: playerA.socketId, userId: playerA.userId, username: playerA.username, rating: playerA.rating },
+      { socketId: playerB.socketId, userId: playerB.userId, username: playerB.username, rating: playerB.rating },
+    ],
+    status: 'WAITING',
+  };
+
+  customRooms.set(roomCode, roomEntry);
+  setRoomDocument(roomEntry);
+
+  // Join both sockets to the room channel
+  const sockA = io.sockets.sockets.get(playerA.socketId);
+  const sockB = io.sockets.sockets.get(playerB.socketId);
+  if (sockA) { sockA.join(roomCode); registerSocketToRoom(roomCode, playerA.socketId); }
+  if (sockB) { sockB.join(roomCode); registerSocketToRoom(roomCode, playerB.socketId); }
+
+  // Notify both: match_found sends them the roomId so they can navigate
+  const foundPayload = {
+    roomId: roomCode,
+    roomCode,
+    opponent: null, // will be filled per-player
+  };
+  if (sockA) sockA.emit('match_found', { ...foundPayload, opponent: { userId: playerB.userId, username: playerB.username } });
+  if (sockB) sockB.emit('match_found', { ...foundPayload, opponent: { userId: playerA.userId, username: playerA.username } });
+
+  // Auto-start the match immediately (no host lobby needed for ranked)
+  handleRequestStartMatch(io, { id: playerA.socketId, user: { id: playerA.userId, username: playerA.username }, join: () => {}, emit: () => {} }, { roomId: roomCode, userId: playerA.userId });
+}
+
 
 class SocketManager {
   constructor() {
@@ -104,6 +155,36 @@ class SocketManager {
 
       // Attach matchmaker socket listeners (request_start_match, join_room, leave_room, disconnect cleanup)
       setupMatchmakerListeners(this.io, socket);
+
+      // 0. socket.on('join_queue') — Ranked Public Matchmaking
+      socket.on('join_queue', () => {
+        const userId = user.id;
+        const username = user.username;
+        const rating = user.rating || 1200;
+
+        // Avoid duplicate queue entries
+        const alreadyQueued = waitingQueue.some(p => p.userId === userId);
+        if (alreadyQueued) {
+          socket.emit('queue_status', { status: 'QUEUED', position: waitingQueue.findIndex(p => p.userId === userId) + 1 });
+          return;
+        }
+
+        waitingQueue.push({ socketId: socket.id, userId, username, rating, joinedAt: Date.now() });
+        logger.info(`[Queue] ${username} (${userId}) joined queue. Queue size: ${waitingQueue.length}`);
+        socket.emit('queue_status', { status: 'QUEUED', position: waitingQueue.length });
+
+        tryPairPlayers(this.io);
+      });
+
+      socket.on('leave_queue', () => {
+        const userId = user.id;
+        const idx = waitingQueue.findIndex(p => p.userId === userId);
+        if (idx !== -1) {
+          waitingQueue.splice(idx, 1);
+          logger.info(`[Queue] ${user.username} left queue. Queue size: ${waitingQueue.length}`);
+        }
+        socket.emit('queue_status', { status: 'IDLE' });
+      });
 
       // 1. socket.on('create_custom_room', (payload) => { ... })
       socket.on('create_custom_room', (payload = {}) => {
@@ -198,7 +279,7 @@ class SocketManager {
             players: room.players,
             status: room.status,
             isStarted: Boolean(room.isStarted),
-            problems: room.problems || DEFAULT_ARENA_PROBLEMS,
+            problems: room.problems || [],
           });
 
           this.io.to(roomId).emit('room_updated', room);
@@ -227,7 +308,7 @@ class SocketManager {
             hostName: newRoom.hostName,
             players: newRoom.players,
             status: newRoom.status,
-            problems: newRoom.problems || DEFAULT_ARENA_PROBLEMS,
+            problems: newRoom.problems || [],
           });
         }
       });
@@ -340,7 +421,7 @@ class SocketManager {
         if (!player.passedSampleTestCases) player.passedSampleTestCases = {};
         if (player.score === undefined) player.score = 0;
 
-        const problemList = room.problems || DEFAULT_ARENA_PROBLEMS;
+        const problemList = room.problems || [];
         const problemObj = problemList.find(p => p.id === problemId);
         const difficulty = problemObj ? problemObj.difficulty.toUpperCase() : 'EASY';
 
@@ -545,7 +626,12 @@ class SocketManager {
       socket.on('disconnect', (reason) => {
         logger.info(`Player client disconnected: ${user.username} (Socket ID: ${socket.id}, Reason: ${reason})`);
 
-        // Loop through the entire authoritative state map memory layout list container space
+        // Remove from matchmaking queue if waiting
+        const qIdx = waitingQueue.findIndex(p => p.socketId === socket.id);
+        if (qIdx !== -1) {
+          waitingQueue.splice(qIdx, 1);
+          logger.info(`[Queue] ${user.username} removed from queue on disconnect. Queue size: ${waitingQueue.length}`);
+        }
         for (const [roomCode, room] of customRooms.entries()) {
           const playerIndex = room.players.findIndex((p) => p.socketId === socket.id);
           if (playerIndex !== -1) {
