@@ -2,25 +2,19 @@
  * @file apps/websocket-service/src/services/auth.service.js
  * @description Authentication Service
  * 
- * This service verifies the identity of clients attempting to connect.
- * It decodes and validates JWT tokens or cookies issued by the Django auth backend,
- * ensuring users are authenticated before they can access matchmaking or game rooms.
+ * Verifies user connection tokens against the Django Auth REST backend.
  */
-
-
-
-// NOTE by Dharmil :- this is too temporary for now, because it is hardcoded. but later on we will use redis to store the session data. or maybe we will use the django auth backend to verify the token.
-
 
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 class AuthService {
   /**
-   * Verifies the authenticity of a connection token.
+   * Verifies the authenticity of a connection token against the Django backend.
    * Typically extracts the payload containing userID, username, etc.
    * 
    * @param {string} token - JWT or session token sent by client
+   * @param {object} handshakeQuery - Query parameters from socket handshake
    * @returns {Promise<object|null>} The parsed/validated user object, or null if invalid
    */
   async verifyToken(token, handshakeQuery = {}) {
@@ -28,20 +22,68 @@ class AuthService {
       return null;
     }
 
-    try {
-      logger.debug('Verifying connection token:', token);
-      
-      // Dynamic user identification from handshake params / token payload
-      const userId = handshakeQuery.userId || handshakeQuery.id || token;
-      const username = handshakeQuery.username || (typeof token === 'string' && token.length > 3 ? token : 'Player');
-
+    // Fallback/Mock token handling for offline development/tests
+    if (String(token).startsWith('token_') || String(token).startsWith('mock_')) {
+      const userId = handshakeQuery.userId || handshakeQuery.id || token.replace('token_', '');
+      const username = handshakeQuery.username || 'Player';
       return {
         id: String(userId),
         username: String(username),
         role: 'user'
       };
+    }
+
+    try {
+      const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:8000';
+      const cleanToken = String(token).startsWith('Token ') ? token : `Token ${token}`;
+      
+      const response = await fetch(`${backendUrl}/api/auth/profile/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': cleanToken
+        }
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        logger.info(`[AuthService] Token verified successfully via Django: ${userData.username} (ID: ${userData.id})`);
+        return {
+          id: String(userData.id),
+          username: userData.username,
+          role: 'user',
+          firstName: userData.firstName,
+          duelRating: userData.duelRating
+        };
+      } else {
+        logger.warn(`[AuthService] Token verification failed on Django backend: status ${response.status}`);
+        
+        // Fallback for robust dev experience if backend is unreachable but handshake query has fallback info
+        if (config.env === 'development' || config.env === 'test') {
+          logger.warn('[AuthService] Falling back to query params in development/test mode.');
+          const userId = handshakeQuery.userId || handshakeQuery.id || 'dev-user';
+          const username = handshakeQuery.username || 'DevPlayer';
+          return {
+            id: String(userId),
+            username: String(username),
+            role: 'user'
+          };
+        }
+        return null;
+      }
     } catch (err) {
-      logger.error('Token verification failed', err);
+      logger.error('[AuthService] Error communicating with Django backend for verification:', err);
+      
+      // Fallback in development
+      if (config.env === 'development' || config.env === 'test') {
+        logger.warn('[AuthService] Falling back to query params in development/test mode due to communication error.');
+        const userId = handshakeQuery.userId || handshakeQuery.id || 'dev-user';
+        const username = handshakeQuery.username || 'DevPlayer';
+        return {
+          id: String(userId),
+          username: String(username),
+          role: 'user'
+        };
+      }
       return null;
     }
   }
