@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 app_name = "auth"
@@ -11,6 +11,5 @@ urlpatterns = [
     path("google/", views.google_login_view, name="google-login"),
     path("logout/", views.logout_view, name="logout"),
     path("profile/", views.profile_view, name="profile"),
-    path("duels/create/", views.create_duel_view, name="duel-create"),
-    path("duels/history/", views.duel_history_view, name="duel-history"),
+    path("duels/", include("apps.duels.urls")),
 ]

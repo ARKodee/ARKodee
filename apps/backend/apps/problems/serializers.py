@@ -79,17 +79,20 @@ class ProblemDetailSerializer(serializers.ModelSerializer):
         return obj.difficulty.upper()
 
     def get_sample_input(self, obj):
-        samples = obj.test_cases.filter(is_sample=True).order_by("order_index")
+        all_tcs = list(obj.test_cases.all())
+        samples = sorted([s for s in all_tcs if s.is_sample], key=lambda x: x.order_index)
         return [s.input for s in samples]
 
     def get_sample_output(self, obj):
-        samples = obj.test_cases.filter(is_sample=True).order_by("order_index")
+        all_tcs = list(obj.test_cases.all())
+        samples = sorted([s for s in all_tcs if s.is_sample], key=lambda x: x.order_index)
         return [s.expected_output for s in samples]
 
     def get_sample_test_cases(self, obj):
-        samples = obj.test_cases.filter(is_sample=True).order_by("order_index")
-        if not samples.exists():
-            samples = obj.test_cases.all().order_by("order_index")
+        all_tcs = list(obj.test_cases.all())
+        samples = sorted([s for s in all_tcs if s.is_sample], key=lambda x: x.order_index)
+        if not samples:
+            samples = sorted(all_tcs, key=lambda x: x.order_index)
         return [
             {
                 "id": str(s.id),
@@ -101,7 +104,15 @@ class ProblemDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_boilerplate(self, obj):
-        return self.context.get("templates", {})
+        context_templates = self.context.get("templates")
+        if context_templates:
+            if isinstance(context_templates, dict):
+                if str(obj.id) in context_templates:
+                    return context_templates[str(obj.id)]
+                if obj.id in context_templates:
+                    return context_templates[obj.id]
+            return context_templates
+        return obj.templates or {}
 
 
 class SubmissionHistorySerializer(serializers.ModelSerializer):
