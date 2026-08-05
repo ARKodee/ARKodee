@@ -87,6 +87,7 @@ export function useMatchSocket(matchId) {
   const [opponentProgress, setOpponentProgress] = useState({});
   const [isEditorLocked, setIsEditorLocked] = useState(false);
   const [connectionState, setConnectionState] = useState('DISCONNECTED');
+  const [roomState, setRoomState] = useState(null);
   
   // Real-time Combat telemetry states
   const [startedAt, setStartedAt] = useState(null);
@@ -155,12 +156,14 @@ export function useMatchSocket(matchId) {
     const handleMatchStartedOrReady = (payload) => {
       console.log('[useMatchSocket] Match payload received:', payload);
       
-      const loadedProblems = payload?.problems && Array.isArray(payload.problems) && payload.problems.length >= 4
-        ? payload.problems
-        : DEFAULT_ARENA_PROBLEMS;
-        
-      setProblems(loadedProblems);
-      setIsMatchReady(true);
+      const hasProblems = payload?.problems && Array.isArray(payload.problems) && payload.problems.length > 0;
+      
+      if (hasProblems) {
+        setProblems(payload.problems);
+        setIsMatchReady(true);
+      } else {
+        setIsMatchReady(false);
+      }
       setIsMatchStarted(true);
 
       if (payload?.startedAt) {
@@ -194,10 +197,17 @@ export function useMatchSocket(matchId) {
           });
         }
       }
+
+      setRoomState(payload);
     };
 
     socket.on('match_ready', handleMatchStartedOrReady);
     socket.on('match_started', handleMatchStartedOrReady);
+    
+    socket.on('match_starting', (payload) => {
+      console.log('[useMatchSocket] Match starting signal received:', payload);
+      setIsMatchStarted(true);
+    });
 
     socket.on('room_updated', (updatedRoom) => {
       console.log('[useMatchSocket] room_updated received:', updatedRoom);
@@ -226,6 +236,7 @@ export function useMatchSocket(matchId) {
           setOpponentProgress(opp.solvedProblems || {});
         }
       }
+      setRoomState(updatedRoom);
     });
 
     socket.on('opponent_sabotaged', (payload) => {
@@ -374,6 +385,7 @@ export function useMatchSocket(matchId) {
     matchFinishedData,
     toastMessage,
     setToastMessage,
+    roomState,
     socket: socketRef.current,
   };
 }

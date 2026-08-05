@@ -123,7 +123,7 @@ export function CustomRoomModal({ socket, user, onClose }) {
   };
 
   const handleJoinSubmit = () => {
-    if (!joinCode || joinCode.length !== 5) {
+    if (!joinCode || joinCode.trim().length !== 5) {
       setErrorMsg('Please enter a valid 5-character lobby code.');
       return;
     }
@@ -131,7 +131,7 @@ export function CustomRoomModal({ socket, user, onClose }) {
     setErrorMsg('');
     if (socket) {
       socket.emit('join_custom_room', {
-        roomCode: joinCode.toUpperCase(),
+        roomCode: joinCode.trim().toUpperCase(),
         userId: activeUserId,
         username: activeUsername,
       });
@@ -144,12 +144,6 @@ export function CustomRoomModal({ socket, user, onClose }) {
     setIsLoading(true);
     if (socket) {
       socket.emit('request_start_match', {
-        roomId: matchIdToUse,
-        roomCode: matchIdToUse,
-        userId: activeUserId,
-        username: activeUsername,
-      });
-      socket.emit('start_custom_match', {
         roomId: matchIdToUse,
         roomCode: matchIdToUse,
         userId: activeUserId,
@@ -190,53 +184,15 @@ export function CustomRoomModal({ socket, user, onClose }) {
           </button>
         )}
 
-        {/* ─── CHOOSE Screen ─── */}
-        {viewMode === 'CHOOSE' && (
-          <div className="crm-choose-view">
-            <div className="crm-choose-view-container">
-              <div>
-                <h2 className="crm-title">
-                  Custom Lobby Setup
-                </h2>
-                <p className="crm-subtitle">
-                  Host a session or connect to a friend&apos;s active arena lobby code
-                </p>
-              </div>
-
-              <div className="crm-btn-grid">
-                <button
-                  onClick={() => setViewMode('CREATE')}
-                  className="crm-choose-btn"
-                >
-                  <Swords size={20} className="text-indigo-400" />
-                  <span className="crm-choose-btn-label">
-                    Create Lobby
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setViewMode('JOIN')}
-                  className="crm-choose-btn"
-                >
-                  <Users size={20} className="text-emerald-400" />
-                  <span className="crm-choose-btn-label">
-                    Join Lobby
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── CREATE Screen ─── */}
-        {viewMode === 'CREATE' && (
+        {/* ─── Unified LOBBY View (Shown to both host and guest when roomData exists) ─── */}
+        {roomData ? (
           <div className="crm-create-view">
             {/* Header Bar */}
             <div className="crm-header-bar">
-              <div className="crm-lobby-status crm-lobby-status--host">
+              <div className={`crm-lobby-status ${String(roomData.hostId) === String(activeUserId) ? 'crm-lobby-status--host' : 'crm-lobby-status--guest'}`}>
                 <Swords size={16} />
                 <span className="crm-lobby-status-label">
-                  Lobby Host Status
+                  {String(roomData.hostId) === String(activeUserId) ? 'Lobby Host Status' : 'Lobby Guest Status'}
                 </span>
               </div>
               <LeaveButton icon={LogOut} />
@@ -269,14 +225,14 @@ export function CustomRoomModal({ socket, user, onClose }) {
                   {hostPlayer.username?.substring(0, 2).toUpperCase()}
                 </div>
                 <span className="crm-slot-name">
-                  {hostPlayer.username && hostPlayer.username !== 'Host' ? hostPlayer.username : activeUsername}
+                  {hostPlayer.username || 'Host'}
                 </span>
                 <span className="crm-slot-status crm-slot-status--host">
                   Stable
                 </span>
               </div>
 
-              {/* Slot 2: Challenger — conditional */}
+              {/* Slot 2: Challenger */}
               {challengerPlayer ? (
                 <div className="crm-slot">
                   <div className="crm-slot-badge crm-slot-badge--guest">
@@ -301,8 +257,8 @@ export function CustomRoomModal({ socket, user, onClose }) {
               )}
             </div>
 
-            {/* Start Match CTA */}
-            {isHostUser ? (
+            {/* Action CTA */}
+            {String(roomData.hostId) === String(activeUserId) ? (
               <button
                 disabled={!challengerPlayer || isLoading}
                 onClick={handleStartMatch}
@@ -316,91 +272,104 @@ export function CustomRoomModal({ socket, user, onClose }) {
               </div>
             )}
           </div>
-        )}
-
-        {/* ─── JOIN Screen ─── */}
-        {viewMode === 'JOIN' && (
-          <div className="crm-join-view">
-            {/* Header Bar */}
-            <div className="crm-header-bar">
-              <div className="crm-lobby-status crm-lobby-status--guest">
-                <Users size={16} />
-                <span className="crm-lobby-status-label">
-                  Challenger Portal
-                </span>
-              </div>
-              <LeaveButton icon={ArrowLeft} />
-            </div>
-
-            {roomData ? (
-              /* Connected State */
-              <div className="crm-join-input-section">
-                <div className="crm-connect-success-box">
-                  <p className="crm-connect-success-title">Lobby Connection Stable</p>
-                  <p className="crm-connect-success-subtitle">
-                    ROOM ID: {roomCode}
-                  </p>
-                </div>
-
-                <div className="crm-connect-waiting-box">
-                  <span className="crm-connect-waiting-text">
-                    Connected! Waiting for host to start match...
-                  </span>
-                </div>
-
-                <div className="crm-connect-players-box">
+        ) : (
+          <>
+            {/* ─── CHOOSE Screen ─── */}
+            {viewMode === 'CHOOSE' && (
+              <div className="crm-choose-view">
+                <div className="crm-choose-view-container">
                   <div>
-                    <span className="crm-connect-player-label">
-                      Host
-                    </span>
-                    <span className="crm-connect-player-name">
-                      {hostPlayer.username}
-                    </span>
+                    <h2 className="crm-title">
+                      Custom Lobby Setup
+                    </h2>
+                    <p className="crm-subtitle">
+                      Host a session or connect to a friend&apos;s active arena lobby code
+                    </p>
                   </div>
-                  <div className="crm-connect-players-sep">
-                    <span className="crm-connect-player-label">
-                      You (Challenger)
-                    </span>
-                    <span className="crm-connect-player-name crm-connect-player-name--me">
-                      {user?.username}
-                    </span>
+
+                  <div className="crm-btn-grid">
+                    <button
+                      onClick={() => setViewMode('CREATE')}
+                      className="crm-choose-btn"
+                    >
+                      <Swords size={20} className="text-indigo-400" />
+                      <span className="crm-choose-btn-label">
+                        Create Lobby
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setViewMode('JOIN')}
+                      className="crm-choose-btn"
+                    >
+                      <Users size={20} className="text-emerald-400" />
+                      <span className="crm-choose-btn-label">
+                        Join Lobby
+                      </span>
+                    </button>
                   </div>
                 </div>
-              </div>
-            ) : (
-              /* Input State */
-              <div className="crm-join-input-section">
-                <div className="crm-join-field-wrapper">
-                  <label className="crm-join-field-label">
-                    Lobby Code
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={5}
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                    placeholder="ABCDE"
-                    className="crm-input-field"
-                  />
-                </div>
-
-                {errorMsg && (
-                  <div className="crm-error-box">
-                    <ShieldAlert size={14} className="crm-error-icon" />
-                    <span>{errorMsg}</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleJoinSubmit}
-                  disabled={isLoading || joinCode.length !== 5}
-                  className="crm-join-submit-btn"
-                >
-                  {isLoading ? 'Connecting...' : 'Connect Room'}
-                </button>
               </div>
             )}
-          </div>
+
+            {/* ─── CREATE Loading Screen ─── */}
+            {viewMode === 'CREATE' && (
+              <div className="crm-create-view">
+                <div className="crm-code-section">
+                  <span className="crm-code-label">
+                    Creating Custom Lobby...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* ─── JOIN Input Screen ─── */}
+            {viewMode === 'JOIN' && (
+              <div className="crm-join-view">
+                {/* Header Bar */}
+                <div className="crm-header-bar">
+                  <div className="crm-lobby-status crm-lobby-status--guest">
+                    <Users size={16} />
+                    <span className="crm-lobby-status-label">
+                      Challenger Portal
+                    </span>
+                  </div>
+                  <LeaveButton icon={ArrowLeft} />
+                </div>
+
+                  <div className="crm-join-input-section">
+                  <div className="crm-join-field-wrapper">
+                    <label className="crm-join-field-label">
+                      Lobby Code
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={5}
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      placeholder="ABCDE"
+                      className="crm-input-field"
+                    />
+                  </div>
+
+                  {errorMsg && (
+                    <div className="crm-error-box">
+                      <ShieldAlert size={14} className="crm-error-icon" />
+                      <span>{errorMsg}</span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleJoinSubmit}
+                    disabled={isLoading || joinCode.trim().length !== 5}
+                    className="crm-join-submit-btn"
+                  >
+                    {isLoading ? 'Connecting...' : 'Connect Room'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

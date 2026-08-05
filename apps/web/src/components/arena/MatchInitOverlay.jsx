@@ -17,6 +17,7 @@ export function MatchInitOverlay({
   userA = { username: 'PLAYER 1', rating: null },
   userB = { username: 'OPPONENT', rating: null },
   onHandoff = () => {},
+  isReady = true,
 }) {
   const [phase, setPhase] = useState('ENTRANCE'); // 'ENTRANCE' | 'COUNTDOWN' | 'HANDOFF'
   const [countdown, setCountdown] = useState(3);
@@ -40,7 +41,7 @@ export function MatchInitOverlay({
     return () => clearTimeout(timer);
   }, [phase]);
 
-  // Countdown timer logic (3 -> 2 -> 1 -> 0 -> Handoff)
+  // Countdown timer logic (3 -> 2 -> 1 -> 0)
   useEffect(() => {
     if (phase !== 'COUNTDOWN') return;
 
@@ -53,16 +54,19 @@ export function MatchInitOverlay({
         setCountdown((prev) => prev - 1);
       }, 1000);
       return () => clearTimeout(timer);
-    } else {
-      setIsFadingOut(true);
-
-      const handoffTimer = setTimeout(() => {
-        onHandoff();
-      }, 400); // 400ms fade-out transition
-
-      return () => clearTimeout(handoffTimer);
     }
   }, [phase, countdown]);
+
+  // Handoff logic (only fire when countdown is 0 and isReady is true)
+  useEffect(() => {
+    if (phase === 'COUNTDOWN' && countdown === 0 && isReady) {
+      setIsFadingOut(true);
+      const handoffTimer = setTimeout(() => {
+        onHandoff();
+      }, 400);
+      return () => clearTimeout(handoffTimer);
+    }
+  }, [phase, countdown, isReady, onHandoff]);
 
   return (
     <div
@@ -199,13 +203,27 @@ export function MatchInitOverlay({
         )}
 
         {(phase === 'HANDOFF' || countdown === 0) && (
-          <div className="flex flex-col items-center animate-bounce">
-            <span className="text-6xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-b from-red-400 via-rose-300 to-amber-400 drop-shadow-[0_0_40px_rgba(239,68,68,0.9)]">
-              GO!
-            </span>
-            <span className="mt-2 text-xs font-mono tracking-widest text-red-400 uppercase font-bold">
-              ENGAGING COMBAT ENVIRONMENT
-            </span>
+          <div className="h-24 flex flex-col items-center justify-center">
+            {isReady ? (
+              <div className="flex flex-col items-center animate-bounce">
+                <span className="text-6xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-b from-red-400 via-rose-300 to-amber-400 drop-shadow-[0_0_40px_rgba(239,68,68,0.9)]">
+                  GO!
+                </span>
+                <span className="mt-2 text-xs font-mono tracking-widest text-red-400 uppercase font-bold">
+                  ENGAGING COMBAT ENVIRONMENT
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-2xl font-black font-mono text-indigo-400 uppercase animate-pulse">
+                  Preparing Arena...
+                </span>
+                <span className="text-[10px] font-mono tracking-widest text-zinc-500 uppercase">
+                  Fetching problem templates from backend. Will start soon.
+                </span>
+              </div>
+            )}
           </div>
         )}
 

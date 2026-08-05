@@ -1,62 +1,179 @@
 // src/pages/Arena1v1Page.jsx
 // Arena1v1Page — live 1v1 competitive arena with split-pane workspace
 // Uses design system tokens, no Tailwind
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { useAuth } from '../store/AuthContext';
 import { useTheme } from '../store/ThemeContext';
 import { useMatchSocket, DEFAULT_ARENA_PROBLEMS } from '../hooks/useMatchSocket';
 import { ProblemDescription } from '../components/practice/ProblemDescription';
-import { InteractiveEditor } from '../components/practice/InteractiveEditor';
 import { MatchInitOverlay } from '../components/arena/MatchInitOverlay';
 import { runProblemCode, submitProblemCode } from '../lib/problems';
+import { getUserProfile } from '../lib/auth';
 import {
-  ArrowLeft,
-  Swords,
-  Clock,
-  Zap,
-  Lock,
-  Shield,
-  CheckCircle2,
-  CircleDot,
-  Circle,
-  ChevronDown,
-  ChevronUp,
-  Play,
-  Send,
-  HelpCircle,
-  EyeOff,
-  Keyboard,
+  ArrowLeft, Swords, Clock, Zap, Lock, Shield,
+  CheckCircle2, CircleDot, Circle, ChevronDown, ChevronUp,
+  Play, UploadCloud, HelpCircle, EyeOff, Keyboard, AlertTriangle,
+  Sparkles, ChevronLeft, ChevronRight, Columns, Plus, X,
   Info,
-  Layers,
-  Code,
-  AlertTriangle,
-  Sparkles,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import './Arena1v1Page.css';
 
 // ─── Language Options ──────────────────────────────────────────────────────────
 const LANGUAGES = [
-  { id: 'python', label: 'Python 3', monaco: 'python' },
-  { id: 'cpp', label: 'C++ 17', monaco: 'cpp' },
-  { id: 'java', label: 'Java', monaco: 'java' },
-  { id: 'javascript', label: 'JavaScript', monaco: 'javascript' },
+  { id: 'python',     label: 'Python 3',    monaco: 'python' },
+  { id: 'cpp',        label: 'C++ 17',      monaco: 'cpp' },
+  { id: 'java',       label: 'Java',        monaco: 'java' },
+  { id: 'javascript', label: 'JavaScript',  monaco: 'javascript' },
 ];
 
-// ─── Difficulty Badge Component ────────────────────────────────────────────────
+const LANGUAGE_TEMPLATES = {
+  python: `class Solution:\n    def solve(self, nums: List[int], target: int) -> List[int]:\n        # Write your solution here\n        pass\n`,
+  cpp: `#include <iostream>\n#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> solve(vector<int>& nums, int target) {\n        // Write your solution here\n        return {};\n    }\n};\n`,
+  java: `import java.util.*;\n\nclass Solution {\n    public int[] solve(int[] nums, int target) {\n        // Write your solution here\n        return new int[]{};\n    }\n}\n`,
+  javascript: `/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar solve = function(nums, target) {\n    // Write your solution here\n};\n`,
+};
+
+// ─── Monaco Custom Themes ──────────────────────────────────────────────────────
+const ARKODEE_DARK_THEME = {
+  base: 'vs-dark', inherit: true,
+  rules: [
+    { token: '', foreground: 'e8e8f0', background: '111113' },
+    { token: 'comment', foreground: '555568', fontStyle: 'italic' },
+    { token: 'keyword', foreground: '818cf8' },
+    { token: 'string', foreground: '34d399' },
+    { token: 'number', foreground: 'fbbf24' },
+    { token: 'type', foreground: '818cf8' },
+    { token: 'function', foreground: 'e8e8f0' },
+  ],
+  colors: {
+    'editor.background': '#111113', 'editor.foreground': '#e8e8f0',
+    'editor.lineHighlightBackground': '#1a1a1f', 'editor.selectionBackground': '#2a2a3a',
+    'editorLineNumber.foreground': '#555568', 'editorLineNumber.activeForeground': '#8888a0',
+    'editorGutter.background': '#111113', 'editorWidget.background': '#16161a',
+    'editorWidget.border': '#1f1f24', 'editor.inactiveSelectionBackground': '#1f1f28',
+    'editorCursor.foreground': '#818cf8', 'editorIndentGuide.background': '#1f1f24',
+    'editorIndentGuide.activeBackground': '#2a2a32',
+  },
+};
+
+const ARKODEE_LIGHT_THEME = {
+  base: 'vs', inherit: true,
+  rules: [
+    { token: '', foreground: '0f0f14', background: 'f9f9fb' },
+    { token: 'comment', foreground: '9292a0', fontStyle: 'italic' },
+    { token: 'keyword', foreground: '6d58f5' },
+    { token: 'string', foreground: '059669' },
+    { token: 'number', foreground: 'd97706' },
+    { token: 'type', foreground: '6d58f5' },
+    { token: 'function', foreground: '0f0f14' },
+  ],
+  colors: {
+    'editor.background': '#f9f9fb', 'editor.foreground': '#0f0f14',
+    'editor.lineHighlightBackground': '#f0f0f5', 'editor.selectionBackground': '#e4e4ec',
+    'editorLineNumber.foreground': '#9292a0', 'editorLineNumber.activeForeground': '#52525e',
+    'editorGutter.background': '#f9f9fb', 'editorWidget.background': '#ffffff',
+    'editorWidget.border': '#e4e4ec', 'editor.inactiveSelectionBackground': '#ededf5',
+    'editorCursor.foreground': '#6d58f5', 'editorIndentGuide.background': '#e4e4ec',
+    'editorIndentGuide.activeBackground': '#c8c8d8',
+  },
+};
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
 function DifficultyBadge({ difficulty }) {
-  const className = `a1-difficulty-badge a1-difficulty-badge--${difficulty?.toLowerCase()}`;
-  return <span className={className}>{difficulty}</span>;
+  return <span className={`a1-difficulty-badge a1-difficulty-badge--${difficulty?.toLowerCase()}`}>{difficulty}</span>;
 }
 
-// ─── Problem Status Icon Component ──────────────────────────────────────────────
 function ProblemStatusIcon({ status }) {
-  if (status === 'solved') return <CheckCircle2 size={14} className="a1-problem-tab-icon a1-problem-tab-icon--solved" />;
-  if (status === 'attempted') return <CircleDot size={14} className="a1-problem-tab-icon a1-problem-tab-icon--attempted" />;
+  if (status === 'solved')   return <CheckCircle2 size={14} className="a1-problem-tab-icon a1-problem-tab-icon--solved" />;
+  if (status === 'attempted') return <CircleDot   size={14} className="a1-problem-tab-icon a1-problem-tab-icon--attempted" />;
   return <Circle size={14} className="a1-problem-tab-icon a1-problem-tab-icon--untouched" />;
+}
+
+// ─── Rules Modal ───────────────────────────────────────────────────────────────
+function RulesModal({ onDismiss, myUsername, opponentUsername, myRating, opponentRating }) {
+  return (
+    <div className="a1-rules-overlay">
+      <div className="a1-rules-card">
+        <div className="a1-rules-accent-bar" />
+        
+        {/* Left Column */}
+        <div className="a1-rules-col-left">
+          <div className="a1-rules-header">
+            <div className="a1-rules-icon"><Swords size={28} /></div>
+            <div>
+              <h2 className="a1-rules-title">Match Rules</h2>
+              <p className="a1-rules-subtitle">Review before the duel begins</p>
+            </div>
+          </div>
+
+          <div className="a1-rules-players">
+            <div className="a1-rules-player">
+              <div className="a1-rules-avatar">{myUsername[0].toUpperCase()}</div>
+              <span className="a1-rules-player-name">{myUsername}</span>
+              <span className="a1-rules-player-elo">{myRating} ELO</span>
+            </div>
+            <div className="a1-rules-vs">VS</div>
+            <div className="a1-rules-player">
+              <div className="a1-rules-avatar a1-rules-avatar--opp">{opponentUsername[0].toUpperCase()}</div>
+              <span className="a1-rules-player-name">{opponentUsername}</span>
+              <span className="a1-rules-player-elo">{opponentRating} ELO</span>
+            </div>
+          </div>
+
+          <div className="a1-rules-grid">
+            <div className="a1-rules-item">
+              <Clock size={14} className="a1-rules-item-icon" />
+              <div>
+                <div className="a1-rules-item-label">Time Limit</div>
+                <div className="a1-rules-item-value">30 Minutes</div>
+              </div>
+            </div>
+            <div className="a1-rules-item">
+              <Swords size={14} className="a1-rules-item-icon" />
+              <div>
+                <div className="a1-rules-item-label">Problems</div>
+                <div className="a1-rules-item-value">4 Algorithmic</div>
+              </div>
+            </div>
+            <div className="a1-rules-item">
+              <Sparkles size={14} className="a1-rules-item-icon" />
+              <div>
+                <div className="a1-rules-item-label">AP / Sabotage</div>
+                <div className="a1-rules-item-value">Enabled</div>
+              </div>
+            </div>
+            <div className="a1-rules-item">
+              <Zap size={14} className="a1-rules-item-icon" />
+              <div>
+                <div className="a1-rules-item-label">ELO Stakes</div>
+                <div className="a1-rules-item-value">± 25 pts</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="a1-rules-col-right">
+          <ul className="a1-rules-list">
+            <li>Solve problems correctly to earn score points. Fastest correct solver wins.</li>
+            <li>You earn AP by running code, submitting, and solving problems.</li>
+            <li>Spend AP in the Tactical Shop to buy advantages or cast sabotages on your opponent.</li>
+            <li>In 1v1 mode, wrong answers show only which testcase failed — not the actual input/output.</li>
+            <li>If the <strong>Blindfold</strong> sabotage is active on you, even the failed testcase index is hidden.</li>
+            <li>Leaving mid-match forfeits the duel and deducts ELO.</li>
+          </ul>
+
+          <button className="a1-rules-start-btn" onClick={onDismiss}>
+            <Zap size={16} />
+            I'm Ready — Start Match
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
 }
 
 // ─── Main Page Component ───────────────────────────────────────────────────────
@@ -66,424 +183,404 @@ export function Arena1v1Page() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Match phase state: 'IDLE' | 'INITIATING' | 'COUNTDOWN' | 'ACTIVE'
+  const editorRef = useRef(null);
+
+  // Match phase: 'IDLE' | 'RULES' | 'INITIATING' | 'COUNTDOWN' | 'ACTIVE'
   const [matchPhase, setMatchPhase] = useState('IDLE');
+  const [myProfile, setMyProfile] = useState(null);
 
   // Problem navigation
   const [activeProblemIndex, setActiveProblemIndex] = useState(0);
   const [userCodeMap, setUserCodeMap] = useState({});
   const [selectedLanguageMap, setSelectedLanguageMap] = useState({});
-  const [terminalOutputMap, setTerminalOutputMap] = useState({});
+
+  // Console / terminal state — practice-style
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(220);
+  const [isResizingTerminal, setIsResizingTerminal] = useState(false);
+  const [activeTerminalTab, setActiveTerminalTab] = useState('testcases');
+  const [terminalOutputMap, setTerminalOutputMap] = useState({});
+  const [testCaseResultsMap, setTestCaseResultsMap] = useState({});
+  const [visibleTestCasesMap, setVisibleTestCasesMap] = useState({});
+  const [activeCaseIdx, setActiveCaseIdx] = useState(0);
+  const [submissionResultMap, setSubmissionResultMap] = useState({});
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Layout states: left panel collapsibility and width sizing
+  // Layout states
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(360);
-  const [rightPanelWidth, setRightPanelWidth] = useState(300);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(380);
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
+  const [rightPanelWidth, setRightPanelWidth] = useState(280);
 
-  // Left panel view tabs: 'description' | 'submissions'
-  const [activeLeftTab, setActiveLeftTab] = useState('description');
-  const [submissionsList, setSubmissionsList] = useState([]); // List of { id, problemId, verdict, timestamp, code, language }
+  // Right panel internal sections collapse
+  const [isShopCollapsed, setIsShopCollapsed] = useState(false);
+  const [isTelemetryCollapsed, setIsTelemetryCollapsed] = useState(false);
 
-  // Expanded code view index inside submissions list
-  const [expandedSubId, setExpandedSubId] = useState(null);
+  // Submissions list
+  const [submissionsList, setSubmissionsList] = useState([]);
 
-  // Active Powerups purchased locally
+  // Active Powerups & Sabotages
   const [autocompleteActiveUntil, setAutocompleteActiveUntil] = useState(0);
+  const [opponentSabotageActiveUntil, setOpponentSabotageActiveUntil] = useState(0);
+  const [localShieldActiveUntil, setLocalShieldActiveUntil] = useState(0);
 
   // Timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // WebSocket hook
   const {
-    problems,
-    isMatchReady,
-    isMatchStarted,
-    isArenaDissolved,
-    hostId,
-    opponentProfile,
-    opponentProgress,
-    isEditorLocked,
-    connectionState,
-    requestStartMatch,
-    leaveArenaLobby,
-    initiateMatch,
-    sendSubmission,
-    sendSabotage,
-    sendShield,
-    startedAt,
-    myScore,
-    myAp,
-    opponentScore,
-    opponentAp,
-    activeSabotage,
-    sabotageTimeLeft,
-    myShieldActiveUntil,
-    matchFinishedData,
-    toastMessage,
-    setToastMessage,
+    problems, isMatchReady, isMatchStarted, isArenaDissolved,
+    hostId, opponentProfile, opponentProgress, isEditorLocked,
+    connectionState, requestStartMatch, leaveArenaLobby, initiateMatch,
+    sendSubmission, sendSabotage, sendShield, startedAt,
+    myScore, myAp, opponentScore, opponentAp, activeSabotage, sabotageTimeLeft,
+    myShieldActiveUntil, matchFinishedData, toastMessage, setToastMessage,
+    roomState, socket,
   } = useMatchSocket(matchId);
 
   const activeUserId = user?.id || user?.userId || 'user-1';
   const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+  const submissionsStorageKey = matchId ? `arena_subs_${matchId}_${activeUserId}` : '';
 
-  // Check if current user is host
-  const isHost = hostId
-    ? String(activeUserId) === String(hostId)
-    : true;
+  // Fetch user profile
+  useEffect(() => {
+    getUserProfile().then(setMyProfile).catch(() => {});
+  }, []);
 
-  // Get active problems list
+  // Load saved submissions
+  useEffect(() => {
+    if (submissionsStorageKey) {
+      try {
+        const saved = localStorage.getItem(submissionsStorageKey);
+        if (saved) setSubmissionsList(JSON.parse(saved));
+      } catch { /* ignore */ }
+    }
+  }, [submissionsStorageKey]);
+
+  const saveSubmissions = (newSubs) => {
+    setSubmissionsList(newSubs);
+    if (submissionsStorageKey) localStorage.setItem(submissionsStorageKey, JSON.stringify(newSubs));
+  };
+
+  const myRating = myProfile?.duelRating || user?.duelRating || 1200;
+  const isHost = hostId ? String(activeUserId) === String(hostId) : true;
   const activeProblemsList = (problems && problems.length > 0) ? problems : DEFAULT_ARENA_PROBLEMS;
   const activeProblem = activeProblemsList[activeProblemIndex] || activeProblemsList[0];
-
-  // Get current problem ID
   const currentProblemId = activeProblem?.id || `p${activeProblemIndex + 1}`;
-
-  // Get current code and language
-  const currentCode = userCodeMap[currentProblemId] ?? `# Write your solution for ${activeProblem?.title || 'Problem'} here\n\n`;
   const currentLanguage = selectedLanguageMap[currentProblemId] ?? 'python';
+  const currentCode = userCodeMap[currentProblemId] ?? activeProblem?.boilerplate?.[currentLanguage] ?? activeProblem?.templates?.[currentLanguage] ?? LANGUAGE_TEMPLATES[currentLanguage] ?? `# Write your solution here\n\n`;
   const currentTerminalOutput = terminalOutputMap[currentProblemId] ?? '';
-
-  const problemSubmissions = submissionsList.filter((s) => s.problemId === currentProblemId);
+  const currentTestCaseResults = testCaseResultsMap[currentProblemId] ?? [];
+  const currentSubmissionResult = submissionResultMap[currentProblemId] ?? null;
+  const currentVisibleTestCases = visibleTestCasesMap[currentProblemId] ?? (
+    activeProblem?.sample_input
+      ? activeProblem.sample_input.map((inp, i) => ({
+          id: `sample-${i}`,
+          label: `Case ${i + 1}`,
+          input: inp,
+          expected_output: activeProblem.sample_output?.[i] ?? '',
+        }))
+      : []
+  );
+  const problemSubmissions = submissionsList.filter(s => s.problemId === currentProblemId);
   const isSuggestionsEnabled = autocompleteActiveUntil > Date.now();
+  const isBlindfolded = activeSabotage === 'blindfold';
 
-  // Local timer update from startedAt timestamp (Resolves page refresh bug)
+  const hasOpponent = opponentProfile?.username && opponentProfile.username !== 'OPPONENT';
+  const opponentInitial = hasOpponent ? opponentProfile.username[0].toUpperCase() : '?';
+  const opponentDisplayName = hasOpponent ? opponentProfile.username : 'Challenger';
+  const opponentDisplayRating = hasOpponent && opponentProfile.rating ? opponentProfile.rating : 1200;
+
+  // ── Timers & Phase Transitions ──────────────────────────────────────────────
   useEffect(() => {
-    if (!startedAt || matchPhase === 'IDLE') return;
-
-    const calcElapsed = () => {
-      const diffSecs = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
-      setElapsedSeconds(diffSecs);
-    };
-
-    calcElapsed();
-    const interval = setInterval(calcElapsed, 1000);
-    return () => clearInterval(interval);
+    if (!startedAt || matchPhase === 'IDLE' || matchPhase === 'RULES') return;
+    const calc = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)));
+    calc();
+    const id = setInterval(calc, 1000);
+    return () => clearInterval(id);
   }, [startedAt, matchPhase]);
 
-  // Handle phase transitions and animations on page load/refresh
   useEffect(() => {
     if (isMatchStarted) {
       if (startedAt) {
-        const diffSecs = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
-        // If match has been active for more than 5 seconds, skip transition animations
-        if (diffSecs > 5) {
+        const diff = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+        // Only skip to ACTIVE if the match has been running for a long time (e.g., reconnecting after 60s)
+        if (diff > 60 && matchPhase === 'IDLE') {
           setMatchPhase('ACTIVE');
-        } else if (matchPhase === 'IDLE') {
-          setMatchPhase('INITIATING');
+          return;
         }
-      } else if (matchPhase === 'IDLE') {
-        setMatchPhase('INITIATING');
       }
+      if (matchPhase === 'IDLE') setMatchPhase('INITIATING');
     }
   }, [isMatchStarted, startedAt, matchPhase]);
 
-  // Redirect when arena is dissolved
-  useEffect(() => {
-    if (isArenaDissolved) {
-      navigate('/matchmaking');
-    }
-  }, [isArenaDissolved, navigate]);
+  useEffect(() => { if (isArenaDissolved) navigate('/matchmaking'); }, [isArenaDissolved, navigate]);
 
-  // Toast message cleanup autotimer
   useEffect(() => {
-    if (toastMessage) {
-      const t = setTimeout(() => setToastMessage(''), 5000);
-      return () => clearTimeout(t);
-    }
+    if (toastMessage) { const t = setTimeout(() => setToastMessage(''), 5000); return () => clearTimeout(t); }
   }, [toastMessage, setToastMessage]);
 
-  // Drag resizer handlers
+  // Sync visible test cases when switching problems
+  useEffect(() => {
+    if (!currentProblemId || visibleTestCasesMap[currentProblemId]) return;
+    if (activeProblem?.sample_input?.length > 0) {
+      setVisibleTestCasesMap(prev => ({
+        ...prev,
+        [currentProblemId]: activeProblem.sample_input.map((inp, i) => ({
+          id: `sample-${i}`, label: `Case ${i + 1}`,
+          input: inp, expected_output: activeProblem.sample_output?.[i] ?? '',
+        })),
+      }));
+    }
+  }, [currentProblemId, activeProblem]);
+
+  // ── Drag Resize Handlers ────────────────────────────────────────────────────
   const startResizeLeft = (e) => {
     e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = leftPanelWidth;
-
-    const doDrag = (moveEvent) => {
-      const newWidth = Math.max(250, Math.min(500, startWidth + (moveEvent.clientX - startX)));
-      setLeftPanelWidth(newWidth);
-    };
-
-    const stopDrag = () => {
-      document.removeEventListener('mousemove', doDrag);
-      document.removeEventListener('mouseup', stopDrag);
-    };
-
+    const startX = e.clientX, startWidth = leftPanelWidth;
+    const doDrag = (mv) => setLeftPanelWidth(Math.max(260, Math.min(560, startWidth + (mv.clientX - startX))));
+    const stopDrag = () => { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); };
     document.addEventListener('mousemove', doDrag);
     document.addEventListener('mouseup', stopDrag);
   };
 
   const startResizeRight = (e) => {
     e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = rightPanelWidth;
-
-    const doDrag = (moveEvent) => {
-      const newWidth = Math.max(240, Math.min(400, startWidth - (moveEvent.clientX - startX)));
-      setRightPanelWidth(newWidth);
-    };
-
-    const stopDrag = () => {
-      document.removeEventListener('mousemove', doDrag);
-      document.removeEventListener('mouseup', stopDrag);
-    };
-
+    const startX = e.clientX, startWidth = rightPanelWidth;
+    const doDrag = (mv) => setRightPanelWidth(Math.max(220, Math.min(420, startWidth - (mv.clientX - startX))));
+    const stopDrag = () => { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); };
     document.addEventListener('mousemove', doDrag);
     document.addEventListener('mouseup', stopDrag);
   };
 
-  // Start match
+  const handleTerminalMouseDown = useCallback((e) => {
+    e.preventDefault();
+    setIsResizingTerminal(true);
+    const startY = e.clientY;
+    const termEl = e.currentTarget.parentElement;
+    const startH = termEl ? termEl.offsetHeight : 220;
+    const parentH = termEl?.parentElement?.offsetHeight || 600;
+    const move = (mv) => setTerminalHeight(Math.min(Math.max(startH + (startY - mv.clientY), 120), parentH * 0.72));
+    const up = () => { setIsResizingTerminal(false); document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }, []);
+
+  // ── Match Controls ──────────────────────────────────────────────────────────
   const handleStartMatch = () => {
     if (!isHost) return;
     requestStartMatch();
-    setMatchPhase('INITIATING');
+    setMatchPhase('RULES');
     initiateMatch();
   };
 
-  // Leave arena
   const handleLeaveArena = () => {
+    if (matchPhase === 'ACTIVE' && !matchFinishedData) {
+      if (!window.confirm('Are you sure you want to abandon the match? You will forfeit and lose ELO!')) return;
+    }
     leaveArenaLobby();
     navigate('/matchmaking');
   };
 
-  // Countdown complete -> ACTIVE
   const handleOverlayHandoff = useCallback(() => {
-    setMatchPhase('ACTIVE');
+    setMatchPhase('RULES');
   }, []);
 
-  // Update code for current problem
-  const handleCodeChange = (newCode) => {
-    setUserCodeMap((prev) => ({
-      ...prev,
-      [currentProblemId]: newCode,
-    }));
-  };
+  // ── Code Handlers ───────────────────────────────────────────────────────────
+  const handleCodeChange = (newCode) => setUserCodeMap(prev => ({ ...prev, [currentProblemId]: newCode }));
+  const handleLanguageChange = (lang) => setSelectedLanguageMap(prev => ({ ...prev, [currentProblemId]: lang }));
 
-  // Update language for current problem
-  const handleLanguageChange = (lang) => {
-    setSelectedLanguageMap((prev) => ({
-      ...prev,
-      [currentProblemId]: lang,
-    }));
-  };
-
-  // Run Code logic via Django backend sandbox
+  // ── Run Code ────────────────────────────────────────────────────────────────
   const handleRunCode = async () => {
+    if (!activeProblem?.slug) return;
     setIsRunning(true);
-    setTerminalOutputMap((prev) => ({
-      ...prev,
-      [currentProblemId]: `> Compiling and running code against sample test cases...`,
-    }));
     setIsTerminalOpen(true);
+    setActiveTerminalTab('testcases');
+    setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: '> Running against sample test cases...' }));
+    setTestCaseResultsMap(prev => ({ ...prev, [currentProblemId]: [] }));
     try {
-      const res = await runProblemCode(activeProblem.slug, currentCode, currentLanguage);
-      if (res.verdict === 'CE' || res.compile_error) {
-        setTerminalOutputMap((prev) => ({
-          ...prev,
-          [currentProblemId]: `RESULT: COMPILATION ERROR\n\n${res.compile_error || 'An error occurred during compilation.'}`,
-        }));
-      } else if (res.verdict === 'AC') {
-        setTerminalOutputMap((prev) => ({
-          ...prev,
-          [currentProblemId]: `RESULT: ACCEPTED\n\nPassed all sample test cases.`,
-        }));
-        // Emit RUN_SUCCESS to get +20 AP milestone
-        sendSubmission(currentProblemId, 'RUN_SUCCESS', currentCode);
-      } else {
-        setTerminalOutputMap((prev) => ({
-          ...prev,
-          [currentProblemId]: `RESULT: ${res.verdict || 'FAILED'}\n(Failed sample test case)`,
-        }));
-      }
-    } catch (err) {
-      setTerminalOutputMap((prev) => ({
+      const res = await runProblemCode(activeProblem.slug, currentCode, currentLanguage, currentVisibleTestCases);
+      setTestCaseResultsMap(prev => ({ ...prev, [currentProblemId]: res.results || [] }));
+      setTerminalOutputMap(prev => ({
         ...prev,
-        [currentProblemId]: `ERROR: Execution failed.\n${err.message || 'Unknown network error.'}`,
+        [currentProblemId]: res.verdict === 'CE' || res.compile_error
+          ? `Compilation Error\n\n${res.compile_error || 'Error during compilation.'}`
+          : `RESULT: ${res.verdict === 'AC' ? 'ACCEPTED' : res.verdict || 'FAILED'}`,
       }));
+      if (res.verdict === 'AC') sendSubmission(currentProblemId, 'RUN_SUCCESS', currentCode);
+    } catch (err) {
+      setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: `ERROR: ${err.message || 'Network error.'}` }));
     } finally {
       setIsRunning(false);
     }
   };
 
-  // Submit Code logic via Django backend sandbox
+  // ── Submit Code ─────────────────────────────────────────────────────────────
   const handleSubmitCode = async () => {
+    if (!activeProblem?.slug) return;
     setIsSubmitting(true);
-    setTerminalOutputMap((prev) => ({
-      ...prev,
-      [currentProblemId]: `> Submitting solution for complete evaluation...`,
-    }));
     setIsTerminalOpen(true);
-
-    const isBlindfolded = activeSabotage === 'blindfold';
-
+    setActiveTerminalTab('submission');
+    setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: '> Submitting solution for full evaluation...' }));
+    setSubmissionResultMap(prev => ({ ...prev, [currentProblemId]: null }));
     try {
       const res = await submitProblemCode(activeProblem.slug, currentCode, currentLanguage);
       const isCorrect = res.verdict === 'AC';
-      const finalVerdict = isCorrect ? 'ACCEPTED' : 'WRONG_ANSWER';
-
-      // Format visual output for console
-      if (isCorrect) {
-        setTerminalOutputMap((prev) => ({
-          ...prev,
-          [currentProblemId]: `RESULT: ACCEPTED\nPassed all ${res.total_count} test cases successfully!`,
-        }));
-        sendSubmission(currentProblemId, 'ACCEPTED', currentCode);
-      } else {
-        const terminalText = isBlindfolded
-          ? `RESULT: WRONG ANSWER\n(Failed testcase details hidden by BLINDFOLD sabotage)`
-          : `RESULT: ${res.verdict || 'WRONG_ANSWER'}\nFailed on Testcase ${res.passed_count + 1} of ${res.total_count}`;
-
-        setTerminalOutputMap((prev) => ({
-          ...prev,
-          [currentProblemId]: terminalText,
-        }));
-        sendSubmission(currentProblemId, 'WRONG_ANSWER', currentCode);
-      }
-
-      // Add to our left-panel submissions list
-      const newSubmission = {
-        id: `sub-${Date.now()}`,
-        problemId: currentProblemId,
-        problemTitle: activeProblem?.title || 'Problem',
-        verdict: finalVerdict,
-        timestamp: new Date().toLocaleTimeString(),
-        code: currentCode,
-        language: currentLanguage,
-      };
-      setSubmissionsList((prev) => [newSubmission, ...prev]);
-
-    } catch (err) {
-      setTerminalOutputMap((prev) => ({
+      setSubmissionResultMap(prev => ({ ...prev, [currentProblemId]: res }));
+      setTerminalOutputMap(prev => ({
         ...prev,
-        [currentProblemId]: `ERROR: Submission failed.\n${err.message || 'Unknown network error.'}`,
+        [currentProblemId]: isCorrect
+          ? `RESULT: ACCEPTED\nPassed all ${res.total_count} test cases!`
+          : isBlindfolded
+            ? `RESULT: WRONG ANSWER`
+            : `RESULT: WRONG ANSWER\nFailed on testcase ${(res.passed_count ?? 0) + 1} of ${res.total_count}`,
       }));
+      sendSubmission(currentProblemId, isCorrect ? 'ACCEPTED' : 'WRONG_ANSWER', currentCode);
+      saveSubmissions([{
+        id: `sub-${Date.now()}`, problemId: currentProblemId,
+        problemTitle: activeProblem?.title || 'Problem',
+        verdict: isCorrect ? 'ACCEPTED' : 'WRONG_ANSWER',
+        timestamp: new Date().toLocaleTimeString(), created_at: new Date().toISOString(),
+        code: currentCode, language: currentLanguage,
+        test_cases_passed: res.passed_count ?? 0, total_test_cases: res.total_count ?? 0,
+      }, ...submissionsList]);
+    } catch (err) {
+      setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: `ERROR: ${err.message || 'Submission failed.'}` }));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Tactical Conductors Purchase
-  const handleBuyAutocomplete = () => {
-    if (myAp < 30) return;
-    setAutocompleteActiveUntil(Date.now() + 60000); // 60 seconds
-    setToastMessage('✨ Autocomplete powerup activated for 60 seconds!');
-    sendShield('cleanse');
+  // ── Add testcase from failed submission ─────────────────────────────────────
+  const handleAddFailedToTestcases = (failedTC) => {
+    if (!failedTC?.input) return;
+    const newCase = {
+      id: `custom-${Date.now()}`, label: `Case ${currentVisibleTestCases.length + 1}`,
+      input: failedTC.input, expected_output: failedTC.expected ?? '',
+    };
+    setVisibleTestCasesMap(prev => ({ ...prev, [currentProblemId]: [...currentVisibleTestCases, newCase] }));
+    setActiveTerminalTab('testcases');
+    setActiveCaseIdx(currentVisibleTestCases.length);
   };
 
-  const handleBuyHint = () => {
-    if (myAp < 35) return;
-    setToastMessage(`💡 Hint for ${activeProblem?.title}: Focus on the constraints and corner values!`);
-    sendShield('cleanse');
+  // ── Problem status ──────────────────────────────────────────────────────────
+  const getProblemStatus = (probId) => {
+    const subs = submissionsList.filter(s => s.problemId === probId);
+    if (subs.some(s => ['accepted', 'ac', 'accepted! solution passed all test cases.'].includes(String(s.verdict).toLowerCase()))) return 'solved';
+    if (subs.length > 0) return 'attempted';
+    return 'untouched';
   };
 
-  const handleCastJam = () => {
-    if (myAp < 50) return;
-    sendSabotage('jam');
+  // ── Monaco Mount ────────────────────────────────────────────────────────────
+  const handleEditorMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monaco.editor.defineTheme('arkodee-dark', ARKODEE_DARK_THEME);
+    monaco.editor.defineTheme('arkodee-light', ARKODEE_LIGHT_THEME);
+    monaco.editor.setTheme(theme === 'dark' ? 'arkodee-dark' : 'arkodee-light');
   };
 
-  const handleCastBlur = () => {
-    if (myAp < 40) return;
-    sendSabotage('blur');
-  };
+  useEffect(() => {
+    if (editorRef.current && window.monaco) {
+      window.monaco.editor.setTheme(theme === 'dark' ? 'arkodee-dark' : 'arkodee-light');
+    }
+  }, [theme]);
 
-  const handleCastBlindfold = () => {
-    if (myAp < 60) return;
-    sendSabotage('blindfold');
-  };
+  // ── Shop Handlers ───────────────────────────────────────────────────────────
+  const handleBuyAutocomplete = () => { if (myAp < 30) return; setAutocompleteActiveUntil(Date.now() + 60000); setToastMessage('✨ Autocomplete active for 60s!'); };
+  const handleBuyHint = () => { if (myAp < 35) return; setToastMessage(`💡 Hint: Focus on constraints and edge cases!`); };
+  const handleCastJam = () => { if (myAp < 50) return; sendSabotage('jam'); setOpponentSabotageActiveUntil(Date.now() + 5000); setToastMessage('💥 Jam cast on opponent (5s)!'); };
+  const handleCastBlur = () => { if (myAp < 40) return; sendSabotage('blur'); setOpponentSabotageActiveUntil(Date.now() + 10000); setToastMessage('🌫️ Haze cast on opponent (10s)!'); };
+  const handleCastBlindfold = () => { if (myAp < 60) return; sendSabotage('blindfold'); setOpponentSabotageActiveUntil(Date.now() + 60000); setToastMessage('🫣 Blindfold cast on opponent (60s)!'); };
+  const handleCastImmunity = () => { if (myAp < 40) return; sendShield('immunity'); setLocalShieldActiveUntil(Date.now() + 15000); setToastMessage('🛡️ Immunity shield activated (15s)!'); };
+  const handleCastCleanse = () => { if (myAp < 20) return; sendShield('cleanse'); setToastMessage('✨ Cleanse cast!'); };
 
-  const handleCastImmunity = () => {
-    if (myAp < 40) return;
-    sendShield('immunity');
-  };
-
-  const handleCastCleanse = () => {
-    if (myAp < 20) return;
-    sendShield('cleanse');
-  };
-
-  // Format timer
+  // ── Timer helpers ───────────────────────────────────────────────────────────
   const formatTimer = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
-
-  // Get timer class
+  const getDisplayTime = () => {
+    if (roomState?.isOvertime) {
+      const overtimeElapsed = roomState.overtimeStartedAt
+        ? Math.max(0, Math.floor((Date.now() - new Date(roomState.overtimeStartedAt).getTime()) / 1000))
+        : 0;
+      const remaining = Math.max(0, 600 - overtimeElapsed);
+      return { text: `OT ${formatTimer(remaining)}`, secs: remaining, isOt: true };
+    } else {
+      const remaining = Math.max(0, 3600 - elapsedSeconds);
+      return { text: formatTimer(remaining), secs: remaining, isOt: false };
+    }
+  };
+  const displayTime = getDisplayTime();
   const getTimerClass = () => {
-    const mins = Math.floor(elapsedSeconds / 60);
-    if (mins >= 25) return 'a1-timer a1-timer--critical';
-    if (mins >= 20) return 'a1-timer a1-timer--warning';
+    if (displayTime.isOt) return 'a1-timer a1-timer--critical animate-pulse';
+    if (displayTime.secs < 300) return 'a1-timer a1-timer--critical';
+    if (displayTime.secs < 600) return 'a1-timer a1-timer--warning';
     return 'a1-timer a1-timer--normal';
   };
 
-  // Render IDLE state
+  // ════════════════════════════════════════════════════════════════════════════
+  // IDLE / LOBBY RENDER
+  // ════════════════════════════════════════════════════════════════════════════
   if (matchPhase === 'IDLE') {
+    if (connectionState === 'CONNECTING' || connectionState === 'DISCONNECTED') {
+      return (
+        <div className="a1-root">
+          <div className="a1-lobby" style={{ justifyContent: 'center' }}>
+            <div className="a1-lobby-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '3rem' }}>
+              <Swords size={38} className="animate-pulse text-indigo-400" />
+              <h1 className="a1-lobby-title" style={{ margin: 0 }}>Connecting to Arena</h1>
+              <p className="a1-lobby-desc" style={{ margin: 0 }}>Establishing secure uplink to match room...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="a1-root">
-        {/* Initiation Overlay */}
-        {(matchPhase === 'INITIATING' || matchPhase === 'COUNTDOWN') && (
-          <MatchInitOverlay
-            userA={{ username: activeUsername, rating: user?.duelRating || 1200 }}
-            userB={{ username: opponentProfile?.username || 'Challenger', rating: opponentProfile?.rating || 1200 }}
-            onHandoff={handleOverlayHandoff}
-          />
-        )}
-
         <div className="a1-lobby">
-          {/* Header */}
           <header className="a1-lobby-header">
             <button className="a1-lobby-back" onClick={handleLeaveArena}>
-              <ArrowLeft size={16} />
-              <span>Leave Arena</span>
+              <ArrowLeft size={16} /><span>Leave Arena</span>
             </button>
-            <span className="a1-lobby-status">LOBBY STATUS: {connectionState}</span>
+            <span className="a1-lobby-status">LOBBY · {connectionState}</span>
           </header>
 
-          {/* Main Card */}
           <div className="a1-lobby-card">
-            <div className="a1-lobby-icon">
-              <Swords size={40} />
-            </div>
-
+            <div className="a1-lobby-icon"><Swords size={38} /></div>
             <h1 className="a1-lobby-title">1v1 Ranked Arena</h1>
-            <p className="a1-lobby-desc">
-              Match #{matchId?.substring(0, 8) || 'ARENA-01'} is ready. Both players receive 4 problems.
-              The fastest correct solution wins.
-            </p>
+            <p className="a1-lobby-desc">Match room ready. Both players receive 4 problems. The fastest correct solver wins.</p>
 
-            {/* Match Info Grid */}
-            <div className="a1-lobby-stats">
-              <div className="a1-lobby-stat">
-                <span className="a1-lobby-stat-label">Problems</span>
-                <span className="a1-lobby-stat-value">4 Algorithmic</span>
+            <div className="a1-lobby-players">
+              <div className="a1-lobby-player">
+                <div className="a1-lobby-avatar">{activeUsername[0].toUpperCase()}</div>
+                <span className="a1-lobby-player-name">{activeUsername}</span>
+                <span className="a1-lobby-player-elo">{myRating} ELO</span>
               </div>
-              <div className="a1-lobby-stat">
-                <span className="a1-lobby-stat-label">Time Limit</span>
-                <span className="a1-lobby-stat-value">30:00 Mins</span>
-              </div>
-              <div className="a1-lobby-stat">
-                <span className="a1-lobby-stat-label">Sabotage</span>
-                <span className="a1-lobby-stat-value a1-lobby-stat-value--accent">ENABLED</span>
-              </div>
-              <div className="a1-lobby-stat">
-                <span className="a1-lobby-stat-label">Ranked ELO</span>
-                <span className="a1-lobby-stat-value a1-lobby-stat-value--warning">± 25 PTS</span>
+              <div className="a1-lobby-vs-badge">VS</div>
+              <div className="a1-lobby-player">
+                <div className="a1-lobby-avatar a1-lobby-avatar--opp">{opponentInitial}</div>
+                <span className="a1-lobby-player-name">{opponentDisplayName}</span>
+                <span className="a1-lobby-player-elo">{hasOpponent && opponentProfile.rating ? `${opponentProfile.rating} ELO` : 'Searching...'}</span>
               </div>
             </div>
 
-            {/* Start Button */}
+            <div className="a1-lobby-stats">
+              {[['Problems', '4 Algorithmic'], ['Time Limit', '30 Mins'], ['Sabotage', 'ENABLED'], ['ELO Stakes', '± 25 PTS']].map(([l, v]) => (
+                <div key={l} className="a1-lobby-stat">
+                  <span className="a1-lobby-stat-label">{l}</span>
+                  <span className="a1-lobby-stat-value">{v}</span>
+                </div>
+              ))}
+            </div>
+
             {isHost ? (
-              <button className="a1-lobby-start" onClick={handleStartMatch}>
-                <Zap size={18} />
-                <span>Start Match</span>
-              </button>
+              <button className="a1-lobby-start" onClick={handleStartMatch}><Zap size={18} /><span>Start Match</span></button>
             ) : (
-              <div className="a1-lobby-waiting">
-                <Lock size={18} />
-                <span>Waiting for host to start...</span>
-              </div>
+              <div className="a1-lobby-waiting"><Lock size={18} /><span>Waiting for host to start...</span></div>
             )}
           </div>
         </div>
@@ -491,595 +588,701 @@ export function Arena1v1Page() {
     );
   }
 
-  // Render ACTIVE state
+  // ════════════════════════════════════════════════════════════════════════════
+  // COUNTDOWN OVERLAY (shown right after host clicks Start)
+  // ════════════════════════════════════════════════════════════════════════════
+  if (matchPhase === 'INITIATING' || matchPhase === 'COUNTDOWN') {
+    return (
+      <div className="a1-root">
+        {toastMessage && <div className="a1-toast"><span>{toastMessage}</span></div>}
+        <MatchInitOverlay
+          userA={{ username: activeUsername, rating: myRating }}
+          userB={{ username: opponentDisplayName, rating: opponentDisplayRating }}
+          onHandoff={handleOverlayHandoff}
+          isReady={isMatchReady && problems?.length > 0}
+        />
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // RULES MODAL (shown right after countdown, before editor)
+  // ════════════════════════════════════════════════════════════════════════════
+  if (matchPhase === 'RULES') {
+    return (
+      <div className="a1-root">
+        <RulesModal
+          myUsername={activeUsername}
+          opponentUsername={opponentDisplayName}
+          myRating={myRating}
+          opponentRating={opponentDisplayRating}
+          onDismiss={() => setMatchPhase('ACTIVE')}
+        />
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ACTIVE ARENA RENDER
+  // ════════════════════════════════════════════════════════════════════════════
   return (
     <div className="a1-root">
-      {/* Match Finished Victory overlay portal */}
+
+      {/* Victory Overlay */}
       {matchFinishedData && (
         <div className="a1-victory-overlay">
           <div className="a1-victory-card">
-            <div className="a1-victory-icon-wrapper">
-              <Swords size={32} />
-            </div>
-
+            <div className="a1-victory-accent-bar" />
+            <div className="a1-victory-icon-wrapper"><Swords size={32} /></div>
             <h2 className="a1-victory-title">
-              Match Completed
+              {matchFinishedData.winnerId === 'draw' ? 'Match Tied'
+                : matchFinishedData.winnerId === activeUserId ? '🏆 Victory' : 'Defeat'}
             </h2>
             <p className="a1-victory-subtitle">
-              Authoritative points evaluation threshold checked.
+              {matchFinishedData.reason || 'The duel has concluded.'}
             </p>
 
+            <div className="a1-victory-stats-grid">
+              <div className="a1-victory-stat-card">
+                <span className="a1-victory-card-num">{myScore}</span>
+                <span className="a1-victory-card-label">Your Score</span>
+              </div>
+              <div className="a1-victory-stat-card">
+                <span className="a1-victory-card-num">{opponentScore}</span>
+                <span className="a1-victory-card-label">Opponent Score</span>
+              </div>
+            </div>
+
             <div className="a1-victory-stats-box">
-              <div className="a1-victory-stat-row">
-                <span className="a1-victory-stat-label">Winner:</span>
-                <span className="a1-victory-stat-value a1-victory-stat-value--winner">
-                  {matchFinishedData.winnerId === activeUserId ? activeUsername : (opponentProfile?.username || 'Opponent')}
-                </span>
-              </div>
-              <div className="a1-victory-divider" />
-              <div className="a1-victory-stat-row">
-                <span className="a1-victory-stat-label">Your Final Score:</span>
-                <span className="a1-victory-stat-value a1-victory-stat-value--me">{myScore} pts</span>
-              </div>
-              <div className="a1-victory-stat-row">
-                <span className="a1-victory-stat-label">Opponent Score:</span>
-                <span className="a1-victory-stat-value a1-victory-stat-value--opponent">{opponentScore} pts</span>
-              </div>
-              <div className="a1-victory-divider" />
-              <div className="a1-victory-stat-row">
-                <span className="a1-victory-stat-label">ELO Adjustment:</span>
-                <span className={`a1-victory-stat-value ${
-                  (() => {
-                    const scoreObj = matchFinishedData.scores?.find((p) => String(p.userId) === String(activeUserId));
-                    const delta = scoreObj ? scoreObj.eloDelta : 0;
-                    return delta >= 0 ? 'a1-victory-stat-value--up' : 'a1-victory-stat-value--down';
-                  })()
-                }`}>
-                  {(() => {
-                    const scoreObj = matchFinishedData.scores?.find((p) => String(p.userId) === String(activeUserId));
-                    const delta = scoreObj ? scoreObj.eloDelta : 0;
-                    return delta >= 0 ? `+${delta} ELO` : `${delta} ELO`;
-                  })()}
-                </span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => navigate('/matchmaking')}
-              className="a1-victory-btn"
-            >
-              Return to Matchmaking Arena
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification HUD */}
-      {toastMessage && (
-        <div className="a1-toast">
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Initiation Overlay */}
-      {(matchPhase === 'INITIATING' || matchPhase === 'COUNTDOWN') && (
-        <MatchInitOverlay
-          userA={{ username: activeUsername, rating: user?.duelRating || 1200 }}
-          userB={{ username: opponentProfile?.username || 'Challenger', rating: opponentProfile?.rating || 1200 }}
-          onHandoff={handleOverlayHandoff}
-        />
-      )}
-
-      <div className="a1-body">
-        {/* Header — 3 columns: left | SCOREBOARD | right */}
-        <header className="a1-header">
-          {/* Left — exit + match id */}
-          <div className="a1-header-left">
-            <button className="a1-back-btn" onClick={handleLeaveArena}>
-              <ArrowLeft size={14} />
-              <span>Exit</span>
-            </button>
-            <span className="a1-header-sep" />
-            <span className="a1-match-id">#{matchId?.substring(0, 8) || 'RANKED'}</span>
-          </div>
-
-          {/* Center — live duel scoreboard */}
-          <div className="a1-scoreboard">
-            {/* Me */}
-            <div className="a1-scoreboard-player a1-scoreboard-player--me">
-              <span className="a1-scoreboard-name">{activeUsername}</span>
-              <span className="a1-scoreboard-score">{myScore}</span>
-              <div className="a1-scoreboard-ap-bar">
-                <div className="a1-scoreboard-ap-fill a1-scoreboard-ap-fill--me" style={{ width: `${Math.min(myAp, 100)}%` }} />
-              </div>
-              <span className="a1-scoreboard-ap-label">{myAp} AP</span>
-            </div>
-
-            {/* Center divider with lead indicator */}
-            <div className="a1-scoreboard-center">
-              <div className={`a1-scoreboard-lead ${
-                myScore > opponentScore ? 'a1-scoreboard-lead--winning'
-                : myScore < opponentScore ? 'a1-scoreboard-lead--losing'
-                : 'a1-scoreboard-lead--tied'
-              }`}>
-                {myScore > opponentScore ? '▲ LEADING' : myScore < opponentScore ? '▼ BEHIND' : 'TIED'}
-              </div>
-              <div className="a1-scoreboard-vs">VS</div>
-            </div>
-
-            {/* Opponent */}
-            <div className="a1-scoreboard-player a1-scoreboard-player--opp">
-              <span className="a1-scoreboard-name">{opponentProfile?.username || 'Opponent'}</span>
-              <span className="a1-scoreboard-score">{opponentScore}</span>
-              <div className="a1-scoreboard-ap-bar">
-                <div className="a1-scoreboard-ap-fill a1-scoreboard-ap-fill--opp" style={{ width: `${Math.min(opponentAp ?? 0, 100)}%` }} />
-              </div>
-              <span className="a1-scoreboard-ap-label">{opponentAp ?? 0} AP</span>
-            </div>
-          </div>
-
-          {/* Right — timer + language */}
-          <div className="a1-header-right">
-            <div className={getTimerClass()}>
-              <Clock size={14} />
-              <span>{formatTimer(elapsedSeconds)}</span>
-            </div>
-            <select
-              className="a1-lang-select"
-              value={currentLanguage}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={lang.id} value={lang.id}>{lang.label}</option>
+              {[
+                ['Result', matchFinishedData.winnerId === 'draw' || !matchFinishedData.winnerId ? 'Draw' : matchFinishedData.winnerId === activeUserId ? 'You Won' : 'Opponent Won'],
+                ['Your Solved', `${roomState?.players?.find(p => String(p.userId) === String(activeUserId))?.solvedProblems ? Object.keys(roomState.players.find(p => String(p.userId) === String(activeUserId)).solvedProblems).filter(k => roomState.players.find(p => String(p.userId) === String(activeUserId)).solvedProblems[k]).length : 0} / 4`],
+                ['Opponent Solved', `${opponentProfile?.solvedCount || 0} / 4`],
+                ['Your Penalties', `${roomState?.players?.find(p => String(p.userId) === String(activeUserId))?.failedAttempts ? Object.values(roomState.players.find(p => String(p.userId) === String(activeUserId)).failedAttempts).reduce((a, b) => a + b, 0) : 0} failed`],
+                ['Opponent Penalties', `${roomState?.players?.find(p => String(p.userId) !== String(activeUserId))?.failedAttempts ? Object.values(roomState.players.find(p => String(p.userId) !== String(activeUserId)).failedAttempts).reduce((a, b) => a + b, 0) : 0} failed`],
+              ].map(([l, v]) => (
+                <div key={l} className="a1-victory-stat-row">
+                  <span className="a1-victory-stat-label">{l}</span>
+                  <span className="a1-victory-stat-value">{v}</span>
+                </div>
               ))}
-            </select>
-          </div>
-        </header>
-
-        {/* Workspace */}
-        <div className="a1-workspace">
-          {/* Left Sidebar - Problem switcher tabs list */}
-          <aside className="a1-sidebar">
-            <div className="a1-sidebar-header">
-              <span className="a1-sidebar-title">Problems</span>
+              <div className="a1-victory-divider" />
+              {(() => {
+                const scoreObj = matchFinishedData.scores?.find(p => String(p.userId) === String(activeUserId));
+                const delta = scoreObj?.eloDelta ?? 0;
+                return (
+                  <div className="a1-victory-stat-row">
+                    <span className="a1-victory-stat-label">ELO Rating Change</span>
+                    <span className={`a1-victory-stat-value ${delta > 0 ? 'a1-victory-stat-value--up' : delta < 0 ? 'a1-victory-stat-value--down' : ''}`}>
+                      {delta > 0 ? `+${delta}` : delta} ELO
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
-            <div className="a1-sidebar-content">
-              <div className="a1-problem-tabs">
-                {activeProblemsList.map((prob, idx) => {
-                  const status = opponentProgress?.[prob.id] || 'untouched';
-                  return (
-                    <button
-                      key={prob.id || idx}
-                      className={`a1-problem-tab ${idx === activeProblemIndex ? 'a1-problem-tab--active' : ''}`}
-                      onClick={() => setActiveProblemIndex(idx)}
-                    >
-                      <ProblemStatusIcon status={status} />
-                      <span className="a1-problem-tab-name">P{idx + 1}</span>
-                    </button>
-                  );
-                })}
+            <button className="a1-victory-btn" onClick={() => navigate('/matchmaking')}>Return to Matchmaking</button>
+          </div>
+        </div>
+      )}
+
+      {/* Tie Resolution Voting Overlay */}
+      {roomState?.status === 'TIE_PROMPT' && (
+        <div className="a1-tie-prompt-overlay">
+          <div className="a1-tie-prompt-card">
+            <div className="a1-tie-prompt-accent-bar" />
+            <div className="a1-tie-prompt-icon-wrapper">
+              <Clock size={32} />
+            </div>
+            <h2 className="a1-tie-prompt-title">Sudden Death Overtime?</h2>
+            <p className="a1-tie-prompt-subtitle">
+              Timer expired! Your points are tied at {myScore} pts. Vote to settle with a Draw or enter Overtime (+10 mins).
+            </p>
+            
+            <div className="a1-tie-prompt-voting-status">
+              <div className="a1-tie-prompt-vote-col">
+                <span className="a1-tie-prompt-vote-label">Draw votes:</span>
+                <span className="a1-tie-prompt-vote-val">{roomState.votes?.draw?.length || 0} / 2</span>
+              </div>
+              <div className="a1-tie-prompt-vote-col">
+                <span className="a1-tie-prompt-vote-label">Overtime votes:</span>
+                <span className="a1-tie-prompt-vote-val">{roomState.votes?.overtime?.length || 0} / 2</span>
               </div>
             </div>
-          </aside>
 
-          {/* Main Content Pane */}
-          <div className="a1-main">
-            <div className="a1-split">
-              
-              {/* Left Pane - Problem Description & Submissions Tabs (Resizable / Collapsible) */}
-              <section
-                className={`a1-description resizable-panel ${isLeftPanelCollapsed ? 'w-0 opacity-0 pointer-events-none' : ''}`}
-                style={{ width: isLeftPanelCollapsed ? 0 : `${leftPanelWidth}px` }}
-              >
-                {/* Collapsible Header */}
-                <div className="a1-workspace-panel-header">
-                  <span className="a1-workspace-panel-title">
-                    // Workspace Panel
-                  </span>
+            <div className="a1-tie-prompt-timer">
+              Voting ends in: {Math.max(0, Math.ceil((roomState.tiePromptExpiresAt - Date.now()) / 1000))}s
+            </div>
+
+            {(() => {
+              const myId = activeUserId;
+              const hasVotedDraw = roomState.votes?.draw?.includes(myId);
+              const hasVotedOvertime = roomState.votes?.overtime?.includes(myId);
+              const hasVoted = hasVotedDraw || hasVotedOvertime;
+
+              if (hasVoted) {
+                return (
+                  <div className="a1-tie-prompt-waiting">
+                    <span className="a1-tie-prompt-spinner" />
+                    <span>Waiting for opponent's vote...</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="a1-tie-prompt-actions">
                   <button
-                    onClick={() => setIsLeftPanelCollapsed(true)}
-                    className="a1-workspace-panel-close"
+                    className="a1-tie-prompt-btn a1-tie-prompt-btn--draw"
+                    onClick={() => socket?.emit('vote_tie_resolution', { matchId, vote: 'draw' })}
                   >
-                    <ChevronLeft size={14} />
+                    🤝 Vote DRAW
+                  </button>
+                  <button
+                    className="a1-tie-prompt-btn a1-tie-prompt-btn--ot"
+                    onClick={() => socket?.emit('vote_tie_resolution', { matchId, vote: 'overtime' })}
+                  >
+                    🔥 Vote OVERTIME (+10m)
                   </button>
                 </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
-                {/* Sub-Tab selection */}
-                <div className="a1-subtabs">
+      {/* Toast */}
+      {toastMessage && <div className="a1-toast"><span>{toastMessage}</span></div>}
+
+      {/* Sabotage warning footer (rendered at root level so it overlays everything) */}
+      {activeSabotage && (
+        <div className="a1-sabotage-banner">
+          <div className="a1-sabotage-banner-inner">
+            <AlertTriangle size={13} className="a1-sabotage-icon" />
+            <span>SABOTAGE ACTIVE: <strong>{activeSabotage.toUpperCase()}</strong> — {sabotageTimeLeft}s remaining</span>
+          </div>
+          {myAp >= 20 && (
+            <button onClick={handleCastCleanse} className="a1-sabotage-cleanse-btn">Cleanse (20 AP)</button>
+          )}
+        </div>
+      )}
+
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <header className="a1-header">
+        {/* Left */}
+        <div className="a1-header-left">
+          <button className="a1-back-btn" onClick={handleLeaveArena}>
+            <ArrowLeft size={14} /><span>Exit</span>
+          </button>
+          <span className="a1-header-sep" />
+          <span className="a1-match-id">#{matchId?.substring(0, 8) || 'RANKED'}</span>
+        </div>
+
+        {/* Center — Scoreboard: only scores, no progress bars */}
+        <div className="a1-scoreboard">
+          <div className="a1-scoreboard-me">
+            <span className="a1-scoreboard-name">{activeUsername}</span>
+            <span className="a1-scoreboard-score a1-scoreboard-score--me">{myScore}</span>
+          </div>
+
+          <div className="a1-scoreboard-divider">
+            <span className={`a1-lead-badge ${
+              myScore > opponentScore ? 'a1-lead-badge--winning'
+              : myScore < opponentScore ? 'a1-lead-badge--losing'
+              : 'a1-lead-badge--tied'
+            }`}>
+              {myScore > opponentScore ? '▲ LEADING' : myScore < opponentScore ? '▼ BEHIND' : '— TIED'}
+            </span>
+          </div>
+
+          <div className="a1-scoreboard-opp">
+            <span className="a1-scoreboard-name">{opponentDisplayName}</span>
+            <span className="a1-scoreboard-score a1-scoreboard-score--opp">{opponentScore}</span>
+          </div>
+        </div>
+
+        {/* Right — Timer (always visible) + language */}
+        <div className="a1-header-right">
+          <div className={getTimerClass()}>
+            <Clock size={13} />
+            <span>{displayTime.text}</span>
+          </div>
+          <select className="a1-lang-select" value={currentLanguage} onChange={e => handleLanguageChange(e.target.value)}>
+            {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+        </div>
+      </header>
+
+      {/* ── Workspace ─────────────────────────────────────────────────────── */}
+      <div className="a1-workspace">
+
+        {/* Problem Index Sidebar */}
+        <aside className="a1-sidebar">
+          <div className="a1-sidebar-header"><span className="a1-sidebar-title">P</span></div>
+          <div className="a1-sidebar-content">
+            <div className="a1-problem-tabs">
+              {activeProblemsList.map((prob, idx) => {
+                const status = getProblemStatus(prob.id);
+                return (
                   <button
-                    onClick={() => setActiveLeftTab('description')}
-                    className={`a1-subtab ${activeLeftTab === 'description' ? 'a1-subtab--active' : ''}`}
+                    key={prob.id || idx}
+                    className={`a1-problem-tab ${idx === activeProblemIndex ? 'a1-problem-tab--active' : ''}`}
+                    onClick={() => setActiveProblemIndex(idx)}
                   >
-                    Description
+                    <ProblemStatusIcon status={status} />
+                    <span className="a1-problem-tab-name">P{idx + 1}</span>
                   </button>
-                  <button
-                    onClick={() => setActiveLeftTab('submissions')}
-                    className={`a1-subtab ${activeLeftTab === 'submissions' ? 'a1-subtab--active' : ''}`}
-                  >
-                    Submissions ({problemSubmissions.length})
-                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
+
+        {/* Left Panel — Problem Description (collapsible + resizable) */}
+        <section className={`a1-description ${isLeftPanelCollapsed ? 'is-collapsed' : ''}`} style={{ width: isLeftPanelCollapsed ? 0 : `${leftPanelWidth}px`, display: isLeftPanelCollapsed ? 'none' : 'flex' }}>
+          {!isLeftPanelCollapsed && (
+            <button
+              className="a1-panel-toggle-chip a1-panel-toggle-chip--left"
+              onClick={() => setIsLeftPanelCollapsed(v => !v)}
+              title="Collapse problem panel"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          )}
+
+          {!isLeftPanelCollapsed && (
+            <div className="a1-description-scroll">
+              {activeProblem ? (
+                <ProblemDescription
+                  problem={activeProblem}
+                  submissions={problemSubmissions.map(sub => ({
+                    id: sub.id, verdict: sub.verdict, language: sub.language,
+                    created_at: sub.created_at || new Date().toISOString(),
+                    code: sub.code, test_cases_passed: sub.test_cases_passed,
+                    total_test_cases: sub.total_test_cases,
+                  }))}
+                  loadingSubmissions={false}
+                />
+              ) : (
+                <div className="a1-empty-state">Select a problem to view details.</div>
+              )}
+            </div>
+          )}
+        </section>
+        {!isLeftPanelCollapsed && (
+          <div className="a1-resize-handle" onMouseDown={startResizeLeft} title="Drag to resize" />
+        )}
+
+        {/* Center — Editor + Console */}
+        <div className="a1-center">
+          {isLeftPanelCollapsed && (
+            <button
+              className="a1-collapsed-expand-btn a1-collapsed-expand-btn--left"
+              onClick={() => setIsLeftPanelCollapsed(v => !v)}
+              title="Expand problem panel"
+            >
+              <ChevronRight size={14} />
+            </button>
+          )}
+          {isRightPanelCollapsed && (
+            <button
+              className="a1-collapsed-expand-btn a1-collapsed-expand-btn--right"
+              onClick={() => setIsRightPanelCollapsed(v => !v)}
+              title="Expand shop panel"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          )}
+
+          {/* Editor container — flex:1, takes all remaining height above console */}
+          <div className="a1-editor-wrap">
+            {/* Blur sabotage overlay */}
+            <div className={`a1-editor-inner ${activeSabotage === 'blur' ? 'sabotage-blurred' : ''}`}>
+              {(isEditorLocked || activeSabotage === 'jam') && (
+                <div className="a1-editor-lock-overlay">
+                  <Lock size={18} />
+                  <span>Editor Locked by Sabotage</span>
                 </div>
+              )}
+              <Editor
+                height="100%"
+                language={LANGUAGES.find(l => l.id === currentLanguage)?.monaco}
+                value={currentCode}
+                onChange={handleCodeChange}
+                onMount={handleEditorMount}
+                theme={theme === 'dark' ? 'arkodee-dark' : 'arkodee-light'}
+                options={{
+                  readOnly: isEditorLocked || activeSabotage === 'jam',
+                  contextmenu: false,
+                  fontSize: 14,
+                  lineHeight: 22,
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  padding: { top: 16, bottom: 16 },
+                  automaticLayout: true,
+                  lineNumbers: 'on',
+                  renderLineHighlight: 'line',
+                  smoothScrolling: true,
+                  cursorBlinking: 'smooth',
+                  cursorSmoothCaretAnimation: 'on',
+                  bracketPairColorization: { enabled: true },
+                  guides: { bracketPairs: true },
+                  scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+                  quickSuggestions: isSuggestionsEnabled ? { other: true, comments: false, strings: false } : false,
+                  parameterHints: { enabled: isSuggestionsEnabled },
+                  suggestOnTriggerCharacters: isSuggestionsEnabled,
+                  tabCompletion: isSuggestionsEnabled ? 'on' : 'off',
+                  wordBasedSuggestions: isSuggestionsEnabled ? 'allDocuments' : 'none',
+                }}
+              />
+            </div>
+          </div>
 
-                {/* Left Pane Viewport scroll area */}
-                <div className="a1-description-scroll select-text p-4">
-                  {activeLeftTab === 'description' ? (
-                    <div>
-                      <div className="a1-problem-header">
-                        <div className="a1-problem-title-row">
-                          <span className="a1-problem-index">P{activeProblemIndex + 1}.</span>
-                          <h2 className="a1-problem-title">{activeProblem?.title}</h2>
+          {/* Console Panel — practice-style, collapsible, resizable */}
+          {isTerminalOpen && (
+            <div className="a1-console" style={{ height: `${terminalHeight}px` }}>
+              <div
+                className={`a1-console-resize-handle ${isResizingTerminal ? 'a1-console-resize-handle--active' : ''}`}
+                onMouseDown={handleTerminalMouseDown}
+              />
+              <div className="a1-console-header">
+                <div className="a1-console-tabs">
+                  <button
+                    className={`a1-console-tab ${activeTerminalTab === 'testcases' ? 'a1-console-tab--active' : ''}`}
+                    onClick={() => setActiveTerminalTab('testcases')}
+                  >
+                    Testcases
+                  </button>
+                  {(currentSubmissionResult || isSubmitting) && (
+                    <button
+                      className={`a1-console-tab ${activeTerminalTab === 'submission' ? 'a1-console-tab--active' : ''}`}
+                      onClick={() => setActiveTerminalTab('submission')}
+                    >
+                      Submission
+                    </button>
+                  )}
+                </div>
+                <button className="a1-console-close-btn" onClick={() => setIsTerminalOpen(false)}>
+                  <X size={13} />
+                </button>
+              </div>
+
+              <div className="a1-console-body">
+                {activeTerminalTab === 'testcases' ? (
+                  <div className="a1-tc-root">
+                    {currentTerminalOutput && (currentTerminalOutput.includes('Compilation Error') || currentTerminalOutput.includes('Execution Error') || currentTerminalOutput.includes('ERROR:')) ? (
+                      <div className="a1-tc-content" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ padding: '10px 14px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', color: '#ef4444', fontWeight: 'bold' }}>
+                          {currentTerminalOutput.includes('Compilation Error') ? 'Compilation Error' : 'Execution Error'}
                         </div>
-                        <div className="a1-problem-meta">
-                          <DifficultyBadge difficulty={activeProblem?.difficulty} />
-                        </div>
+                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '12px', color: '#f87171', padding: '12px', backgroundColor: '#18181b', borderRadius: '6px', border: '1px solid #27272a', margin: 0 }}>
+                          {currentTerminalOutput.substring(currentTerminalOutput.indexOf('\n\n') + 2) || currentTerminalOutput}
+                        </pre>
                       </div>
-                      <div className="a1-problem-content">
-                        <ProblemDescription
-                          problem={activeProblem}
-                          submissions={[]}
-                          loadingSubmissions={false}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="a1-submissions-ledger">
-                      <h3 className="a1-submissions-title">
-                        Submission Ledger for P{activeProblemIndex + 1}
-                      </h3>
-                      
-                      {problemSubmissions.length === 0 ? (
-                        <div className="a1-submissions-empty">
-                          No submissions recorded for this problem yet.
-                        </div>
-                      ) : (
-                        problemSubmissions.map((sub) => {
-                          const isExpanded = expandedSubId === sub.id;
-                          const verdictLower = String(sub.verdict).toLowerCase();
-                          const isAccepted = ['accepted', 'ac', 'accepted! solution passed all test cases.'].includes(verdictLower);
-                          return (
-                            <div
-                              key={sub.id}
-                              className={`a1-submission-item ${
-                                isAccepted
-                                  ? 'a1-submission-item--accepted'
-                                  : 'a1-submission-item--rejected'
-                              }`}
-                            >
-                              <div className="a1-submission-item-header">
-                                <span className="a1-submission-verdict-wrapper">
-                                  {isAccepted ? (
-                                    <CheckCircle2 size={12} />
-                                  ) : (
-                                    <AlertTriangle size={12} />
-                                  )}
-                                  {sub.verdict}
-                                </span>
-                                <span className="a1-submission-time">{sub.timestamp}</span>
-                              </div>
-                              
-                              <div className="a1-submission-item-meta">
-                                <span>Lang: {sub.language?.toUpperCase()}</span>
+                    ) : (
+                      <>
+                        {/* Testcase sub-tabs */}
+                        {currentVisibleTestCases.length > 0 && (
+                          <div className="a1-tc-tabs">
+                            {currentVisibleTestCases.map((tc, idx) => {
+                              const res = currentTestCaseResults[idx];
+                              return (
                                 <button
-                                  onClick={() => setExpandedSubId(isExpanded ? null : sub.id)}
-                                  className="a1-submission-item-toggle"
+                                  key={tc.id || idx}
+                                  onClick={() => setActiveCaseIdx(idx)}
+                                  className={`a1-tc-tab ${activeCaseIdx === idx ? 'a1-tc-tab--active' : ''} ${res?.passed ? 'a1-tc-tab--passed' : res ? 'a1-tc-tab--failed' : ''}`}
                                 >
-                                  <Code size={10} />
-                                  {isExpanded ? 'Hide Code' : 'View Code'}
+                                  <span className="a1-tc-indicator" />
+                                  {tc.label || `Case ${idx + 1}`}
                                 </button>
-                              </div>
+                              );
+                            })}
+                            {/* Add testcase button removed */}
+                          </div>
+                        )}
 
-                              {isExpanded && (
-                                <pre className="a1-submission-item-code">
-                                  {sub.code}
+                        {/* Active testcase detail */}
+                        {currentVisibleTestCases[activeCaseIdx] ? (
+                          <div className="a1-tc-content">
+                            <div className="a1-tc-field">
+                              <span className="a1-tc-field-label">Input</span>
+                              <pre className="a1-tc-pre">{currentVisibleTestCases[activeCaseIdx].input || '(empty)'}</pre>
+                            </div>
+                            {currentVisibleTestCases[activeCaseIdx].expected_output && !isBlindfolded && (
+                              <div className="a1-tc-field">
+                                <span className="a1-tc-field-label">Expected Output</span>
+                                <pre className="a1-tc-pre a1-tc-pre--expected">{currentVisibleTestCases[activeCaseIdx].expected_output}</pre>
+                              </div>
+                            )}
+                            {currentTestCaseResults[activeCaseIdx] && (
+                              <div className="a1-tc-field">
+                                <span className="a1-tc-field-label">Your Output</span>
+                                <pre className={`a1-tc-pre ${currentTestCaseResults[activeCaseIdx].passed ? 'a1-tc-pre--success' : 'a1-tc-pre--fail'}`}>
+                                  {currentTestCaseResults[activeCaseIdx].output !== undefined && currentTestCaseResults[activeCaseIdx].output !== null
+                                    ? (currentTestCaseResults[activeCaseIdx].output === "" ? "(no output)" : currentTestCaseResults[activeCaseIdx].output)
+                                    : "(no output)"}
                                 </pre>
-                              )}
+                              </div>
+                            )}
+                            {currentTestCaseResults[activeCaseIdx]?.error && (
+                              <div className="a1-tc-field" style={{ marginTop: '12px' }}>
+                                <span className="a1-tc-field-label" style={{ color: '#ef4444' }}>Runtime Error / Exception</span>
+                                <pre className="a1-tc-pre" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171', backgroundColor: 'rgba(239, 68, 68, 0.05)' }}>
+                                  {currentTestCaseResults[activeCaseIdx].error}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="a1-tc-empty">Run your code to see results here.</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  /* Submission tab */
+                  <div className="a1-submission-result">
+                    {isSubmitting ? (
+                      <div className="a1-submission-pending">
+                        <div className="a1-spinner" />
+                        <span>Evaluating your solution...</span>
+                      </div>
+                    ) : currentTerminalOutput ? (
+                      <>
+                        <pre className={`a1-submission-output ${
+                          currentTerminalOutput.includes('ACCEPTED') ? 'a1-submission-output--accepted'
+                          : (currentTerminalOutput.includes('ERROR') || currentTerminalOutput.includes('WRONG') || currentTerminalOutput.includes('FAILED'))
+                            ? 'a1-submission-output--failed'
+                          : ''
+                        }`}>{currentTerminalOutput}</pre>
+                        {/* Show failed testcase details in non-blindfold mode */}
+                        {!isBlindfolded && currentSubmissionResult?.results?.length > 0 && (() => {
+                          const failedIdx = currentSubmissionResult.results.findIndex(tc => !tc.passed);
+                          const failedTC = failedIdx !== -1 ? currentSubmissionResult.results[failedIdx] : null;
+                          if (!failedTC) return null;
+                          return (
+                            <div className="a1-failed-tc-box">
+                              <div className="a1-failed-tc-header">
+                                <span>Failed Testcase Details</span>
+                                {failedTC.input && (
+                                  <button className="a1-add-tc-link" onClick={() => handleAddFailedToTestcases(failedTC)}>
+                                    <Plus size={11} /> Add to Testcases
+                                  </button>
+                                )}
+                              </div>
+                              {failedTC.input && <div className="a1-failed-tc-row"><span>Input:</span><code>{failedTC.input}</code></div>}
+                              {failedTC.expected && <div className="a1-failed-tc-row"><span>Expected:</span><code>{failedTC.expected}</code></div>}
+                              {failedTC.output && <div className="a1-failed-tc-row"><span>Got:</span><code>{failedTC.output}</code></div>}
                             </div>
                           );
-                        })
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Left Drag Resizer Bar */}
-              {!isLeftPanelCollapsed && (
-                <div 
-                  onMouseDown={startResizeLeft} 
-                  className="resize-handle"
-                  title="Drag to resize problems panel"
-                />
-              )}
-
-              {/* Floating Left Panel Toggle Tab when collapsed */}
-              {isLeftPanelCollapsed && (
-                <button
-                  onClick={() => {
-                    setIsLeftPanelCollapsed(false);
-                    setActiveLeftTab('description');
-                  }}
-                  className="a1-restore-tab"
-                >
-                  <ChevronRight size={14} />
-                  <span className="a1-restore-tab-text">Problems</span>
-                </button>
-              )}
-
-              {/* Center Pane - Editor & Console */}
-              <div className="a1-editor min-w-0 flex-1">
-                <div className={`a1-editor-container ${activeSabotage === 'blur' ? 'sabotage-blurred' : ''}`}>
-                  <Editor
-                    height="100%"
-                    language={LANGUAGES.find((l) => l.id === currentLanguage)?.monaco}
-                    value={currentCode}
-                    onChange={handleCodeChange}
-                    theme={theme === 'dark' ? 'vs-dark' : 'light'}
-                    options={{
-                      readOnly: isEditorLocked || activeSabotage === 'jam',
-                      fontSize: 13,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      padding: { top: 12, bottom: 12 },
-                      automaticLayout: true,
-                      quickSuggestions: isSuggestionsEnabled,
-                      parameterHints: isSuggestionsEnabled,
-                      suggestOnTriggerCharacters: isSuggestionsEnabled,
-                      wordBasedSuggestions: isSuggestionsEnabled,
-                    }}
-                  />
-                </div>
-
-                {/* Console Output Tab */}
-                <div className={`a1-console ${isTerminalOpen ? 'a1-console--open' : 'a1-console--closed'}`}>
-                  <div className="a1-console-header">
-                    <div className="a1-console-tabs">
-                      <button className="a1-console-tab a1-console-tab--active">
-                        Console Terminal Output
-                      </button>
-                    </div>
-                    <div className="a1-console-actions">
-                      <button className="a1-console-close" onClick={() => setIsTerminalOpen(!isTerminalOpen)}>
-                        {isTerminalOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                      </button>
-                    </div>
+                        })()}
+                      </>
+                    ) : (
+                      <div className="a1-tc-empty">Submit your code to see results here.</div>
+                    )}
                   </div>
-                  {isTerminalOpen && (
-                    <div className="a1-console-body">
-                      <pre className="select-text whitespace-pre-wrap">{currentTerminalOutput || 'Ready to run compiler tests...'}</pre>
-                    </div>
-                  )}
-                </div>
-
-                {/* Code action run controls */}
-                <div className="a1-action-bar">
-                  <button
-                    className="a1-btn a1-btn--ghost"
-                    onClick={handleRunCode}
-                    disabled={isRunning || isSubmitting}
-                  >
-                    <Play size={14} />
-                    <span>Run</span>
-                  </button>
-                  <button
-                    className="a1-btn a1-btn--primary"
-                    onClick={handleSubmitCode}
-                    disabled={isRunning || isSubmitting}
-                  >
-                    <Send size={14} />
-                    <span>Submit</span>
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Right Drag Resizer Bar */}
-          <div 
-            onMouseDown={startResizeRight} 
-            className="resize-handle"
-            title="Drag to resize telemetry panel"
-          />
-
-          {/* Right Sidebar - Telemetry & Shop Panel */}
-          <aside className="a1-opponent-panel" style={{ width: `${rightPanelWidth}px` }}>
-            {/* Opponent Identity Details */}
-            <div className="a1-opponent-header">
-              <div className="a1-opponent-avatar">
-                {(opponentProfile?.username || 'C')[0].toUpperCase()}
-              </div>
-              <div className="a1-opponent-info">
-                <span className="a1-opponent-label">Opponent</span>
-                <span className="a1-opponent-name">{opponentProfile?.username || 'Challenger'}</span>
+                )}
               </div>
             </div>
+          )}
 
-            {/* Telemetry section: Scores */}
-            <div className="a1-telemetry">
-              <span className="a1-telemetry-section-title">
-                // Combat Telemetry
-              </span>
-              
-              {/* Me Score */}
-              <div className="a1-telemetry-row">
-                <div className="a1-telemetry-user">
-                  <span className="a1-telemetry-user-name">{activeUsername} (You)</span>
-                  <span className="a1-telemetry-user-status">Status: Active</span>
-                </div>
-                <span className="a1-telemetry-score">{myScore} pts</span>
-              </div>
-
-              {/* Mana AP Bar */}
-              <div className="a1-mana-container">
-                <div className="a1-mana-header">
-                  <span>AP (Mana) Bar:</span>
-                  <span>{myAp} / 100</span>
-                </div>
-                <div className="a1-mana-track">
-                  <div className="a1-mana-fill" style={{ width: `${myAp}%` }} />
-                </div>
-              </div>
-
-              <div className="a1-telemetry-divider" />
-
-              {/* Opponent Score */}
-              <div className="a1-telemetry-row">
-                <div className="a1-telemetry-user">
-                  <span className="a1-telemetry-user-name flex-row">
-                    {opponentProfile?.username || 'Opponent'}
-                    <span className="a1-pulse-container">
-                      <span className="a1-pulse-ping"></span>
-                      <span className="a1-pulse-dot"></span>
-                    </span>
-                  </span>
-                  <span className="a1-telemetry-user-status">
-                    Problems: [{opponentProfile?.solvedCount || 0}/4]
-                  </span>
-                </div>
-                <span className="a1-telemetry-score-opp">{opponentScore} pts</span>
-              </div>
-            </div>
-
-            {/* Tactical Shop controls */}
-            <div className="a1-shop">
-              <span className="a1-shop-title">
-                <Sparkles size={11} className="a1-shop-title-icon" />
-                <span>Tactical Shop</span>
-              </span>
-
-              <div className="a1-shop-items">
-                {/* Autocomplete */}
-                <div className="a1-shop-item">
-                  <div className="a1-shop-item-header">
-                    <span className="a1-shop-item-name">
-                      <Keyboard size={11} />
-                      Suggestions
-                    </span>
-                    <span className="a1-shop-item-cost">30 AP</span>
-                  </div>
-                  <button
-                    disabled={myAp < 30 || isSuggestionsEnabled}
-                    onClick={handleBuyAutocomplete}
-                    className="a1-shop-btn"
-                  >
-                    {isSuggestionsEnabled ? 'Active' : 'Buy (60s)'}
-                  </button>
-                </div>
-
-                {/* Hint */}
-                <div className="a1-shop-item">
-                  <div className="a1-shop-item-header">
-                    <span className="a1-shop-item-name">
-                      <HelpCircle size={11} />
-                      Problem Hint
-                    </span>
-                    <span className="a1-shop-item-cost">35 AP</span>
-                  </div>
-                  <button
-                    disabled={myAp < 35}
-                    onClick={handleBuyHint}
-                    className="a1-shop-btn"
-                  >
-                    Reveal Hint
-                  </button>
-                </div>
-
-                {/* Editor Lock */}
-                <div className="a1-shop-item">
-                  <div className="a1-shop-item-header">
-                    <span className="a1-shop-item-name">
-                      <Lock size={11} />
-                      Editor Jam
-                    </span>
-                    <span className="a1-shop-item-cost">50 AP</span>
-                  </div>
-                  <button
-                    disabled={myAp < 50}
-                    onClick={handleCastJam}
-                    className="a1-shop-btn a1-shop-btn--danger"
-                  >
-                    Cast Jam (5s)
-                  </button>
-                </div>
-
-                {/* Blur screen */}
-                <div className="a1-shop-item">
-                  <div className="a1-shop-item-header">
-                    <span className="a1-shop-item-name">
-                      <EyeOff size={11} />
-                      Blur Canvas
-                    </span>
-                    <span className="a1-shop-item-cost">40 AP</span>
-                  </div>
-                  <button
-                    disabled={myAp < 40}
-                    onClick={handleCastBlur}
-                    className="a1-shop-btn a1-shop-btn--danger"
-                  >
-                    Cast Haze (10s)
-                  </button>
-                </div>
-
-                {/* Blindfold */}
-                <div className="a1-shop-item">
-                  <div className="a1-shop-item-header">
-                    <span className="a1-shop-item-name">
-                      <AlertTriangle size={11} />
-                      Blindfold
-                    </span>
-                    <span className="a1-shop-item-cost">60 AP</span>
-                  </div>
-                  <button
-                    disabled={myAp < 60}
-                    onClick={handleCastBlindfold}
-                    className="a1-shop-btn a1-shop-btn--danger"
-                  >
-                    Cast Blindfold (60s)
-                  </button>
-                </div>
-
-                {/* Shield */}
-                <div className="a1-shop-item">
-                  <div className="a1-shop-item-header">
-                    <span className="a1-shop-item-name">
-                      <Shield size={11} />
-                      Immunity Shield
-                    </span>
-                    <span className="a1-shop-item-cost">40 AP</span>
-                  </div>
-                  <button
-                    disabled={myAp < 40}
-                    onClick={handleCastImmunity}
-                    className="a1-shop-btn a1-shop-btn--shield"
-                  >
-                    Activate (15s)
-                  </button>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
-
-        {/* Sabotage overlay warning banner on screen bottom */}
-        {activeSabotage && (
-          <footer className="a1-footer">
-            <div className="a1-footer-info">
-              <AlertTriangle size={14} className="a1-footer-warning-icon" />
-              <span>
-                WARNING: Casted {activeSabotage?.toUpperCase()}! Time left: {sabotageTimeLeft}s
-              </span>
-            </div>
-            {myAp >= 20 && (
+          {/* Action Bar */}
+          <div className="a1-action-bar">
+            <button
+              className={`a1-btn a1-btn--ghost ${isTerminalOpen ? 'a1-btn--active' : ''}`}
+              onClick={() => setIsTerminalOpen(v => !v)}
+              title={isTerminalOpen ? 'Close console' : 'Open console'}
+            >
+              <ChevronUp size={13} style={{ transform: isTerminalOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              <span>Console</span>
+            </button>
+            <div style={{ flex: 1 }} />
+            {!isBlindfolded && (
               <button
-                onClick={handleCastCleanse}
-                className="a1-footer-cleanse-btn"
+                className="a1-btn a1-btn--ghost"
+                onClick={handleRunCode}
+                disabled={isRunning || isSubmitting || isEditorLocked || activeSabotage === 'jam'}
+                id="btn-arena-run"
               >
-                Cleanse (20 AP)
+                <Play size={13} />
+                <span>{isRunning ? 'Running...' : 'Run'}</span>
               </button>
             )}
-          </footer>
+            <button
+              className="a1-btn a1-btn--primary"
+              onClick={handleSubmitCode}
+              disabled={isRunning || isSubmitting || isEditorLocked || activeSabotage === 'jam'}
+              id="btn-arena-submit"
+            >
+              <UploadCloud size={13} />
+              <span>{isSubmitting ? 'Submitting...' : 'Submit'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Right Panel resize handle */}
+        {!isRightPanelCollapsed && (
+          <div className="a1-resize-handle" onMouseDown={startResizeRight} title="Drag to resize shop panel" />
         )}
+
+        {/* Right Panel — Telemetry + Shop (collapsible) */}
+        <aside className={`a1-right-panel ${isRightPanelCollapsed ? 'is-collapsed' : ''}`} style={{ width: isRightPanelCollapsed ? 0 : `${rightPanelWidth}px`, display: isRightPanelCollapsed ? 'none' : 'flex' }}>
+          {!isRightPanelCollapsed && (
+            <button
+              className="a1-panel-toggle-chip a1-panel-toggle-chip--right"
+              onClick={() => setIsRightPanelCollapsed(v => !v)}
+              title="Collapse shop panel"
+            >
+              <ChevronRight size={14} />
+            </button>
+          )}
+
+          {!isRightPanelCollapsed && (
+            <>
+              {/* ── Top: Opponent Telemetry ────────────────────────────────── */}
+              <div className="a1-right-section">
+                <button className="a1-right-section-header" aria-expanded={!isTelemetryCollapsed} onClick={() => setIsTelemetryCollapsed(v => !v)}>
+                  <span className="a1-right-section-title">Telemetry</span>
+                  <ChevronDown size={13} style={{ transform: isTelemetryCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
+                </button>
+
+              {!isTelemetryCollapsed && (
+                <div className="a1-telemetry-body">
+                  {/* Me row */}
+                  <div className="a1-player-row a1-player-row--me">
+                    <div className="a1-player-avatar">{activeUsername[0].toUpperCase()}</div>
+                    <div className="a1-player-info">
+                      <span className="a1-player-name">{activeUsername} <span className="a1-you-tag">YOU</span></span>
+                      <div className="a1-ap-bar-wrap">
+                        <div className="a1-ap-bar-track">
+                          <div className="a1-ap-bar-fill a1-ap-bar-fill--me" style={{ width: `${Math.min(myAp, 100)}%` }} />
+                        </div>
+                        <span className="a1-ap-label">{myAp} AP</span>
+                      </div>
+                    </div>
+                    <span className="a1-player-score">{myScore}</span>
+                  </div>
+
+                  <div className="a1-telemetry-divider" />
+
+                  {/* Opponent row */}
+                  <div className="a1-player-row a1-player-row--opp">
+                    <div className="a1-player-avatar a1-player-avatar--opp">{opponentInitial}</div>
+                    <div className="a1-player-info">
+                      <span className="a1-player-name">
+                        {opponentDisplayName}
+                        <span className="a1-pulse-container">
+                          <span className="a1-pulse-ping" /><span className="a1-pulse-dot" />
+                        </span>
+                      </span>
+                      <div className="a1-ap-bar-wrap">
+                        <div className="a1-ap-bar-track">
+                          <div className="a1-ap-bar-fill a1-ap-bar-fill--opp" style={{ width: `${Math.min(opponentAp ?? 0, 100)}%` }} />
+                        </div>
+                        <span className="a1-ap-label">{opponentAp ?? 0} AP</span>
+                      </div>
+                      <span className="a1-opp-solved">Solved: {opponentProfile?.solvedCount || 0} / {activeProblemsList.length}</span>
+                    </div>
+                    <span className="a1-player-score a1-player-score--opp">{opponentScore}</span>
+                  </div>
+
+                  {/* Shield active indicator */}
+                  {myShieldActiveUntil > Date.now() && (
+                    <div className="a1-shield-active">
+                      <Shield size={12} /> Immunity Shield Active
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ── Bottom: Tactical Shop ──────────────────────────────────── */}
+            <div className="a1-right-section a1-right-section--shop">
+              <button className="a1-right-section-header" aria-expanded={!isShopCollapsed} onClick={() => setIsShopCollapsed(v => !v)}>
+                <span className="a1-right-section-title">
+                  <Sparkles size={11} style={{ color: 'var(--accent)', marginRight: 4 }} />
+                  Tactical Shop
+                </span>
+                <ChevronDown size={13} style={{ transform: isShopCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
+              </button>
+
+              {!isShopCollapsed && (
+                <div className="a1-shop-body">
+                  <div className="a1-ap-badge">
+                    <Zap size={11} /> {myAp} AP available
+                  </div>
+
+                  {/* Advantages */}
+                  <div className="a1-shop-category">
+                    <span className="a1-shop-category-label">Advantages</span>
+                    <div className="a1-shop-item">
+                      <div className="a1-shop-item-top">
+                        <span className="a1-shop-item-name"><Keyboard size={11} /> Suggestions</span>
+                        <span className="a1-shop-item-cost">30 AP</span>
+                      </div>
+                      <button disabled={myAp < 30 || isSuggestionsEnabled} onClick={handleBuyAutocomplete} className="a1-shop-btn">
+                        {isSuggestionsEnabled ? '✓ Active' : 'Buy (60s)'}
+                      </button>
+                    </div>
+                    <div className="a1-shop-item">
+                      <div className="a1-shop-item-top">
+                        <span className="a1-shop-item-name"><HelpCircle size={11} /> Problem Hint</span>
+                        <span className="a1-shop-item-cost">35 AP</span>
+                      </div>
+                      <button disabled={myAp < 35} onClick={handleBuyHint} className="a1-shop-btn">Reveal Hint</button>
+                    </div>
+                    <div className="a1-shop-item">
+                      <div className="a1-shop-item-top">
+                        <span className="a1-shop-item-name"><Shield size={11} /> Immunity Shield</span>
+                        <span className="a1-shop-item-cost">40 AP</span>
+                      </div>
+                      {(() => {
+                        const shieldActive = (myShieldActiveUntil && myShieldActiveUntil > Date.now()) || (localShieldActiveUntil > Date.now());
+                        return (
+                          <button disabled={myAp < 40 || shieldActive} onClick={handleCastImmunity} className="a1-shop-btn a1-shop-btn--shield">
+                            {shieldActive ? '✓ Active' : 'Activate (15s)'}
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Sabotages */}
+                  <div className="a1-shop-category">
+                    <span className="a1-shop-category-label">Sabotages</span>
+                    <div className="a1-shop-item">
+                      <div className="a1-shop-item-top">
+                        <span className="a1-shop-item-name"><Lock size={11} /> Editor Jam</span>
+                        <span className="a1-shop-item-cost">50 AP</span>
+                      </div>
+                      <button disabled={myAp < 50 || opponentSabotageActiveUntil > Date.now()} onClick={handleCastJam} className="a1-shop-btn a1-shop-btn--danger">
+                        {opponentSabotageActiveUntil > Date.now() ? 'Cooldown' : 'Cast Jam (5s)'}
+                      </button>
+                    </div>
+                    <div className="a1-shop-item">
+                      <div className="a1-shop-item-top">
+                        <span className="a1-shop-item-name"><EyeOff size={11} /> Haze (Blur)</span>
+                        <span className="a1-shop-item-cost">40 AP</span>
+                      </div>
+                      <button disabled={myAp < 40 || opponentSabotageActiveUntil > Date.now()} onClick={handleCastBlur} className="a1-shop-btn a1-shop-btn--danger">
+                        {opponentSabotageActiveUntil > Date.now() ? 'Cooldown' : 'Cast Haze (10s)'}
+                      </button>
+                    </div>
+                    <div className="a1-shop-item">
+                      <div className="a1-shop-item-top">
+                        <span className="a1-shop-item-name"><AlertTriangle size={11} /> Blindfold</span>
+                        <span className="a1-shop-item-cost">60 AP</span>
+                      </div>
+                      <button disabled={myAp < 60 || opponentSabotageActiveUntil > Date.now()} onClick={handleCastBlindfold} className="a1-shop-btn a1-shop-btn--danger">
+                        {opponentSabotageActiveUntil > Date.now() ? 'Cooldown' : 'Cast Blindfold (60s)'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            </>
+          )}
+        </aside>
       </div>
     </div>
   );

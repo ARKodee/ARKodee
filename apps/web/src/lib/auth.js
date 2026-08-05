@@ -116,7 +116,7 @@ export const isUserAuthenticated = () => {
  * @returns {Promise<Array>} List of duel history entries.
  */
 export const getDuelHistory = async () => {
-  return apiClient('/auth/duels/history/', {
+  return apiClient('/duels/history/', {
     method: 'GET',
   });
 };
