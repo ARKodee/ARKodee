@@ -77,27 +77,27 @@
   color-scheme: light;
 
   /* Backgrounds */
-  --bg-base:     #f9f9fb;
-  --bg-surface:  #ffffff;
-  --bg-elevated: #f0f0f5;
-  --bg-overlay:  #e8e8f0;
+  --bg-base:     #faf9f5;
+  --bg-surface:  #fffefd;
+  --bg-elevated: #f4f2eb;
+  --bg-overlay:  #ece9e0;
 
   /* Borders */
-  --border:        #e4e4ec;
-  --border-strong: #c8c8d8;
-  --border-subtle: #ededf5;
+  --border:        #e4e0d6;
+  --border-strong: #d2cbbd;
+  --border-subtle: #f1eee7;
 
   /* Text */
-  --text-primary:   #0f0f14;
-  --text-secondary: #52525e;
-  --text-muted:     #9292a0;
+  --text-primary:   #17201d;
+  --text-secondary: #52605a;
+  --text-muted:     #8a948e;
   --text-inverse:   #ffffff;
 
-  /* Accent */
-  --accent:         #6d58f5;
-  --accent-hover:   #5c49e0;
-  --accent-subtle:  rgba(109, 88, 245, 0.08);
-  --accent-border:  rgba(109, 88, 245, 0.20);
+  /* Accent - restrained evergreen complements the warm canvas */
+  --accent:         #167c70;
+  --accent-hover:   #0f6b61;
+  --accent-subtle:  rgba(22, 124, 112, 0.08);
+  --accent-border:  rgba(22, 124, 112, 0.20);
 
   /* Semantic */
   --success:         #059669;

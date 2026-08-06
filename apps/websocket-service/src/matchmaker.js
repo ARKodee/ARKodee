@@ -11,10 +11,8 @@ import { logger } from './utils/logger.js';
 // Authoritative internal Map tracking roomID -> Set of socket.ids
 // Key: roomId (string), Value: Set<string> (socket IDs)
 const roomSocketsMap = new Map();
-
-// Authoritative internal Map tracking active room state documents
-// Key: roomId (string), Value: Room Document object
 const roomsStore = new Map();
+const activeIntervals = new Map();
 
 /**
  * Registers a socket to a room mapping
@@ -147,7 +145,7 @@ export const DEFAULT_ARENA_PROBLEMS = [
  * @param {Object} socket - Client socket connection
  * @param {Object} payload - Event payload { roomId, userId }
  */
-export function handleRequestStartMatch(io, socket, payload = {}) {
+export async function handleRequestStartMatch(io, socket, payload = {}) {
   const roomId = payload.roomId || payload.roomCode || payload.room_id;
   const senderId = payload.userId || socket.user?.id;
 
@@ -160,6 +158,9 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
     });
     return;
   }
+
+  // Immediately notify room of start countdown to start overlays in parallel
+  io.to(roomId).emit('match_starting', { roomId });
 
   // 1. Look up room document in authoritative store / collection
   let roomDoc = getRoomDocument(roomId);
@@ -208,12 +209,17 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
     });
     return;
   }
+  if (roomDoc.status === 'ACTIVE' || roomDoc.isStarted) {
+    logger.warn(`[Matchmaker] Match already active or started for room ${roomId}. Ignoring duplicate start request.`);
+    return;
+  }
 
   // 3. Mark room state as ACTIVE & started
   roomDoc.status = 'ACTIVE';
   roomDoc.isStarted = true;
   const matchStartTime = new Date().toISOString();
   roomDoc.startedAt = matchStartTime;
+  roomDoc.problems = []; // Empty initially while loading in background
   
   // Initialize player metadata for the combat economy
   if (roomDoc.players && Array.isArray(roomDoc.players)) {
@@ -226,19 +232,8 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
   }
   setRoomDocument(roomDoc);
 
-  // Setup AP passive regenerator (1 AP / 5 seconds)
-  const apInterval = setInterval(() => {
-    let activeRoom = getRoomDocument(roomId);
-    if (!activeRoom || activeRoom.status !== 'ACTIVE') {
-      clearInterval(apInterval);
-      return;
-    }
-    activeRoom.players.forEach((p) => {
-      p.ap = Math.min(100, (p.ap || 20) + 1); // Cap at 100 AP
-    });
-    setRoomDocument(activeRoom);
-    io.to(roomId).emit('room_updated', activeRoom);
-  }, 5000);
+  // Setup AP passive regenerator & Match duration limit timer
+  setupApAndMatchTimer(io, roomId);
 
   // 4. Dynamic Socket ID Lookup & Broadcasting
   // Get mapped socket IDs from internal Map or Socket.io adapter room
@@ -256,11 +251,11 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
     matchId: `MATCH-${roomId}-${Date.now()}`,
     startedAt: matchStartTime,
     hostId: roomHostId,
-    problems: DEFAULT_ARENA_PROBLEMS,
+    problems: [], // Empty initially
     players: roomDoc.players || [],
   };
 
-  logger.info(`[Matchmaker] Host authorized! Broadcasting 'match_started' to ${allSocketIds.size} client sockets in room ${roomId}`);
+  logger.info(`[Matchmaker] Host authorized! Broadcasting immediate 'match_started' to ${allSocketIds.size} client sockets in room ${roomId}`);
 
   // Emit directly to every connected socket ID mapped to this room
   for (const sId of allSocketIds) {
@@ -269,6 +264,45 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
 
   // Also broadcast to the Socket.io room channel for total delivery coverage
   io.to(roomId).emit('match_started', matchStartedPayload);
+
+  // 5. Fetch dynamic problems from Django backend in background (non-blocking)
+  // 5. Fetch dynamic problems from Django backend in background (non-blocking) with a timeout safety
+  const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:8000';
+  logger.info(`[Matchmaker] Background fetching dynamic problems for room ${roomId} from ${backendUrl}/api/duels/problems/`);
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5 seconds timeout limit
+
+  fetch(`${backendUrl}/api/duels/problems/`, { signal: controller.signal })
+    .then(async (res) => {
+      clearTimeout(timeoutId);
+      let fetchedProblems = DEFAULT_ARENA_PROBLEMS;
+      if (res.ok) {
+        fetchedProblems = await res.json();
+        logger.info(`[Matchmaker] Successfully fetched ${fetchedProblems.length} problems for room ${roomId} from Django.`);
+      } else {
+        logger.warn(`[Matchmaker] Django returned non-200 status. Using fallback problems for room ${roomId}.`);
+      }
+      completeMatchReady(io, roomId, roomDoc, fetchedProblems, matchStartedPayload);
+    })
+    .catch((err) => {
+      clearTimeout(timeoutId);
+      logger.error(`[Matchmaker] Exception raised when fetching problems from Django. Using fallback:`, err.message || err);
+      completeMatchReady(io, roomId, roomDoc, DEFAULT_ARENA_PROBLEMS, matchStartedPayload);
+    });
+}
+
+function completeMatchReady(io, roomId, roomDoc, problems, basePayload) {
+  roomDoc.problems = problems;
+  setRoomDocument(roomDoc);
+
+  const matchReadyPayload = {
+    ...basePayload,
+    problems: problems,
+  };
+
+  logger.info(`[Matchmaker] Broadcasting 'match_ready' to room ${roomId}`);
+  io.to(roomId).emit('match_ready', matchReadyPayload);
 }
 
 /**
@@ -277,8 +311,8 @@ export function handleRequestStartMatch(io, socket, payload = {}) {
  * @param {Object} socket - Connected client socket
  */
 export function setupMatchmakerListeners(io, socket) {
-  socket.on('request_start_match', (payload) => {
-    handleRequestStartMatch(io, socket, payload);
+  socket.on('request_start_match', async (payload) => {
+    await handleRequestStartMatch(io, socket, payload);
   });
 
   socket.on('join_room', (payload) => {
@@ -304,5 +338,150 @@ export function setupMatchmakerListeners(io, socket) {
         unregisterSocketFromRoom(roomId, socket.id);
       }
     }
+  });
+}
+
+// ── Match Timer, Overtime, and Tie/Draw Resolution ─────────────────────────
+
+export function setupApAndMatchTimer(io, roomId) {
+  if (activeIntervals.has(roomId)) {
+    clearInterval(activeIntervals.get(roomId));
+    activeIntervals.delete(roomId);
+  }
+
+  const apInterval = setInterval(() => {
+    let activeRoom = getRoomDocument(roomId);
+    if (!activeRoom || activeRoom.status !== 'ACTIVE') {
+      clearInterval(apInterval);
+      activeIntervals.delete(roomId);
+      return;
+    }
+
+    // 1. Passive AP Regen (1 AP every 5 seconds)
+    activeRoom.players.forEach((p) => {
+      p.ap = Math.min(100, (p.ap || 20) + 1);
+    });
+
+    // 2. Match Time Expiration Checker (Base: 60 mins = 3600s, Overtime: 10 mins = 600s)
+    const elapsedSec = Math.floor((Date.now() - new Date(activeRoom.startedAt).getTime()) / 1000);
+    const baseLimit = 3600; // 60 minutes
+    const overtimeLimit = 600; // 10 minutes
+
+    if (activeRoom.isOvertime) {
+      const overtimeElapsed = Math.floor((Date.now() - new Date(activeRoom.overtimeStartedAt).getTime()) / 1000);
+      if (overtimeElapsed >= overtimeLimit) {
+        clearInterval(apInterval);
+        activeIntervals.delete(roomId);
+        handleMatchTimeExpired(io, roomId, activeRoom, true);
+        return;
+      }
+    } else {
+      if (elapsedSec >= baseLimit) {
+        clearInterval(apInterval);
+        activeIntervals.delete(roomId);
+        handleMatchTimeExpired(io, roomId, activeRoom, false);
+        return;
+      }
+    }
+
+    setRoomDocument(activeRoom);
+    io.to(roomId).emit('room_updated', activeRoom);
+  }, 5000);
+
+  activeIntervals.set(roomId, apInterval);
+}
+
+export function handleMatchTimeExpired(io, roomId, room, isOvertime = false) {
+  const p1 = room.players[0];
+  const p2 = room.players[1];
+  const score1 = p1 ? (p1.score || 0) : 0;
+  const score2 = p2 ? (p2.score || 0) : 0;
+
+  if (score1 !== score2) {
+    // Score is different: highest score wins!
+    const winnerId = score1 > score2 ? p1.userId : (p2 ? p2.userId : null);
+    finishMatch(io, roomId, room, winnerId, 'Time expired. Winner decided by higher score.');
+  } else {
+    // Score is tied
+    if (!isOvertime) {
+      // Base time expired: prompt tie choice
+      room.status = 'TIE_PROMPT';
+      room.votes = { draw: [], overtime: [] };
+      room.tiePromptExpiresAt = Date.now() + 30000; // 30 seconds to vote
+      setRoomDocument(room);
+      io.to(roomId).emit('room_updated', room);
+
+      // Set timeout to auto-draw if they don't both vote overtime
+      setTimeout(() => {
+        const latestRoom = getRoomDocument(roomId);
+        if (latestRoom && latestRoom.status === 'TIE_PROMPT') {
+          finishMatch(io, roomId, latestRoom, null, 'Tie prompt expired. Match ended in a draw.');
+        }
+      }, 30000);
+    } else {
+      // Overtime expired and score is still tied! Compare accuracy (fewer failed attempts)
+      const p1Failed = Object.values(p1.failedAttempts || {}).reduce((a, b) => a + b, 0);
+      const p2Failed = Object.values(p2.failedAttempts || {}).reduce((a, b) => a + b, 0);
+
+      if (p1Failed !== p2Failed) {
+        const winnerId = p1Failed < p2Failed ? p1.userId : p2.userId;
+        finishMatch(io, roomId, room, winnerId, 'Overtime expired. Winner decided by higher accuracy.');
+      } else {
+        // Accuracy is also equal! Match ends in a Draw.
+        finishMatch(io, roomId, room, null, 'Overtime expired with equal scores and accuracy. Match ended in a draw.');
+      }
+    }
+  }
+}
+
+export function finishMatch(io, roomId, room, winnerId, reason) {
+  room.status = 'FINISHED';
+  room.winnerId = winnerId;
+  setRoomDocument(room);
+
+  // Stop AP regen interval immediately — no need to wait for the next tick
+  if (activeIntervals.has(roomId)) {
+    clearInterval(activeIntervals.get(roomId));
+    activeIntervals.delete(roomId);
+  }
+
+  // Post to Python Django backend duels endpoint to persist result and calculate ELO
+  const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:8000';
+  const postData = {
+    player_a_id: room.players[0].userId,
+    player_b_id: room.players[1] ? room.players[1].userId : room.players[0].userId,
+    winner_id: winnerId, // null for draw
+    score_a: room.players[0].score || 0,
+    score_b: room.players[1] ? (room.players[1].score || 0) : 0
+  };
+
+  logger.info(`[Matchmaker] Finalizing duel room ${roomId}. Winner: ${winnerId}, Reason: ${reason}`);
+
+  fetch(`${backendUrl}/api/duels/create/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(postData)
+  })
+  .then(res => res.json())
+  .then(data => {
+    logger.info(`[Duel Persistence] Saved match: ${data.match_id}, ELO delta A: ${data.elo_delta_a}, B: ${data.elo_delta_b}`);
+    io.to(roomId).emit('match_finished', {
+      winnerId,
+      scores: room.players.map(p => ({
+        userId: p.userId,
+        username: p.username,
+        score: p.score,
+        eloDelta: p.userId === room.players[0].userId ? data.elo_delta_a : data.elo_delta_b
+      })),
+      reason
+    });
+  })
+  .catch(err => {
+    logger.error(`[Duel Persistence] Failed to save duel outcome:`, err);
+    io.to(roomId).emit('match_finished', {
+      winnerId,
+      scores: room.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
+      reason
+    });
   });
 }

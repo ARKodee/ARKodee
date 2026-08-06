@@ -18,12 +18,6 @@ export const checkEmailExists = async (email) => {
  * Step 2 (Existing User): Login & Get Token
  * ✅ No token needed - PUBLIC endpoint
  * Django DRF will return: { token: 'xyz123...', user: {...} }
- * 
- * Flow:
- * 1. Send email + password to backend
- * 2. Backend validates credentials
- * 3. If valid → Returns token + user data
- * 4. Save token to localStorage
  */
 export const loginUser = async (email, password) => {
   return apiClient('/auth/login/', {
@@ -36,12 +30,6 @@ export const loginUser = async (email, password) => {
  * Step 2 (New User): Register & Get Token
  * ✅ No token needed - PUBLIC endpoint
  * Django DRF will return: { token: 'xyz123...', user: {...} }
- * 
- * Flow:
- * 1. Send user registration data to backend
- * 2. Backend validates data & creates user
- * 3. If valid → Returns token + user data
- * 4. Save token to localStorage
  */
 export const registerUser = async (userData) => {
   return apiClient('/auth/register/', {
@@ -64,27 +52,18 @@ export const googleLoginUser = async (idToken) => {
 
 /**
  * Logout: Clear token & user data
- * ✅ Can use token or without (depending on backend)
- * 
- * Flow:
- * 1. Clear localStorage (token + user)
- * 2. Redirect to login page
  */
 export const logoutUser = async () => {
   try {
-    // Optional: Notify backend that user is logging out
-    // This requires token, so apiClient will add it automatically
     await apiClient('/auth/logout/', {
       method: 'POST',
     });
   } catch (error) {
     console.warn('Logout API call failed, clearing local data anyway:', error.message);
   } finally {
-    invalidateProfileCache()
-    // Always clear local storage even if API call fails
+    invalidateProfileCache();
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
-    // Redirect to login
     window.location.href = '/auth';
   }
 };
@@ -92,11 +71,6 @@ export const logoutUser = async () => {
 /**
  * Get current user profile (Protected - requires token)
  * ❌ Requires valid token in header
- * 
- * Flow:
- * 1. apiClient automatically adds "Authorization: Token xyz" header
- * 2. If no token or invalid token → 401 response
- * 3. apiClient catches 401 & clears auth
  */
 export const getUserProfile = async () => {
   return apiClient('/auth/profile/', {

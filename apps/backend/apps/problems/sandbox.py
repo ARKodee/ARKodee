@@ -334,6 +334,27 @@ def generate_java_driver(func_name, params, ret_type):
                 f"        }}"
             )
             call_args.append(p_name)
+        elif p_type_norm in ["List[str]", "List[String]"]:
+            java_read_lines.append(
+                f"int {p_name}_size = sc.hasNextInt() ? sc.nextInt() : 0;\n"
+                f"        String[] {p_name} = new String[{p_name}_size];\n"
+                f"        for (int i = 0; i < {p_name}_size; i++) {p_name}[i] = sc.hasNext() ? sc.next() : \"\";"
+            )
+            call_args.append(p_name)
+        elif p_type_norm in ["List[float]", "List[double]"]:
+            java_read_lines.append(
+                f"int {p_name}_size = sc.hasNextInt() ? sc.nextInt() : 0;\n"
+                f"        double[] {p_name} = new double[{p_name}_size];\n"
+                f"        for (int i = 0; i < {p_name}_size; i++) {p_name}[i] = sc.hasNextDouble() ? sc.nextDouble() : 0.0;"
+            )
+            call_args.append(p_name)
+        elif p_type_norm in ["List[bool]", "List[boolean]"]:
+            java_read_lines.append(
+                f"int {p_name}_size = sc.hasNextInt() ? sc.nextInt() : 0;\n"
+                f"        boolean[] {p_name} = new boolean[{p_name}_size];\n"
+                f"        for (int i = 0; i < {p_name}_size; i++) {p_name}[i] = sc.hasNext() ? sc.next().equals(\"1\") : false;"
+            )
+            call_args.append(p_name)
         elif "TreeNode" in p_type_norm:
             java_read_lines.append(f"TreeNode {p_name} = sc.hasNext() ? buildTree(sc.next()) : null;")
             call_args.append(p_name)
@@ -351,12 +372,23 @@ def generate_java_driver(func_name, params, ret_type):
     if ret_type_norm.startswith("Optional[") and ret_type_norm.endswith("]"):
         ret_type_norm = ret_type_norm[9:-1]
         
-    if ret_type_norm in ["List[int]", "int[]"]:
-        print_statement = "System.out.println(Arrays.toString(ans));"
-    elif "TreeNode" in ret_type_norm:
-        print_statement = "System.out.println(ans != null ? ans.val : \"null\");"
+    first_param_type = params[0][1].strip().replace(" ", "") if len(params) > 0 else "int"
+    if first_param_type.startswith("Optional[") and first_param_type.endswith("]"):
+        first_param_type = first_param_type[9:-1]
+        
+    is_inplace = ret_type_norm in ["None", "void"] and len(call_args) > 0
+    target_var = call_args[0] if is_inplace else "ans"
+    target_type = first_param_type if is_inplace else ret_type_norm
+    
+    if is_inplace:
+        call_statement = f"solver.{func_name}({args_str});"
     else:
-        print_statement = "System.out.println(ans);"
+        call_statement = f"var ans = solver.{func_name}({args_str});"
+        
+    if "TreeNode" in target_type:
+        print_statement = f"System.out.println({target_var} != null ? {target_var}.val : \"null\");"
+    else:
+        print_statement = f"printAnswer({target_var});"
         
     driver_code = (
         "\nimport java.util.*;\n\n"
@@ -411,12 +443,76 @@ def generate_java_driver(func_name, params, ret_type):
         "            return dummy.next;\n"
         "        } catch (Exception e) { return null; }\n"
         "    }\n\n"
+        "    private static String toJson(Object obj) {\n"
+        "        if (obj == null) return \"null\";\n"
+        "        if (obj instanceof String || obj instanceof Character) {\n"
+        "            return \"\\\"\" + obj.toString() + \"\\\"\";\n"
+        "        }\n"
+        "        if (obj instanceof Boolean || obj instanceof Number) {\n"
+        "            return obj.toString();\n"
+        "        }\n"
+        "        if (obj instanceof int[]) {\n"
+        "            return Arrays.toString((int[]) obj).replace(\" \", \"\");\n"
+        "        }\n"
+        "        if (obj instanceof boolean[]) {\n"
+        "            return Arrays.toString((boolean[]) obj).replace(\" \", \"\");\n"
+        "        }\n"
+        "        if (obj instanceof double[]) {\n"
+        "            return Arrays.toString((double[]) obj).replace(\" \", \"\");\n"
+        "        }\n"
+        "        if (obj instanceof float[]) {\n"
+        "            return Arrays.toString((float[]) obj).replace(\" \", \"\");\n"
+        "        }\n"
+        "        if (obj instanceof long[]) {\n"
+        "            return Arrays.toString((long[]) obj).replace(\" \", \"\");\n"
+        "        }\n"
+        "        if (obj instanceof char[]) {\n"
+        "            char[] arr = (char[]) obj;\n"
+        "            StringBuilder sb = new StringBuilder(\"[\");\n"
+        "            for (int i = 0; i < arr.length; i++) {\n"
+        "                sb.append(\"\\\"\").append(arr[i]).append(\"\\\"\").append(i + 1 == arr.length ? \"\" : \",\");\n"
+        "            }\n"
+        "            sb.append(\"]\");\n"
+        "            return sb.toString();\n"
+        "        }\n"
+        "        if (obj instanceof Object[]) {\n"
+        "            Object[] arr = (Object[]) obj;\n"
+        "            StringBuilder sb = new StringBuilder(\"[\");\n"
+        "            for (int i = 0; i < arr.length; i++) {\n"
+        "                sb.append(toJson(arr[i])).append(i + 1 == arr.length ? \"\" : \",\");\n"
+        "            }\n"
+        "            sb.append(\"]\");\n"
+        "            return sb.toString();\n"
+        "        }\n"
+        "        if (obj instanceof List) {\n"
+        "            List<?> list = (List<?>) obj;\n"
+        "            StringBuilder sb = new StringBuilder(\"[\");\n"
+        "            for (int i = 0; i < list.size(); i++) {\n"
+        "                sb.append(toJson(list.get(i))).append(i + 1 == list.size() ? \"\" : \",\");\n"
+        "            }\n"
+        "            sb.append(\"]\");\n"
+        "            return sb.toString();\n"
+        "        }\n"
+        "        if (obj instanceof ListNode) {\n"
+        "            List<Integer> list = new ArrayList<>();\n"
+        "            ListNode curr = (ListNode) obj;\n"
+        "            while (curr != null) {\n"
+        "                list.add(curr.val);\n"
+        "                curr = curr.next;\n"
+        "            }\n"
+        "            return toJson(list);\n"
+        "        }\n"
+        "        return obj.toString();\n"
+        "    }\n\n"
+        "    private static void printAnswer(Object ans) {\n"
+        "        System.out.println(toJson(ans));\n"
+        "    }\n\n"
         "    public static void main(String[] args) {\n"
         "        Scanner sc = new Scanner(System.in);\n"
         "        if (!sc.hasNext()) return;\n"
         f"        {read_block}\n"
         "        Solution solver = new Solution();\n"
-        f"        var ans = solver.{func_name}({args_str});\n"
+        f"        {call_statement}\n"
         f"        {print_statement}\n"
         "        sc.close();\n"
         "    }\n"
@@ -465,6 +561,30 @@ def generate_cpp_driver(func_name, params, ret_type):
                 f"    }}"
             )
             call_args.append(p_name)
+        elif p_type_norm in ["List[str]", "vector<string>"]:
+            cpp_read_lines.append(
+                f"int {p_name}_size = 0; cin >> {p_name}_size;\n"
+                f"    vector<string> {p_name}({p_name}_size);\n"
+                f"    for (int i = 0; i < {p_name}_size; i++) cin >> {p_name}[i];"
+            )
+            call_args.append(p_name)
+        elif p_type_norm in ["List[float]", "List[double]", "vector<double>", "vector<float>"]:
+            cpp_read_lines.append(
+                f"int {p_name}_size = 0; cin >> {p_name}_size;\n"
+                f"    vector<double> {p_name}({p_name}_size);\n"
+                f"    for (int i = 0; i < {p_name}_size; i++) cin >> {p_name}[i];"
+            )
+            call_args.append(p_name)
+        elif p_type_norm in ["List[bool]", "List[boolean]", "vector<bool>"]:
+            cpp_read_lines.append(
+                f"int {p_name}_size = 0; cin >> {p_name}_size;\n"
+                f"    vector<bool> {p_name}({p_name}_size);\n"
+                f"    for (int i = 0; i < {p_name}_size; i++) {{\n"
+                f"        int val = 0; cin >> val;\n"
+                f"        {p_name}[i] = (val != 0);\n"
+                f"    }}"
+            )
+            call_args.append(p_name)
         elif "TreeNode" in p_type_norm:
             cpp_read_lines.append(f"string {p_name}_s; cin >> {p_name}_s; TreeNode* {p_name} = buildTree({p_name}_s);")
             call_args.append(p_name)
@@ -482,18 +602,81 @@ def generate_cpp_driver(func_name, params, ret_type):
     if ret_type_norm.startswith("Optional[") and ret_type_norm.endswith("]"):
         ret_type_norm = ret_type_norm[9:-1]
         
-    if ret_type_norm in ["List[int]", "vector<int>"]:
+    first_param_type = params[0][1].strip().replace(" ", "") if len(params) > 0 else "int"
+    if first_param_type.startswith("Optional[") and first_param_type.endswith("]"):
+        first_param_type = first_param_type[9:-1]
+        
+    is_inplace = ret_type_norm in ["None", "void"] and len(call_args) > 0
+    target_var = call_args[0] if is_inplace else "ans"
+    target_type = first_param_type if is_inplace else ret_type_norm
+    
+    if is_inplace:
+        call_statement = f"solver.{func_name}({args_str});"
+    else:
+        call_statement = f"auto ans = solver.{func_name}({args_str});"
+        
+    if target_type in ["bool", "boolean"]:
+        print_code = f'cout << ({target_var} ? "true" : "false") << endl;'
+    elif target_type in ["List[bool]", "List[boolean]"]:
         print_code = (
             "cout << \"[\";\n"
-            "    for (size_t i = 0; i < ans.size(); i++) {\n"
-            "        cout << ans[i] << (i + 1 == ans.size() ? \"\" : \",\");\n"
+            f"    for (size_t i = 0; i < {target_var}.size(); i++) {{\n"
+            f"        cout << ({target_var}[i] ? \"true\" : \"false\") << (i + 1 == {target_var}.size() ? \"\" : \",\");\n"
             "    }\n"
             "    cout << \"]\" << endl;"
         )
-    elif "TreeNode" in ret_type_norm:
-        print_code = "cout << (ans != nullptr ? ans->val : 0) << endl;"
+    elif target_type in ["List[List[bool]]", "List[List[boolean]]"]:
+        print_code = (
+            "cout << \"[\";\n"
+            f"    for (size_t i = 0; i < {target_var}.size(); i++) {{\n"
+            "        cout << \"[\";\n"
+            f"        for (size_t j = 0; j < {target_var}[i].size(); j++) {{\n"
+            f"            cout << ({target_var}[i][j] ? \"true\" : \"false\") << (j + 1 == {target_var}[i].size() ? \"\" : \",\");\n"
+            "        }}\n"
+            f"        cout << \"]\" << (i + 1 == {target_var}.size() ? \"\" : \",\");\n"
+            "    }\n"
+            "    cout << \"]\" << endl;"
+        )
+    elif target_type.startswith("List[List["):
+        print_code = (
+            "cout << \"[\";\n"
+            f"    for (size_t i = 0; i < {target_var}.size(); i++) {{\n"
+            "        cout << \"[\";\n"
+            f"        for (size_t j = 0; j < {target_var}[i].size(); j++) {{\n"
+            f"            printVal({target_var}[i][j]);\n"
+            f"            if (j + 1 < {target_var}[i].size()) cout << \",\";\n"
+            "        }}\n"
+            f"        cout << \"]\" << (i + 1 == {target_var}.size() ? \"\" : \",\");\n"
+            "    }\n"
+            "    cout << \"]\" << endl;"
+        )
+    elif target_type.startswith("List[") or target_type.endswith("[]"):
+        print_code = (
+            "cout << \"[\";\n"
+            f"    for (size_t i = 0; i < {target_var}.size(); i++) {{\n"
+            f"        printVal({target_var}[i]);\n"
+            f"        if (i + 1 < {target_var}.size()) cout << \",\";\n"
+            "    }\n"
+            "    cout << \"]\" << endl;"
+        )
+    elif "ListNode" in target_type:
+        print_code = (
+            f"if (!{target_var}) {{\n"
+            "        cout << \"[]\" << endl;\n"
+            "    } else {\n"
+            "        cout << \"[\";\n"
+            f"        ListNode* curr = {target_var};\n"
+            "        while (curr) {\n"
+            "            cout << curr->val << (curr->next ? \",\" : \"\");\n"
+            "            curr = curr->next;\n"
+            "        }\n"
+            "        cout << \"]\" << endl;\n"
+            "    }"
+        )
+    elif "TreeNode" in target_type:
+        print_code = f"cout << ({target_var} != nullptr ? to_string({target_var}->val) : \"null\") << endl;"
     else:
-        print_code = "cout << ans << endl;"
+        print_code = f"cout << {target_var} << endl;"
         
     driver_code = (
         "\n#include <iostream>\n"
@@ -502,6 +685,11 @@ def generate_cpp_driver(func_name, params, ret_type):
         "#include <queue>\n"
         "#include <sstream>\n"
         "using namespace std;\n\n"
+        "template<typename T>\n"
+        "void printVal(const T& val) { cout << val; }\n"
+        "void printVal(const string& val) { cout << \"\\\"\" << val << \"\\\"\"; }\n"
+        "void printVal(char val) { cout << \"\\\"\" << val << \"\\\"\"; }\n"
+        "void printVal(bool val) { cout << (val ? \"true\" : \"false\"); }\n\n"
         "struct TreeNode {\n"
         "    int val;\n"
         "    TreeNode *left;\n"
@@ -561,7 +749,7 @@ def generate_cpp_driver(func_name, params, ret_type):
         "    cin.tie(NULL);\n"
         f"    {read_block}\n"
         "    Solution solver;\n"
-        f"    auto ans = solver.{func_name}({args_str});\n"
+        f"    {call_statement}\n"
         f"    {print_code}\n"
         "    return 0;\n"
         "}\n"
@@ -611,6 +799,27 @@ def generate_js_driver(func_name, params, ret_type):
                 f"    }}"
             )
             call_args.append(p_name)
+        elif p_type_norm == "List[str]":
+            js_read_lines.append(
+                f"let {p_name}_size = parseInt(nextToken() || '0', 10);\n"
+                f"    let {p_name} = [];\n"
+                f"    for (let i = 0; i < {p_name}_size; i++) {p_name}.push(nextToken() || '');"
+            )
+            call_args.append(p_name)
+        elif p_type_norm in ["List[float]", "List[double]"]:
+            js_read_lines.append(
+                f"let {p_name}_size = parseInt(nextToken() || '0', 10);\n"
+                f"    let {p_name} = [];\n"
+                f"    for (let i = 0; i < {p_name}_size; i++) {p_name}.push(parseFloat(nextToken() || '0'));"
+            )
+            call_args.append(p_name)
+        elif p_type_norm in ["List[bool]", "List[boolean]"]:
+            js_read_lines.append(
+                f"let {p_name}_size = parseInt(nextToken() || '0', 10);\n"
+                f"    let {p_name} = [];\n"
+                f"    for (let i = 0; i < {p_name}_size; i++) {p_name}.push((nextToken() || '0') === '1');"
+            )
+            call_args.append(p_name)
         elif "TreeNode" in p_type_norm:
             js_read_lines.append(f"let {p_name} = buildTree(nextToken());")
             call_args.append(p_name)
@@ -624,6 +833,13 @@ def generate_js_driver(func_name, params, ret_type):
     read_block = "\n    ".join(js_read_lines)
     args_str = ", ".join(call_args)
     
+    ret_type_norm = ret_type.strip().replace(" ", "")
+    if ret_type_norm.startswith("Optional[") and ret_type_norm.endswith("]"):
+        ret_type_norm = ret_type_norm[9:-1]
+        
+    is_inplace = ret_type_norm in ["None", "void"] and len(call_args) > 0
+    print_target = call_args[0] if is_inplace else "ans"
+
     driver_code = (
         "\nconst fs = require('fs');\n"
         "function TreeNode(val, left, right) {\n"
@@ -669,14 +885,34 @@ def generate_js_driver(func_name, params, ret_type):
         "        return dummy.next;\n"
         "    } catch(e) { return null; }\n"
         "}\n\n"
+        "function serializeAns(ans) {\n"
+        "    if (ans === null || ans === undefined) return null;\n"
+        "    if (typeof ans === 'object') {\n"
+        "        if ('val' in ans && 'next' in ans) {\n"
+        "            let res = [];\n"
+        "            let curr = ans;\n"
+        "            while (curr !== null) {\n"
+        "                res.push(curr.val);\n"
+        "                curr = curr.next;\n"
+        "            }\n"
+        "            return res;\n"
+        "        }\n"
+        "        if ('val' in ans && ('left' in ans || 'right' in ans || !('next' in ans))) {\n"
+        "            return ans.val;\n"
+        "        }\n"
+        "        if (Array.isArray(ans)) {\n"
+        "            return ans.map(serializeAns);\n"
+        "        }\n"
+        "    }\n"
+        "    return ans;\n"
+        "}\n\n"
         "const tokens = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\n"
         "function nextToken() { return tokens.length > 0 ? tokens.shift() : null; }\n"
         "if (tokens.length > 0 && tokens[0] !== '') {\n"
         f"    {read_block}\n"
         f"    let solver = typeof Solution !== 'undefined' ? new Solution() : null;\n"
         f"    let ans = solver ? solver.{func_name}({args_str}) : {func_name}({args_str});\n"
-        "    if (ans && typeof ans === 'object' && 'val' in ans) ans = ans.val;\n"
-        "    console.log(JSON.stringify(ans));\n"
+        f"    console.log(JSON.stringify(serializeAns({print_target})));\n"
         "}\n"
     )
     return driver_code
@@ -764,6 +1000,13 @@ def generate_py_driver(func_name, params, ret_type, has_class=True):
     
     solver_inst = "solver = Solution()" if has_class else ""
     call_expr = f"solver.{func_name}({args_str})" if has_class else f"{func_name}({args_str})"
+    
+    ret_type_norm = ret_type.strip().replace(" ", "")
+    if ret_type_norm.startswith("Optional[") and ret_type_norm.endswith("]"):
+        ret_type_norm = ret_type_norm[9:-1]
+        
+    is_inplace = ret_type_norm in ["None", "void"] and len(call_args) > 0
+    print_target = call_args[0] if is_inplace else "ans"
 
     driver_code = (
         "\nimport sys\n"
@@ -828,6 +1071,10 @@ def generate_py_driver(func_name, params, ret_type, has_class=True):
         "            res.append(curr.val)\n"
         "            curr = curr.next\n"
         "        return res\n"
+        "    if isinstance(ans, list):\n"
+        "        return [serialize_ans(x) for x in ans]\n"
+        "    if isinstance(ans, tuple):\n"
+        "        return [serialize_ans(x) for x in ans]\n"
         "    return ans\n\n"
         "def _run_driver():\n"
         "    input_data = sys.stdin.read().split()\n"
@@ -840,7 +1087,7 @@ def generate_py_driver(func_name, params, ret_type, has_class=True):
         f"    {read_block}\n"
         f"    {solver_inst}\n"
         f"    ans = {call_expr}\n"
-        "    print(json.dumps(serialize_ans(ans)))\n\n"
+        f"    print(json.dumps(serialize_ans({print_target})))\n\n"
         "if __name__ == '__main__':\n"
         "    _run_driver()\n"
     )

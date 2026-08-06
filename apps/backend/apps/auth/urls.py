@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 app_name = "auth"
@@ -12,8 +12,9 @@ urlpatterns = [
     path("logout/", views.logout_view, name="logout"),
     path("profile/", views.profile_view, name="profile"),
     path("profile-stats/", views.profile_stats_view, name="profile-stats"),
-    path("duels/create/", views.create_duel_view, name="duel-create"),
-    path("duels/history/", views.duel_history_view, name="duel-history"),
+
+    # Duels — routed through the dedicated duels app
+    path("duels/", include("apps.duels.urls")),
 
     # Superadmin Player Management
     path("admin/players/", views.admin_players_list, name="admin-players-list"),

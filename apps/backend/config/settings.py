@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "apps.problems.apps.ProblemsConfig",
     "apps.contests.apps.ContestsConfig",
     "apps.users.apps.UsersConfig",
+    "apps.duels.apps.DuelsConfig",
 ]
 
 

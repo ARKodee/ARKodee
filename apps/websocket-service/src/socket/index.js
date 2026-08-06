@@ -12,14 +12,20 @@ import {
   registerSocketToRoom,
   setRoomDocument,
   getRoomDocument,
-  DEFAULT_ARENA_PROBLEMS,
   setupMatchmakerListeners,
   handleRequestStartMatch,
+  finishMatch,
+  setupApAndMatchTimer,
 } from '../matchmaker.js';
 
 // Authoritative state tracking map instance directly inside memory module scope
 const customRooms = new Map();
 
+/**
+ * Generates a unique 5-character uppercase room code.
+ * Ensures no collisions within the active customRooms map.
+ * @returns {string} The unique room code
+ */
 /**
  * Generates a unique 5-character uppercase room code.
  * Ensures no collisions within the active customRooms map.
@@ -38,6 +44,58 @@ function generateRoomCode() {
   }
   return result;
 }
+
+// ── Matchmaking Queue ────────────────────────────────────────────────────────
+// Simple in-memory queue: array of { socketId, userId, username, rating }
+const waitingQueue = [];
+
+/**
+ * Attempts to pair two players from the waiting queue.
+ * If a pair is found, creates a room, starts the match, and removes them from the queue.
+ */
+function tryPairPlayers(io) {
+  if (waitingQueue.length < 2) return;
+
+  // Take the first two players
+  const [playerA, playerB] = waitingQueue.splice(0, 2);
+
+  const roomCode = generateRoomCode();
+  logger.info(`[Queue] Pairing ${playerA.username} vs ${playerB.username} into room ${roomCode}`);
+
+  const roomEntry = {
+    id: roomCode,
+    isRanked: true,
+    hostId: playerA.userId,
+    hostName: playerA.username,
+    players: [
+      { socketId: playerA.socketId, userId: playerA.userId, username: playerA.username, rating: playerA.rating },
+      { socketId: playerB.socketId, userId: playerB.userId, username: playerB.username, rating: playerB.rating },
+    ],
+    status: 'WAITING',
+  };
+
+  customRooms.set(roomCode, roomEntry);
+  setRoomDocument(roomEntry);
+
+  // Join both sockets to the room channel
+  const sockA = io.sockets.sockets.get(playerA.socketId);
+  const sockB = io.sockets.sockets.get(playerB.socketId);
+  if (sockA) { sockA.join(roomCode); registerSocketToRoom(roomCode, playerA.socketId); }
+  if (sockB) { sockB.join(roomCode); registerSocketToRoom(roomCode, playerB.socketId); }
+
+  // Notify both: match_found sends them the roomId so they can navigate
+  const foundPayload = {
+    roomId: roomCode,
+    roomCode,
+    opponent: null, // will be filled per-player
+  };
+  if (sockA) sockA.emit('match_found', { ...foundPayload, opponent: { userId: playerB.userId, username: playerB.username } });
+  if (sockB) sockB.emit('match_found', { ...foundPayload, opponent: { userId: playerA.userId, username: playerA.username } });
+
+  // Auto-start the match immediately (no host lobby needed for ranked)
+  handleRequestStartMatch(io, { id: playerA.socketId, user: { id: playerA.userId, username: playerA.username }, join: () => {}, emit: () => {} }, { roomId: roomCode, userId: playerA.userId });
+}
+
 
 class SocketManager {
   constructor() {
@@ -98,10 +156,40 @@ class SocketManager {
       // Attach matchmaker socket listeners (request_start_match, join_room, leave_room, disconnect cleanup)
       setupMatchmakerListeners(this.io, socket);
 
+      // 0. socket.on('join_queue') — Ranked Public Matchmaking
+      socket.on('join_queue', () => {
+        const userId = user.id;
+        const username = user.username;
+        const rating = user.rating || 1200;
+
+        // Avoid duplicate queue entries
+        const alreadyQueued = waitingQueue.some(p => p.userId === userId);
+        if (alreadyQueued) {
+          socket.emit('queue_status', { status: 'QUEUED', position: waitingQueue.findIndex(p => p.userId === userId) + 1 });
+          return;
+        }
+
+        waitingQueue.push({ socketId: socket.id, userId, username, rating, joinedAt: Date.now() });
+        logger.info(`[Queue] ${username} (${userId}) joined queue. Queue size: ${waitingQueue.length}`);
+        socket.emit('queue_status', { status: 'QUEUED', position: waitingQueue.length });
+
+        tryPairPlayers(this.io);
+      });
+
+      socket.on('leave_queue', () => {
+        const userId = user.id;
+        const idx = waitingQueue.findIndex(p => p.userId === userId);
+        if (idx !== -1) {
+          waitingQueue.splice(idx, 1);
+          logger.info(`[Queue] ${user.username} left queue. Queue size: ${waitingQueue.length}`);
+        }
+        socket.emit('queue_status', { status: 'IDLE' });
+      });
+
       // 1. socket.on('create_custom_room', (payload) => { ... })
       socket.on('create_custom_room', (payload = {}) => {
-        const hostUserId = payload.userId || socket.user?.id || 'placeholder-user-id';
-        const hostUsername = payload.username || socket.user?.username || 'Host';
+        const hostUserId = socket.user.id;
+        const hostUsername = socket.user.username;
 
         logger.info(`Player ${hostUsername} (ID: ${hostUserId}) requested to create custom room`);
         const roomCode = generateRoomCode();
@@ -191,49 +279,30 @@ class SocketManager {
             players: room.players,
             status: room.status,
             isStarted: Boolean(room.isStarted),
-            problems: DEFAULT_ARENA_PROBLEMS,
+            problems: room.problems || [],
           });
 
           this.io.to(roomId).emit('room_updated', room);
         } else {
-          logger.info(`[Socket] client_ready for new room ${roomId}. Registering ${socket.user?.username} as host.`);
-          const newRoom = {
-            id: roomId,
-            hostId: socket.user?.id || 'user-1',
-            hostName: socket.user?.username || 'Host',
-            players: [
-              {
-                socketId: socket.id,
-                userId: socket.user?.id || 'user-1',
-                username: socket.user?.username || 'Host',
-              }
-            ],
-            status: 'WAITING',
-          };
-          customRooms.set(roomId, newRoom);
-          setRoomDocument(newRoom);
-          socket.emit('match_ready', {
-            success: true,
-            roomId: roomId,
-            roomCode: roomId,
-            hostId: newRoom.hostId,
-            hostName: newRoom.hostName,
-            players: newRoom.players,
-            status: newRoom.status,
-            problems: DEFAULT_ARENA_PROBLEMS,
+          // Room doesn't exist — don't silently create a solo room, emit an error so the
+          // client knows the match is gone (e.g. server restart, invalid roomId)
+          logger.warn(`[Socket] client_ready for unknown room ${roomId} from ${socket.user?.username}. Emitting match_error.`);
+          socket.emit('match_error', {
+            success: false,
+            message: `Match room [${roomId}] not found. It may have expired or the server restarted.`,
           });
         }
       });
 
       // 3. socket.on('request_start_match' or 'start_custom_match', (payload) => { ... })
-      socket.on('start_custom_match', (payload) => {
+      socket.on('start_custom_match', async (payload) => {
         const roomCode = payload?.roomId || payload?.roomCode;
         if (roomCode && customRooms.has(roomCode)) {
           const cRoom = customRooms.get(roomCode);
           cRoom.status = 'ACTIVE';
           cRoom.isStarted = true;
         }
-        handleRequestStartMatch(this.io, socket, payload);
+        await handleRequestStartMatch(this.io, socket, payload);
       });
 
       // 4. socket.on('leave_custom_room', (payload) => { ... })
@@ -245,8 +314,12 @@ class SocketManager {
           return;
         }
 
-        if (room.isStarted || room.status === 'ACTIVE') {
-          logger.info(`Match active in room ${roomCode}. Preserving room for player ${userId}.`);
+        if (room.isStarted || room.status === 'ACTIVE' || room.status === 'TIE_PROMPT') {
+          // Player explicitly left an active match! Opponent wins!
+          const opponent = room.players.find(p => String(p.userId) !== String(userId));
+          const winnerId = opponent ? opponent.userId : null;
+          logger.info(`[Matchmaker] Player ${userId} left active match ${roomCode}. Opponent ${winnerId} declared winner.`);
+          finishMatch(this.io, roomCode, room, winnerId, 'Opponent left the match.');
           return;
         }
 
@@ -289,6 +362,18 @@ class SocketManager {
       // 5. socket.on('leave_arena_lobby', (payload) => { ... })
       socket.on('leave_arena_lobby', (payload = {}) => {
         const roomId = payload.matchId || payload.roomId || payload.roomCode;
+        const room = customRooms.get(roomId) || getRoomDocument(roomId);
+
+        if (room && (room.status === 'ACTIVE' || room.status === 'TIE_PROMPT')) {
+          // If the match is active, leaving means forfeiting!
+          // Declare opponent as the winner, do NOT dissolve the arena for the opponent yet!
+          const opponent = room.players.find(p => String(p.userId) !== String(user.id));
+          const winnerId = opponent ? opponent.userId : null;
+          logger.info(`[Socket] Player ${user.username} left active match ${roomId}. Opponent ${winnerId} declared winner.`);
+          finishMatch(this.io, roomId, room, winnerId, 'Opponent left the match.');
+          return;
+        }
+
         logger.info(`Player ${user.username} left arena lobby: ${roomId}. Dissolving arena for all contenders.`);
 
         this.io.to(roomId).emit('arena_lobby_dissolved', {
@@ -314,15 +399,24 @@ class SocketManager {
         // Initialize tracking maps if missing
         if (!player.solvedProblems) player.solvedProblems = {};
         if (!player.failedAttempts) player.failedAttempts = {};
+        if (!player.passedSampleTestCases) player.passedSampleTestCases = {};
         if (player.score === undefined) player.score = 0;
 
-        const problemList = room.problems || DEFAULT_ARENA_PROBLEMS;
+        const problemList = room.problems || [];
         const problemObj = problemList.find(p => p.id === problemId);
         const difficulty = problemObj ? problemObj.difficulty.toUpperCase() : 'EASY';
 
-        if (status === 'ACCEPTED') {
-          // If already solved, do not score again
-          if (!player.solvedProblems[problemId]) {
+        const isAlreadySolved = !!player.solvedProblems[problemId];
+
+        if (status === 'RUN_SUCCESS') {
+          // One-time +20 AP milestone for passing visible sample test cases on run success (only if not already solved)
+          if (!isAlreadySolved && !player.passedSampleTestCases[problemId]) {
+            player.passedSampleTestCases[problemId] = true;
+            player.ap = Math.min(100, (player.ap || 0) + 20);
+          }
+        } else if (status === 'ACCEPTED') {
+          // If already solved, do not score or reward AP again
+          if (!isAlreadySolved) {
             player.solvedProblems[problemId] = true;
 
             // Score addition based on difficulty
@@ -343,13 +437,15 @@ class SocketManager {
               }
             }
 
-            // AP bonus
-            player.ap = Math.min(100, (player.ap || 0) + 50); // +50 AP for solve
+            // AP bonus (first Accepted submission gives +50 AP)
+            player.ap = Math.min(100, (player.ap || 0) + 50);
           }
         } else {
-          // Wrong Answer / Penalty
-          player.failedAttempts[problemId] = (player.failedAttempts[problemId] || 0) + 1;
-          player.score = (player.score || 0) - 15; // Deduct 15 points
+          // Wrong Answer / Penalty (only if not already solved)
+          if (!isAlreadySolved) {
+            player.failedAttempts[problemId] = (player.failedAttempts[problemId] || 0) + 1;
+            player.score = (player.score || 0) - 15; // Deduct 15 points
+          }
         }
 
         setRoomDocument(room);
@@ -370,51 +466,58 @@ class SocketManager {
             winnerId = opponent.userId; // Opponent wins because of higher points quality
           }
 
-          room.status = 'FINISHED';
-          room.winnerId = winnerId;
-          setRoomDocument(room);
-
-          // Post to Python Django backend duels endpoint to persist result and calculate ELO
-          const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:8000';
-          const postData = {
-            player_a_id: room.players[0].userId,
-            player_b_id: room.players[1] ? room.players[1].userId : room.players[0].userId,
-            winner_id: winnerId,
-            score_a: room.players[0].score || 0,
-            score_b: room.players[1] ? room.players[1].score : 0
-          };
-
-          fetch(`${backendUrl}/api/auth/duels/create/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(postData)
-          })
-          .then(res => res.json())
-          .then(data => {
-            logger.info(`[Duel Persistence] Saved match: ${data.match_id}, ELO delta A: ${data.elo_delta_a}, B: ${data.elo_delta_b}`);
-            
-            // Broadcast final results including real ELO changes from Python DB!
-            this.io.to(roomId).emit('match_finished', {
-              winnerId,
-              scores: room.players.map(p => ({
-                userId: p.userId,
-                username: p.username,
-                score: p.score,
-                eloDelta: p.userId === room.players[0].userId ? data.elo_delta_a : data.elo_delta_b
-              })),
-              reason: 'All problems solved by a contender.'
-            });
-          })
-          .catch(err => {
-            logger.error(`[Duel Persistence] Failed to save duel outcome:`, err);
-            // Fallback to broadcasting without ELO changes if API fails
-            this.io.to(roomId).emit('match_finished', {
-              winnerId,
-              scores: room.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
-              reason: 'All problems solved by a contender.'
-            });
-          });
+          finishMatch(this.io, roomId, room, winnerId, 'All problems solved by a contender.');
         }
+      });
+
+      // 6.5. socket.on('vote_tie_resolution', (payload) => { ... })
+      socket.on('vote_tie_resolution', (payload = {}) => {
+        const { matchId, vote } = payload; // vote is either 'draw' or 'overtime'
+        const roomId = matchId;
+        const room = customRooms.get(roomId) || getRoomDocument(roomId);
+        if (!room || room.status !== 'TIE_PROMPT') return;
+
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (!player) return;
+
+        if (!room.votes) room.votes = { draw: [], overtime: [] };
+
+        // Deduplicate vote lists
+        room.votes.draw = (room.votes.draw || []).filter(uid => uid !== player.userId);
+        room.votes.overtime = (room.votes.overtime || []).filter(uid => uid !== player.userId);
+
+        if (vote === 'draw') {
+          room.votes.draw.push(player.userId);
+        } else if (vote === 'overtime') {
+          room.votes.overtime.push(player.userId);
+        }
+
+        setRoomDocument(room);
+        customRooms.set(roomId, room);
+        this.io.to(roomId).emit('room_updated', room);
+
+        const totalPlayers = room.players.length;
+        const overtimeVotes = room.votes.overtime.length;
+        const drawVotes = room.votes.draw.length;
+
+        if (overtimeVotes >= totalPlayers) {
+          // Both voted overtime: resume match in overtime phase!
+          room.status = 'ACTIVE';
+          room.isOvertime = true;
+          room.overtimeStartedAt = new Date().toISOString();
+          room.votes = null;
+          room.tiePromptExpiresAt = null;
+          setRoomDocument(room);
+          customRooms.set(roomId, room);
+          this.io.to(roomId).emit('room_updated', room);
+
+          setupApAndMatchTimer(this.io, roomId);
+        } else if (drawVotes >= totalPlayers) {
+          // Both voted draw: end the match as a draw
+          finishMatch(this.io, roomId, room, null, 'Match ended in a draw by mutual agreement.');
+        }
+        // else: split vote (one draw, one overtime) — stay in TIE_PROMPT;
+        // the 30s auto-draw timeout in matchmaker.js will resolve it
       });
 
       // 7. socket.on('use_sabotage', (payload) => { ... })
@@ -507,7 +610,12 @@ class SocketManager {
       socket.on('disconnect', (reason) => {
         logger.info(`Player client disconnected: ${user.username} (Socket ID: ${socket.id}, Reason: ${reason})`);
 
-        // Loop through the entire authoritative state map memory layout list container space
+        // Remove from matchmaking queue if waiting
+        const qIdx = waitingQueue.findIndex(p => p.socketId === socket.id);
+        if (qIdx !== -1) {
+          waitingQueue.splice(qIdx, 1);
+          logger.info(`[Queue] ${user.username} removed from queue on disconnect. Queue size: ${waitingQueue.length}`);
+        }
         for (const [roomCode, room] of customRooms.entries()) {
           const playerIndex = room.players.findIndex((p) => p.socketId === socket.id);
           if (playerIndex !== -1) {
