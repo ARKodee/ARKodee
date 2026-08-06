@@ -69,4 +69,139 @@ class Command(BaseCommand):
             )
             self.stdout.write(f"Bug bounty seeded for {date}: {bug.title} (Created: {created})")
 
-        self.stdout.write(self.style.SUCCESS("All daily bugs seeded successfully!"))
+        # ── Seeding Fallback Arena Problems ──────────────────────────────────────────
+        from apps.problems.models import Problem, TestCase as ProblemTestCase
+        from apps.problems.template_helpers import save_problem_templates
+        
+        fallback_problems = [
+            {
+                "slug": "two-sum-defusal",
+                "title": "Two Sum Defusal",
+                "difficulty": "easy",
+                "description": "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to target.",
+                "constraints": "2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9",
+                "input_format": "First line contains n and target.\nSecond line contains n integers.",
+                "output_format": "Print two space-separated indices.",
+                "sample_input": "4 9\n2 7 11 15",
+                "sample_output": "0 1",
+                "time_limit_ms": 2000,
+                "memory_limit_mb": 256,
+                "test_cases": [
+                    {"input": "4 9\n2 7 11 15", "expected_output": "0 1", "is_sample": True},
+                    {"input": "3 6\n3 2 4", "expected_output": "1 2", "is_sample": True},
+                    {"input": "2 6\n3 3", "expected_output": "0 1", "is_sample": False}
+                ],
+                "templates": {
+                    "python": "class Solution:\n    def solve(self, nums: List[int], target: int) -> List[int]:\n        pass",
+                    "javascript": "class Solution {\n    solve(nums, target) {\n        \n    }\n}",
+                    "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> solve(vector<int>& nums, int target) {\n        \n    }\n};"
+                }
+            },
+            {
+                "slug": "subtree-synchronizer",
+                "title": "Subtree Synchronizer",
+                "difficulty": "medium",
+                "description": "Given the roots of two binary trees `root` and `subRoot`, return `true` if there is a subtree of `root` with the same structure and node values of `subRoot`.",
+                "constraints": "The number of nodes in root is in [1, 2000].",
+                "input_format": "Tree serialization in level order.",
+                "output_format": "Print 'true' or 'false'.",
+                "sample_input": "[3,4,5,1,2] [4,1,2]",
+                "sample_output": "true",
+                "time_limit_ms": 2000,
+                "memory_limit_mb": 256,
+                "test_cases": [
+                    {"input": "[3,4,5,1,2] [4,1,2]", "expected_output": "true", "is_sample": True},
+                    {"input": "[3,4,5,1,2,null,null,null,null,0] [4,1,2]", "expected_output": "false", "is_sample": True}
+                ],
+                "templates": {
+                    "python": "class Solution:\n    def solve(self, root: Optional[TreeNode], subRoot: Optional[TreeNode]) -> bool:\n        pass",
+                    "javascript": "class Solution {\n    solve(root, subRoot) {\n        \n    }\n}",
+                    "cpp": "class Solution {\npublic:\n    bool solve(TreeNode* root, TreeNode* subRoot) {\n        \n    }\n};"
+                }
+            },
+            {
+                "slug": "maximum-subarray-overdrive",
+                "title": "Maximum Subarray Overdrive",
+                "difficulty": "medium",
+                "description": "Given an integer array `nums`, find the subarray with the largest sum, and return its sum in optimal O(N) time complexity.",
+                "constraints": "1 <= nums.length <= 10^5",
+                "input_format": "First line contains n. Second line contains n integers.",
+                "output_format": "Print maximum subarray sum.",
+                "sample_input": "9\n-2 1 -3 4 -1 2 1 -5 4",
+                "sample_output": "6",
+                "time_limit_ms": 1000,
+                "memory_limit_mb": 128,
+                "test_cases": [
+                    {"input": "9\n-2 1 -3 4 -1 2 1 -5 4", "expected_output": "6", "is_sample": True},
+                    {"input": "1\n1", "expected_output": "1", "is_sample": True},
+                    {"input": "5\n5 4 -1 7 8", "expected_output": "23", "is_sample": False}
+                ],
+                "templates": {
+                    "python": "class Solution:\n    def solve(self, nums: List[int]) -> int:\n        pass",
+                    "javascript": "class Solution {\n    solve(nums) {\n        \n    }\n}",
+                    "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int solve(vector<int>& nums) {\n        \n    }\n};"
+                }
+            },
+            {
+                "slug": "network-core-flow",
+                "title": "Network Core Flow",
+                "difficulty": "hard",
+                "description": "Find the critical path with maximum throughput constraint under latency bounds.",
+                "constraints": "2 <= n <= 10^5",
+                "input_format": "Standard graph adjacency specification.",
+                "output_format": "Single maximum bottleneck capacity integer.",
+                "sample_input": "4 5\n0 1 10\n1 2 15\n0 2 5\n2 3 10\n1 3 20",
+                "sample_output": "15",
+                "time_limit_ms": 3000,
+                "memory_limit_mb": 512,
+                "test_cases": [
+                    {"input": "4 5\n0 1 10\n1 2 15\n0 2 5\n2 3 10\n1 3 20", "expected_output": "15", "is_sample": True}
+                ],
+                "templates": {
+                    "python": "class Solution:\n    def solve(self, n: int, edges: List[List[int]]) -> int:\n        pass",
+                    "javascript": "class Solution {\n    solve(n, edges) {\n        \n    }\n}",
+                    "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int solve(int n, vector<vector<int>>& edges) {\n        \n    }\n};"
+                }
+            }
+        ]
+
+        for p_data in fallback_problems:
+            prob, created = Problem.objects.update_or_create(
+                slug=p_data["slug"],
+                defaults={
+                    "title": p_data["title"],
+                    "difficulty": p_data["difficulty"],
+                    "description": p_data["description"],
+                    "constraints": p_data["constraints"],
+                    "input_format": p_data["input_format"],
+                    "output_format": p_data["output_format"],
+                    "sample_input": p_data["sample_input"],
+                    "sample_output": p_data["sample_output"],
+                    "time_limit_ms": p_data["time_limit_ms"],
+                    "memory_limit_mb": p_data["memory_limit_mb"],
+                    "status": "approved",
+                    "is_active": True,
+                    "templates": p_data["templates"]
+                }
+            )
+            self.stdout.write(f"Fallback problem seeded: {prob.title} (Created: {created})")
+            
+            # Save templates helper
+            try:
+                save_problem_templates(str(prob.id), p_data["templates"])
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"Failed to save templates helper: {e}"))
+                
+            # Clean and recreate test cases
+            prob.test_cases.all().delete()
+            for idx, tc in enumerate(p_data["test_cases"]):
+                ProblemTestCase.objects.create(
+                    problem=prob,
+                    input=tc["input"],
+                    expected_output=tc["expected_output"],
+                    is_sample=tc["is_sample"],
+                    order_index=idx
+                )
+
+        self.stdout.write(self.style.SUCCESS("All daily bugs and fallback problems seeded successfully!"))
+

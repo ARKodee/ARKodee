@@ -393,14 +393,15 @@ export function Arena1v1Page() {
 
   // ── Run Code ────────────────────────────────────────────────────────────────
   const handleRunCode = async () => {
-    if (!activeProblem?.slug) return;
+    const problemSlug = activeProblem?.slug || activeProblem?.id;
+    if (!problemSlug) return;
     setIsRunning(true);
     setIsTerminalOpen(true);
     setActiveTerminalTab('testcases');
     setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: '> Running against sample test cases...' }));
     setTestCaseResultsMap(prev => ({ ...prev, [currentProblemId]: [] }));
     try {
-      const res = await runProblemCode(activeProblem.slug, currentCode, currentLanguage, currentVisibleTestCases);
+      const res = await runProblemCode(problemSlug, currentCode, currentLanguage, currentVisibleTestCases);
       setTestCaseResultsMap(prev => ({ ...prev, [currentProblemId]: res.results || [] }));
       setTerminalOutputMap(prev => ({
         ...prev,
@@ -418,14 +419,15 @@ export function Arena1v1Page() {
 
   // ── Submit Code ─────────────────────────────────────────────────────────────
   const handleSubmitCode = async () => {
-    if (!activeProblem?.slug) return;
+    const problemSlug = activeProblem?.slug || activeProblem?.id;
+    if (!problemSlug) return;
     setIsSubmitting(true);
     setIsTerminalOpen(true);
     setActiveTerminalTab('submission');
     setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: '> Submitting solution for full evaluation...' }));
     setSubmissionResultMap(prev => ({ ...prev, [currentProblemId]: null }));
     try {
-      const res = await submitProblemCode(activeProblem.slug, currentCode, currentLanguage);
+      const res = await submitProblemCode(problemSlug, currentCode, currentLanguage);
       const isCorrect = res.verdict === 'AC';
       setSubmissionResultMap(prev => ({ ...prev, [currentProblemId]: res }));
       setTerminalOutputMap(prev => ({

@@ -80,6 +80,7 @@ export function getRoomDocument(roomId) {
 export const DEFAULT_ARENA_PROBLEMS = [
   {
     id: 'p1',
+    slug: 'two-sum-defusal',
     title: 'Two Sum Defusal',
     difficulty: 'EASY',
     description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to target.',
@@ -93,6 +94,7 @@ export const DEFAULT_ARENA_PROBLEMS = [
   },
   {
     id: 'p2',
+    slug: 'subtree-synchronizer',
     title: 'Subtree Synchronizer',
     difficulty: 'MEDIUM',
     description: 'Given the roots of two binary trees `root` and `subRoot`, return `true` if there is a subtree of `root` with the same structure and node values of `subRoot`.',
@@ -106,6 +108,7 @@ export const DEFAULT_ARENA_PROBLEMS = [
   },
   {
     id: 'p3',
+    slug: 'maximum-subarray-overdrive',
     title: 'Maximum Subarray Overdrive',
     difficulty: 'MEDIUM',
     description: 'Given an integer array `nums`, find the subarray with the largest sum, and return its sum in optimal O(N) time complexity.',
@@ -119,6 +122,7 @@ export const DEFAULT_ARENA_PROBLEMS = [
   },
   {
     id: 'p4',
+    slug: 'network-core-flow',
     title: 'Network Core Flow',
     difficulty: 'HARD',
     description: 'Find the critical path with maximum throughput constraint under latency bounds.',
