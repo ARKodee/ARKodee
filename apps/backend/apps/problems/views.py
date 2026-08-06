@@ -12,7 +12,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Problem, TestCase, Submission, UserProblemStats
+from .models import Problem, TestCase, Submission, UserProblemStats, DailyBug, UserBugSolve
 from .template_helpers import get_problem_templates
 from .serializers import (
     ProblemListSerializer,
@@ -941,5 +941,208 @@ def admin_request_reject(request, request_id):
     cr.save()
 
     return Response({"detail": "Request rejected."}, status=status.HTTP_200_OK)
+
+
+import datetime
+from django.utils import timezone
+from apps.auth.models import UserStats
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def daily_bug_summary(request):
+    """
+    Returns a summary of today's DailyBug challenge.
+    If none exists for today's date, falls back to the most recent DailyBug.
+    """
+    today = datetime.date.today()
+    bug = DailyBug.objects.filter(date=today, is_active=True).first()
+    if not bug:
+        bug = DailyBug.objects.filter(is_active=True).order_by("-date").first()
+
+    if not bug:
+        return Response({"detail": "No active bug bounty today."}, status=status.HTTP_404_NOT_FOUND)
+
+    is_solved = UserBugSolve.objects.filter(user=request.user, bug=bug).exists()
+    
+    stats_streak = 0
+    try:
+        stats = request.user.stats
+        stats_streak = stats.streak
+    except Exception:
+        pass
+
+    return Response({
+        "bug_id": str(bug.id),
+        "title": bug.title,
+        "category": bug.category,
+        "date": bug.date.isoformat(),
+        "description": bug.description,
+        "sample_input": bug.sample_input,
+        "expected_output": bug.expected_output,
+        "streak": stats_streak,
+        "xp_reward": bug.xp_reward,
+        "is_solved": is_solved
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def daily_bug_detail(request, bug_id):
+    """
+    Retrieves complete structural details for a target DailyBug challenge.
+    """
+    try:
+        bug = DailyBug.objects.get(id=bug_id, is_active=True)
+    except (DailyBug.DoesNotExist, ValidationError):
+        return Response({"detail": "Bug bounty challenge not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "bug_id": str(bug.id),
+        "title": bug.title,
+        "category": bug.category,
+        "description": bug.description,
+        "line_budget": bug.line_budget,
+        "xp_reward": bug.xp_reward,
+        "starter_codes": bug.starter_codes,
+        "examples": bug.examples
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def run_daily_bug(request, bug_id):
+    """
+    Executes user code against visible sample examples for a target DailyBug.
+    """
+    try:
+        bug = DailyBug.objects.get(id=bug_id, is_active=True)
+    except (DailyBug.DoesNotExist, ValidationError):
+        return Response({"detail": "Bug bounty challenge not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    req_serializer = CodeExecutionRequestSerializer(data=request.data)
+    if not req_serializer.is_valid():
+        return Response(req_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    code = req_serializer.validated_data["code"]
+    language = req_serializer.validated_data["language"]
+
+    class SimpleTestCase:
+        def __init__(self, inp, exp):
+            self.input = inp
+            self.expected_output = exp
+
+    eval_cases = [
+        SimpleTestCase(ex.get("input", ""), ex.get("output", ex.get("expected_output", "")))
+        for ex in bug.examples
+    ]
+
+    if not eval_cases:
+        # Fallback to test_cases_json if no examples listed
+        eval_cases = [
+            SimpleTestCase(tc.get("input", ""), tc.get("expected_output", tc.get("output", "")))
+            for tc in bug.test_cases_json[:2]
+        ]
+
+    if not eval_cases:
+        return Response({"detail": "No sample test cases defined for this bug."}, status=status.HTTP_400_BAD_REQUEST)
+
+    starter_code = bug.starter_codes.get(language, "")
+
+    from .sandbox import run_code_in_sandbox
+    verdict, results, compile_error = run_code_in_sandbox(
+        code, language, eval_cases, bug.time_limit_ms, starter_code
+    )
+
+    return Response({
+        "verdict": verdict,
+        "compile_error": compile_error,
+        "results": results,
+        "output": results[0].get("user_output", "") if results else ""
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def submit_daily_bug(request, bug_id):
+    """
+    Submits user solution for full validation against hidden test cases.
+    Marks solved and increments streak on success.
+    """
+    try:
+        bug = DailyBug.objects.get(id=bug_id, is_active=True)
+    except (DailyBug.DoesNotExist, ValidationError):
+        return Response({"detail": "Bug bounty challenge not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    req_serializer = CodeExecutionRequestSerializer(data=request.data)
+    if not req_serializer.is_valid():
+        return Response(req_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    code = req_serializer.validated_data["code"]
+    language = req_serializer.validated_data["language"]
+
+    class SimpleTestCase:
+        def __init__(self, inp, exp):
+            self.input = inp
+            self.expected_output = exp
+
+    all_cases = [
+        SimpleTestCase(tc.get("input", ""), tc.get("expected_output", tc.get("output", "")))
+        for tc in bug.test_cases_json
+    ]
+
+    if not all_cases:
+        # Fallback to examples if no hidden test cases
+        all_cases = [
+            SimpleTestCase(ex.get("input", ""), ex.get("output", ex.get("expected_output", "")))
+            for ex in bug.examples
+        ]
+
+    if not all_cases:
+        return Response({"detail": "No validation test cases defined for this bug."}, status=status.HTTP_400_BAD_REQUEST)
+
+    starter_code = bug.starter_codes.get(language, "")
+
+    from .sandbox import run_code_in_sandbox
+    verdict, results, compile_error = run_code_in_sandbox(
+        code, language, all_cases, bug.time_limit_ms, starter_code, stop_on_first_fail=True
+    )
+
+    passed = (verdict == "AC")
+
+    if passed:
+        # Register bug solve
+        solve_entry, created = UserBugSolve.objects.get_or_create(
+            user=request.user,
+            bug=bug
+        )
+        if created:
+            # Increment user solving streak
+            try:
+                stats, _ = UserStats.objects.get_or_create(user=request.user)
+                # Check if user already solved another bug today
+                already_solved_today = UserBugSolve.objects.filter(
+                    user=request.user,
+                    solved_at__date=datetime.date.today()
+                ).exclude(bug=bug).exists()
+                if not already_solved_today:
+                    stats.streak += 1
+                    stats.save()
+            except Exception:
+                pass
+
+    error_msg = ""
+    if not passed:
+        if verdict == "CE":
+            error_msg = compile_error or "Compilation Error"
+        else:
+            passed_count = sum(1 for r in results if r.get("passed"))
+            error_msg = f"{verdict} on test case {passed_count + 1}"
+
+    return Response({
+        "passed": passed,
+        "output": results[0].get("user_output", "") if results else "",
+        "error": error_msg
+    }, status=status.HTTP_200_OK)
+
 
 
