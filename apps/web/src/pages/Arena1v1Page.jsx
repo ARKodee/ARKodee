@@ -6,7 +6,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { useAuth } from '../store/AuthContext';
 import { useTheme } from '../store/ThemeContext';
-import { useMatchSocket, DEFAULT_ARENA_PROBLEMS } from '../hooks/useMatchSocket';
+import { useMatchSocket } from '../hooks/useMatchSocket';
 import { ProblemDescription } from '../components/practice/ProblemDescription';
 import { MatchInitOverlay } from '../components/arena/MatchInitOverlay';
 import { runProblemCode, submitProblemCode } from '../lib/problems';
@@ -127,7 +127,7 @@ function RulesModal({ onDismiss, myUsername, opponentUsername, myRating, opponen
               <Clock size={14} className="a1-rules-item-icon" />
               <div>
                 <div className="a1-rules-item-label">Time Limit</div>
-                <div className="a1-rules-item-value">30 Minutes</div>
+                <div className="a1-rules-item-value">60 Minutes</div>
               </div>
             </div>
             <div className="a1-rules-item">
@@ -239,7 +239,7 @@ export function Arena1v1Page() {
     roomState, socket,
   } = useMatchSocket(matchId);
 
-  const activeUserId = user?.id || user?.userId || 'user-1';
+  const activeUserId = user?.id || user?.userId;
   const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
   const submissionsStorageKey = matchId ? `arena_subs_${matchId}_${activeUserId}` : '';
 
@@ -265,7 +265,7 @@ export function Arena1v1Page() {
 
   const myRating = myProfile?.duelRating || user?.duelRating || 1200;
   const isHost = hostId ? String(activeUserId) === String(hostId) : true;
-  const activeProblemsList = (problems && problems.length > 0) ? problems : DEFAULT_ARENA_PROBLEMS;
+  const activeProblemsList = problems || [];
   const activeProblem = activeProblemsList[activeProblemIndex] || activeProblemsList[0];
   const currentProblemId = activeProblem?.id || `p${activeProblemIndex + 1}`;
   const currentLanguage = selectedLanguageMap[currentProblemId] ?? 'python';
@@ -372,7 +372,7 @@ export function Arena1v1Page() {
     if (!isHost) return;
     requestStartMatch();
     setMatchPhase('RULES');
-    initiateMatch();
+    // Note: initiateMatch() removed — it emitted 'initiate_match' which has no server handler
   };
 
   const handleLeaveArena = () => {
@@ -569,7 +569,7 @@ export function Arena1v1Page() {
             </div>
 
             <div className="a1-lobby-stats">
-              {[['Problems', '4 Algorithmic'], ['Time Limit', '30 Mins'], ['Sabotage', 'ENABLED'], ['ELO Stakes', '± 25 PTS']].map(([l, v]) => (
+              {[['Problems', '4 Algorithmic'], ['Time Limit', '60 Mins'], ['Sabotage', 'ENABLED'], ['ELO Stakes', 'Dynamic']].map(([l, v]) => (
                 <div key={l} className="a1-lobby-stat">
                   <span className="a1-lobby-stat-label">{l}</span>
                   <span className="a1-lobby-stat-value">{v}</span>
@@ -635,7 +635,7 @@ export function Arena1v1Page() {
             <div className="a1-victory-accent-bar" />
             <div className="a1-victory-icon-wrapper"><Swords size={32} /></div>
             <h2 className="a1-victory-title">
-              {matchFinishedData.winnerId === 'draw' ? 'Match Tied'
+              {!matchFinishedData.winnerId ? 'Match Tied'
                 : matchFinishedData.winnerId === activeUserId ? '🏆 Victory' : 'Defeat'}
             </h2>
             <p className="a1-victory-subtitle">
@@ -655,7 +655,7 @@ export function Arena1v1Page() {
 
             <div className="a1-victory-stats-box">
               {[
-                ['Result', matchFinishedData.winnerId === 'draw' || !matchFinishedData.winnerId ? 'Draw' : matchFinishedData.winnerId === activeUserId ? 'You Won' : 'Opponent Won'],
+                ['Result', !matchFinishedData.winnerId ? 'Draw' : matchFinishedData.winnerId === activeUserId ? 'You Won' : 'Opponent Won'],
                 ['Your Solved', `${roomState?.players?.find(p => String(p.userId) === String(activeUserId))?.solvedProblems ? Object.keys(roomState.players.find(p => String(p.userId) === String(activeUserId)).solvedProblems).filter(k => roomState.players.find(p => String(p.userId) === String(activeUserId)).solvedProblems[k]).length : 0} / 4`],
                 ['Opponent Solved', `${opponentProfile?.solvedCount || 0} / 4`],
                 ['Your Penalties', `${roomState?.players?.find(p => String(p.userId) === String(activeUserId))?.failedAttempts ? Object.values(roomState.players.find(p => String(p.userId) === String(activeUserId)).failedAttempts).reduce((a, b) => a + b, 0) : 0} failed`],

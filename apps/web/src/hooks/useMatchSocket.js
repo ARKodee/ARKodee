@@ -5,63 +5,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../store/AuthContext';
 
-/**
- * Default fallback problems if backend emits incomplete problem payload
- */
-export const DEFAULT_ARENA_PROBLEMS = [
-  {
-    id: 'p1',
-    title: 'Two Sum Defusal',
-    difficulty: 'EASY',
-    description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to target.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.',
-    constraints: '2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9\n-10^9 <= target <= 10^9',
-    input_format: 'First line contains n and target.\nSecond line contains n space-separated integers.',
-    output_format: 'Print two space-separated indices.',
-    sample_input: ['4 9\n2 7 11 15'],
-    sample_output: ['0 1'],
-    time_limit_ms: 2000,
-    memory_limit_mb: 256,
-  },
-  {
-    id: 'p2',
-    title: 'Subtree Synchronizer',
-    difficulty: 'MEDIUM',
-    description: 'Given the roots of two binary trees `root` and `subRoot`, return `true` if there is a subtree of `root` with the same structure and node values of `subRoot` and `false` otherwise.',
-    constraints: 'The number of nodes in root is in [1, 2000].\n-10^4 <= Node.val <= 10^4',
-    input_format: 'Tree serialization in level order.',
-    output_format: 'Print "true" or "false".',
-    sample_input: ['root = [3,4,5,1,2], subRoot = [4,1,2]'],
-    sample_output: ['true'],
-    time_limit_ms: 2000,
-    memory_limit_mb: 256,
-  },
-  {
-    id: 'p3',
-    title: 'Maximum Subarray Overdrive',
-    difficulty: 'MEDIUM',
-    description: 'Given an integer array `nums`, find the subarray with the largest sum, and return its sum in optimal O(N) time complexity.',
-    constraints: '1 <= nums.length <= 10^5\n-10^4 <= nums[i] <= 10^4',
-    input_format: 'First line contains n. Second line contains n integers.',
-    output_format: 'Print the maximum subarray sum.',
-    sample_input: ['9\n-2 1 -3 4 -1 2 1 -5 4'],
-    sample_output: ['6'],
-    time_limit_ms: 1000,
-    memory_limit_mb: 128,
-  },
-  {
-    id: 'p4',
-    title: 'Network Core Flow (Hard)',
-    difficulty: 'HARD',
-    description: 'There are `n` servers numbered `0` to `n - 1` and an array `edges` where `edges[i] = [from, to, weight]`. Find the critical path with maximum throughput constraint under latency bounds.',
-    constraints: '2 <= n <= 10^5\n1 <= edges.length <= 2 * 10^5',
-    input_format: 'Standard graph adjacency specification.',
-    output_format: 'Single maximum bottleneck capacity integer.',
-    sample_input: ['4 5\n0 1 10\n1 2 15\n0 2 5\n2 3 10\n1 3 20'],
-    sample_output: ['15'],
-    time_limit_ms: 3000,
-    memory_limit_mb: 512,
-  },
-];
 
 /**
  * useMatchSocket Hook
@@ -123,13 +66,19 @@ export function useMatchSocket(matchId) {
   useEffect(() => {
     if (!matchId) return;
 
-    const activeUserId = user?.id || user?.userId || 'user-1';
+    const activeUserId = user?.id || user?.userId;
     const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+
+    // Don't connect if no real token or user id — prevents unauthenticated socket sessions
+    if (!token || !activeUserId) {
+      setConnectionState('ERROR');
+      return;
+    }
 
     const socketUrl = import.meta.env.VITE_WS_URL || 'http://127.0.0.1:3000';
     const socket = io(socketUrl, {
       query: {
-        token: token || `token_${activeUserId}`,
+        token,
         matchId,
         userId: activeUserId,
         username: activeUsername,
@@ -272,11 +221,16 @@ export function useMatchSocket(matchId) {
       setIsArenaDissolved(true);
     });
 
-    socket.on('connect_error', (err) => {
-      console.warn('[useMatchSocket] Connection error (using fallback preloads):', err.message);
+    socket.on('match_error', (payload) => {
+      console.warn('[useMatchSocket] match_error received:', payload?.message);
       setConnectionState('ERROR');
-      setProblems(DEFAULT_ARENA_PROBLEMS);
-      setIsMatchReady(true);
+      setToastMessage(`⚠️ ${payload?.message || 'Match error. Room may have expired.'}`);
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('[useMatchSocket] Connection error:', err.message);
+      setConnectionState('ERROR');
+      // Do NOT load fake problems — let the UI show a proper error/reconnect state
     });
 
     return () => {
@@ -288,7 +242,7 @@ export function useMatchSocket(matchId) {
    * Request start match signal from host
    */
   const requestStartMatch = useCallback(() => {
-    const activeUserId = user?.id || user?.userId || 'placeholder-user-id';
+    const activeUserId = user?.id || user?.userId;
     if (socketRef.current && socketRef.current.connected) {
       socketRef.current.emit('request_start_match', {
         roomId: matchId,
@@ -307,7 +261,7 @@ export function useMatchSocket(matchId) {
    * Leave arena lobby signal (dissolves match for both host & guest)
    */
   const leaveArenaLobby = useCallback(() => {
-    const activeUserId = user?.id || user?.userId || 'placeholder-user-id';
+    const activeUserId = user?.id || user?.userId;
     if (socketRef.current && socketRef.current.connected) {
       socketRef.current.emit('leave_arena_lobby', {
         matchId,
@@ -324,12 +278,8 @@ export function useMatchSocket(matchId) {
     if (socketRef.current && socketRef.current.connected) {
       socketRef.current.emit('initiate_match', { matchId, userId: user?.id });
     }
-    // Pre-populate fallback problems immediately if not already set
-    if (problems.length === 0) {
-      setProblems(DEFAULT_ARENA_PROBLEMS);
-      setIsMatchReady(true);
-    }
-  }, [matchId, user?.id, problems.length]);
+    // Problems come from the server via match_ready — do not pre-populate with fallbacks
+  }, [matchId, user?.id]);
 
   /**
    * Emit code submission progress

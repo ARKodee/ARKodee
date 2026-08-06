@@ -22,10 +22,12 @@ class AuthService {
       return null;
     }
 
-    // Fallback/Mock token handling for offline development/tests
-    if (String(token).startsWith('token_') || String(token).startsWith('mock_')) {
+    // Mock token handling — DEVELOPMENT ONLY. Never active in production.
+    if ((config.env === 'development' || config.env === 'test') &&
+        (String(token).startsWith('token_') || String(token).startsWith('mock_'))) {
       const userId = handshakeQuery.userId || handshakeQuery.id || token.replace('token_', '');
-      const username = handshakeQuery.username || 'Player';
+      const username = handshakeQuery.username || 'DevPlayer';
+      logger.warn(`[AuthService] DEV mock token accepted for user: ${username} (${userId})`);
       return {
         id: String(userId),
         username: String(username),

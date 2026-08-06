@@ -188,8 +188,8 @@ class SocketManager {
 
       // 1. socket.on('create_custom_room', (payload) => { ... })
       socket.on('create_custom_room', (payload = {}) => {
-        const hostUserId = payload.userId || socket.user?.id || 'placeholder-user-id';
-        const hostUsername = payload.username || socket.user?.username || 'Host';
+        const hostUserId = socket.user.id;
+        const hostUsername = socket.user.username;
 
         logger.info(`Player ${hostUsername} (ID: ${hostUserId}) requested to create custom room`);
         const roomCode = generateRoomCode();
@@ -284,31 +284,12 @@ class SocketManager {
 
           this.io.to(roomId).emit('room_updated', room);
         } else {
-          logger.info(`[Socket] client_ready for new room ${roomId}. Registering ${socket.user?.username} as host.`);
-          const newRoom = {
-            id: roomId,
-            hostId: socket.user?.id || 'user-1',
-            hostName: socket.user?.username || 'Host',
-            players: [
-              {
-                socketId: socket.id,
-                userId: socket.user?.id || 'user-1',
-                username: socket.user?.username || 'Host',
-              }
-            ],
-            status: 'WAITING',
-          };
-          customRooms.set(roomId, newRoom);
-          setRoomDocument(newRoom);
-          socket.emit('match_ready', {
-            success: true,
-            roomId: roomId,
-            roomCode: roomId,
-            hostId: newRoom.hostId,
-            hostName: newRoom.hostName,
-            players: newRoom.players,
-            status: newRoom.status,
-            problems: newRoom.problems || [],
+          // Room doesn't exist — don't silently create a solo room, emit an error so the
+          // client knows the match is gone (e.g. server restart, invalid roomId)
+          logger.warn(`[Socket] client_ready for unknown room ${roomId} from ${socket.user?.username}. Emitting match_error.`);
+          socket.emit('match_error', {
+            success: false,
+            message: `Match room [${roomId}] not found. It may have expired or the server restarted.`,
           });
         }
       });
@@ -519,9 +500,7 @@ class SocketManager {
         const overtimeVotes = room.votes.overtime.length;
         const drawVotes = room.votes.draw.length;
 
-        if (drawVotes > 0) {
-          finishMatch(this.io, roomId, room, null, 'Match ended in a draw by player agreement.');
-        } else if (overtimeVotes >= totalPlayers) {
+        if (overtimeVotes >= totalPlayers) {
           // Both voted overtime: resume match in overtime phase!
           room.status = 'ACTIVE';
           room.isOvertime = true;
@@ -533,7 +512,12 @@ class SocketManager {
           this.io.to(roomId).emit('room_updated', room);
 
           setupApAndMatchTimer(this.io, roomId);
+        } else if (drawVotes >= totalPlayers) {
+          // Both voted draw: end the match as a draw
+          finishMatch(this.io, roomId, room, null, 'Match ended in a draw by mutual agreement.');
         }
+        // else: split vote (one draw, one overtime) — stay in TIE_PROMPT;
+        // the 30s auto-draw timeout in matchmaker.js will resolve it
       });
 
       // 7. socket.on('use_sabotage', (payload) => { ... })

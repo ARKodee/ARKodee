@@ -142,7 +142,7 @@ export function MatchInitOverlay({
           
           <div className="mt-1 flex items-center gap-1.5 text-xs text-indigo-400 font-mono font-semibold">
             <Shield size={13} />
-            <span>{userA.rating || 1482} ELO</span>
+            <span>{userA.rating != null ? `${userA.rating} ELO` : 'UNRANKED'}</span>
           </div>
 
           <div className="mt-4 w-full py-1.5 bg-indigo-950/40 border border-indigo-500/20 rounded text-[10px] font-mono text-indigo-300 uppercase tracking-wider">

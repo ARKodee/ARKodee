@@ -399,7 +399,7 @@ export function handleMatchTimeExpired(io, roomId, room, isOvertime = false) {
 
   if (score1 !== score2) {
     // Score is different: highest score wins!
-    const winnerId = score1 > score2 ? p1.userId : p2.userId;
+    const winnerId = score1 > score2 ? p1.userId : (p2 ? p2.userId : null);
     finishMatch(io, roomId, room, winnerId, 'Time expired. Winner decided by higher score.');
   } else {
     // Score is tied
@@ -439,6 +439,12 @@ export function finishMatch(io, roomId, room, winnerId, reason) {
   room.winnerId = winnerId;
   setRoomDocument(room);
 
+  // Stop AP regen interval immediately — no need to wait for the next tick
+  if (activeIntervals.has(roomId)) {
+    clearInterval(activeIntervals.get(roomId));
+    activeIntervals.delete(roomId);
+  }
+
   // Post to Python Django backend duels endpoint to persist result and calculate ELO
   const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:8000';
   const postData = {
@@ -446,7 +452,7 @@ export function finishMatch(io, roomId, room, winnerId, reason) {
     player_b_id: room.players[1] ? room.players[1].userId : room.players[0].userId,
     winner_id: winnerId, // null for draw
     score_a: room.players[0].score || 0,
-    score_b: room.players[1] ? room.players[1].score : 0
+    score_b: room.players[1] ? (room.players[1].score || 0) : 0
   };
 
   logger.info(`[Matchmaker] Finalizing duel room ${roomId}. Winner: ${winnerId}, Reason: ${reason}`);

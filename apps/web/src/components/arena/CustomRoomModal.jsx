@@ -29,11 +29,10 @@ export function CustomRoomModal({ socket, user, onClose }) {
     };
 
     const onRoomDissolved = () => {
-      alert('The lobby has been dissolved by the host.');
       setRoomData(null);
       setRoomCode('');
       setJoinCode('');
-      setErrorMsg('');
+      setErrorMsg('The lobby was dissolved by the host.');
       setIsLoading(false);
       setCopied(false);
       setViewMode('CHOOSE');
@@ -54,8 +53,11 @@ export function CustomRoomModal({ socket, user, onClose }) {
     };
 
     const onMatchStarted = (data) => {
-      console.log('[CustomRoomModal] match_started received, redirecting to arena:', data?.roomCode);
-      const targetMatchId = data?.roomCode || 'CUSTOM-MATCH';
+      const targetMatchId = data?.roomCode || data?.roomId;
+      if (!targetMatchId) {
+        setErrorMsg('Match started but room ID is missing. Please refresh.');
+        return;
+      }
       onClose();
       navigate(`/arena/${targetMatchId}`);
     };
@@ -70,8 +72,9 @@ export function CustomRoomModal({ socket, user, onClose }) {
     // Step 2: Emit create_custom_room if we just entered CREATE mode
     if (viewMode === 'CREATE' && user && !roomCode) {
       setErrorMsg('');
-      const activeUserId = user?.id || user?.userId || 'user-1';
+      const activeUserId = user?.id || user?.userId;
       const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+      if (!activeUserId) { setErrorMsg('You must be logged in to create a room.'); return; }
       socket.emit('create_custom_room', {
         userId: activeUserId,
         username: activeUsername
@@ -87,7 +90,7 @@ export function CustomRoomModal({ socket, user, onClose }) {
     };
   }, [socket, viewMode, user, onClose, navigate]);
 
-  const activeUserId = user?.id || user?.userId || 'user-1';
+  const activeUserId = user?.id || user?.userId;
   const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
   const isHostUser = viewMode === 'CREATE';
 
@@ -139,13 +142,16 @@ export function CustomRoomModal({ socket, user, onClose }) {
   };
 
   const handleStartMatch = () => {
-    if (!roomData || roomData.players.length < 2) return;
-    const matchIdToUse = roomCode || 'ROOM-1V1';
+    if (!roomData || roomData.players?.length < 2) return;
+    if (!roomCode) {
+      setErrorMsg('Room code missing. Please recreate the lobby.');
+      return;
+    }
     setIsLoading(true);
     if (socket) {
       socket.emit('request_start_match', {
-        roomId: matchIdToUse,
-        roomCode: matchIdToUse,
+        roomId: roomCode,
+        roomCode: roomCode,
         userId: activeUserId,
         username: activeUsername,
       });
