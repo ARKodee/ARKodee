@@ -8,6 +8,7 @@ import { useTheme } from '../store/ThemeContext';
 import { ArrowLeft, Terminal, AlertTriangle, Check, X, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { InteractiveEditor } from '../components/practice/InteractiveEditor';
 import { getBugDetails, runBugCode, submitBugCode } from '../lib/bugs';
+import { WorkspaceLayout } from '../components/layout/WorkspaceLayout';
 import './DebugArenaPage.css';
 
 // ─── Language Options ──────────────────────────────────────────────────────────
@@ -286,145 +287,144 @@ export function DebugArenaPage() {
         </div>
       </div>
     );
-  }
+  }  const { bug_id, title, category, description, examples = [], line_budget = 3 } = bugData;
 
-  const { bug_id, title, category, description, examples = [], line_budget = 3 } = bugData;
+  const headerLeft = (
+    <>
+      <button className="da-back-btn" onClick={() => navigate('/dashboard')} title="Return to Dashboard">
+        <ArrowLeft size={18} />
+      </button>
+      <span className="da-toolbar-sep" />
+      <span className="da-title">#{bug_id}</span>
+      <h1 className="da-title">{title}</h1>
+      {category && (
+        <span className="da-category-badge">{category}</span>
+      )}
+    </>
+  );
 
-  return (
-    <div className="da-root">
-      {/* Toolbar */}
-      <header className="da-toolbar">
-        <div className="da-toolbar-left">
-          <button className="da-back-btn" onClick={() => navigate('/dashboard')} title="Return to Dashboard">
-            <ArrowLeft size={18} />
-          </button>
-          <span className="da-toolbar-sep" />
-          <span className="da-title">#{bug_id}</span>
-          <h1 className="da-title">{title}</h1>
-          {category && (
-            <span className="da-category-badge">{category}</span>
-          )}
-        </div>
+  const headerRight = (
+    <>
+      <div className="da-line-budget">
+        <span className="da-line-budget-label">Edits:</span>
+        <span className={`da-line-budget-value ${getLineBudgetClass()}`}>
+          {modsCount}/{line_budget}
+        </span>
+      </div>
 
-        <div className="da-toolbar-right">
-          <div className="da-line-budget">
-            <span className="da-line-budget-label">Edits:</span>
-            <span className={`da-line-budget-value ${getLineBudgetClass()}`}>
-              {modsCount}/{line_budget}
-            </span>
-          </div>
+      <select
+        className="da-lang-select"
+        value={language}
+        onChange={handleLanguageChange}
+      >
+        {LANGUAGES.map((lang) => (
+          <option key={lang.id} value={lang.id}>{lang.label}</option>
+        ))}
+      </select>
+    </>
+  );
 
-          <select
-            className="da-lang-select"
-            value={language}
-            onChange={handleLanguageChange}
-          >
-            {LANGUAGES.map((lang) => (
-              <option key={lang.id} value={lang.id}>{lang.label}</option>
-            ))}
-          </select>
-        </div>
-      </header>
-
-      {/* Workspace */}
-      <div className="da-body">
-        <div className="da-canvas">
-          {/* Left Pane - Problem Description */}
-          <section className="da-pane da-pane--left">
-            <div className="da-description">
-              {/* Constraint Banner */}
-              <div className="da-constraint-banner">
-                <AlertTriangle size={16} />
-                <div>
-                  <h4>Debugging Constraint</h4>
-                  <p>Modify <strong>no more than {line_budget} lines</strong> to pass validation.</p>
-                </div>
-              </div>
-
-              {/* Problem Overview */}
-              <div className="da-problem-overview">
-                <h3>Problem Overview</h3>
-                <p>{description}</p>
-              </div>
-
-              {/* Examples */}
-              {examples.length > 0 && (
-                <div className="da-examples">
-                  <h3>Examples</h3>
-                  {examples.map((ex, idx) => (
-                    <div key={ex.id || idx} className="da-sample">
-                      <div className="da-sample-header">
-                        <span>Example {idx + 1}</span>
-                        <span className="da-sample-badge">Match Case</span>
-                      </div>
-                      <div className="da-sample-block">
-                        <span className="da-sample-label">Input</span>
-                        <pre className="da-sample-pre">{ex.input}</pre>
-                      </div>
-                      <div className="da-sample-block">
-                        <span className="da-sample-label">Output</span>
-                        <pre className="da-sample-pre da-sample-pre--success">{ex.output}</pre>
-                      </div>
-                      {ex.explanation && <p className="da-sample-explanation">{ex.explanation}</p>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Right Pane - Editor */}
-          <section className="da-pane da-pane--right">
-            <div className="da-editor">
-              <div className="da-editor-container">
-                <Editor
-                  height="100%"
-                  language={language === 'cpp' ? 'cpp' : language}
-                  value={currentCode}
-                  onChange={handleCodeChange}
-                  theme={theme === 'dark' ? 'vs-dark' : 'light'}
-                  options={{
-                    fontSize: 13,
-                    fontFamily: "'JetBrains Mono', monospace",
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    padding: { top: 12, bottom: 12 },
-                    automaticLayout: true,
-                  }}
-                />
-              </div>
-
-              {/* Console */}
-              <ConsolePanel
-                output={terminalOutput}
-                isOpen={isTerminalOpen}
-                onToggle={() => setIsTerminalOpen(!isTerminalOpen)}
-                onClose={() => setIsTerminalOpen(false)}
-              />
-
-              {/* Action Bar */}
-              <div className="da-action-bar">
-                <button
-                  className="da-btn da-btn--ghost"
-                  onClick={handleRunCode}
-                  disabled={isRunning || isSubmitting}
-                >
-                  <Terminal size={14} />
-                  <span>Run</span>
-                </button>
-                <button
-                  className="da-btn da-btn--primary"
-                  onClick={handleSubmitCode}
-                  disabled={isRunning || isSubmitting}
-                >
-                  <Zap size={14} />
-                  <span>Submit</span>
-                </button>
-              </div>
-            </div>
-          </section>
+  const leftPane = (
+    <div className="da-description">
+      {/* Constraint Banner */}
+      <div className="da-constraint-banner">
+        <AlertTriangle size={16} />
+        <div>
+          <h4>Debugging Constraint</h4>
+          <p>Modify <strong>no more than {line_budget} lines</strong> to pass validation.</p>
         </div>
       </div>
+
+      {/* Problem Overview */}
+      <div className="da-problem-overview">
+        <h3>Problem Overview</h3>
+        <p>{description}</p>
+      </div>
+
+      {/* Examples */}
+      {examples.length > 0 && (
+        <div className="da-examples">
+          <h3>Examples</h3>
+          {examples.map((ex, idx) => (
+            <div key={ex.id || idx} className="da-sample">
+              <div className="da-sample-header">
+                <span>Example {idx + 1}</span>
+                <span className="da-sample-badge">Match Case</span>
+              </div>
+              <div className="da-sample-block">
+                <span className="da-sample-label">Input</span>
+                <pre className="da-sample-pre">{ex.input}</pre>
+              </div>
+              <div className="da-sample-block">
+                <span className="da-sample-label">Output</span>
+                <pre className="da-sample-pre da-sample-pre--success">{ex.output}</pre>
+              </div>
+              {ex.explanation && <p className="da-sample-explanation">{ex.explanation}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const rightPane = (
+    <div className="da-editor">
+      <div className="da-editor-container">
+        <Editor
+          height="100%"
+          language={language === 'cpp' ? 'cpp' : language}
+          value={currentCode}
+          onChange={handleCodeChange}
+          theme={theme === 'dark' ? 'vs-dark' : 'light'}
+          options={{
+            fontSize: 13,
+            fontFamily: "'JetBrains Mono', monospace",
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            padding: { top: 12, bottom: 12 },
+            automaticLayout: true,
+          }}
+        />
+      </div>
+
+      {/* Console */}
+      <ConsolePanel
+        output={terminalOutput}
+        isOpen={isTerminalOpen}
+        onToggle={() => setIsTerminalOpen(!isTerminalOpen)}
+        onClose={() => setIsTerminalOpen(false)}
+      />
+
+      {/* Action Bar */}
+      <div className="da-action-bar">
+        <button
+          className="da-btn da-btn--ghost"
+          onClick={handleRunCode}
+          disabled={isRunning || isSubmitting}
+        >
+          <Terminal size={14} />
+          <span>Run</span>
+        </button>
+        <button
+          className="da-btn da-btn--primary"
+          onClick={handleSubmitCode}
+          disabled={isRunning || isSubmitting}
+        >
+          <Zap size={14} />
+          <span>Submit</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <WorkspaceLayout
+        headerLeft={headerLeft}
+        headerRight={headerRight}
+        leftPane={leftPane}
+        rightPane={rightPane}
+      />
 
       {/* Success Modal */}
       {showSuccessModal && (
@@ -449,7 +449,7 @@ export function DebugArenaPage() {
           onClose={() => setShowFailedModal(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 
