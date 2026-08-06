@@ -131,11 +131,12 @@ export function Navbar() {
     <header className="navbar">
       <div className="navbar__inner">
 
-        {/* ── Brand ────────────────────────────────────────────────────────── */}
-        <Link to="/" className="navbar__brand">
-          <span className="navbar__brand-icon">⚡</span>
-          <span className="navbar__brand-name">ARKodee</span>
-          <span className="navbar__brand-badge">BETA</span>
+        {/* ── Logo ────────────────────────────────────────────────────────── */}
+        <Link to="/dashboard" className="navbar__logo" aria-label="ARKodee home">
+          <span className="navbar__logo-icon">
+            <IconCode />
+          </span>
+          <span className="navbar__logo-name">ARKodee</span>
         </Link>
 
         {/* ── Nav Links ───────────────────────────────────────────────────── */}
@@ -165,13 +166,11 @@ export function Navbar() {
             </div>
           )}
 
-          {/* ELO Rating Badge */}
-          {rating > 0 && (
-            <div className="navbar__elo" title="Contest ELO Rating">
-              <span className="navbar__elo-label">ELO</span>
-              <span className="navbar__elo-val">{rating}</span>
-            </div>
-          )}
+          {/* Rating */}
+          <div className="navbar__stat" title={`Rating: ${rating}`}>
+            <IconShield />
+            <span>{getRatingTitle(rating)}</span>
+          </div>
 
           {/* Theme toggle */}
           <button

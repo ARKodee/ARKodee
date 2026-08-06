@@ -26,9 +26,9 @@ urlpatterns = [
     path("mod/<uuid:contest_id>/update/", mod_contest_update, name="mod_contest_update"),
     path("mod/<uuid:contest_id>/delete/", mod_contest_delete, name="mod_contest_delete"),
 
-    # ── Player routes (slug catch-alls — must come AFTER mod/) ────────────────
-    path("<slug:slug>/", contest_detail_view, name="contest_detail"),
-    path("<slug:slug>/register/", contest_register_view, name="contest_register"),
-    path("<slug:slug>/start-virtual/", contest_start_virtual_view, name="contest_start_virtual"),
-    path("<slug:slug>/leaderboard/", contest_leaderboard_view, name="contest_leaderboard"),
+    # ── Player routes (slug/id catch-alls — must come AFTER mod/) ────────────
+    path("<str:slug>/", contest_detail_view, name="contest_detail"),
+    path("<str:slug>/register/", contest_register_view, name="contest_register"),
+    path("<str:slug>/start-virtual/", contest_start_virtual_view, name="contest_start_virtual"),
+    path("<str:slug>/leaderboard/", contest_leaderboard_view, name="contest_leaderboard"),
 ]

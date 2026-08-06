@@ -666,9 +666,22 @@ export function ContestArenaPage() {
         const runtimeStatus = rawStatus.toLowerCase();
         const isEndedStatus = ['ended', 'past', 'completed', 'finished', 'closed'].includes(runtimeStatus);
 
+        // Non-virtual: attempt auto-registration for public live matches if not registered
+        if (!isVirtual && runtimeStatus === 'live' && !data.is_registered) {
+          if (!data.access_code_required) {
+            try {
+              await registerForContest(slug);
+              data.is_registered = true;
+            } catch (regErr) {
+              console.warn('Auto registration failed:', regErr);
+            }
+          }
+        }
+
         // Non-virtual: redirect if not yet started, not registered for live, or already ended
         if (!isVirtual) {
           if (runtimeStatus === 'upcoming' || (runtimeStatus === 'live' && !data.is_registered) || isEndedStatus) {
+            setLoading(false);
             navigate(`/contests/${slug}`);
             return;
           }
@@ -676,6 +689,7 @@ export function ContestArenaPage() {
 
         // Virtual mode: only allow for ended/past/completed contests
         if (isVirtual && !isEndedStatus) {
+          setLoading(false);
           navigate(`/contests/${slug}`);
           return;
         }
@@ -721,7 +735,7 @@ export function ContestArenaPage() {
 
     fetchData();
     return () => { cancelled = true; }
-  }, [slug, isVirtual, navigate, mySubmissions, sessionStartMs]);
+  }, [slug, isVirtual]);
 
 
 

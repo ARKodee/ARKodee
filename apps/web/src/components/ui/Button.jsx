@@ -17,11 +17,13 @@ export function Button({
   size = 'md',
   icon = false,
   loading = false,
+  isLoading = false,
   disabled = false,
   className = '',
   as: Tag = 'button',
   ...props
 }) {
+  const isCurrentlyLoading = loading || isLoading;
   const cls = [
     'btn',
     `btn--${variant}`,
@@ -31,8 +33,8 @@ export function Button({
   ].filter(Boolean).join(' ');
 
   return (
-    <Tag className={cls} disabled={disabled || loading} {...props}>
-      {loading && <span className="btn__spinner" aria-hidden="true" />}
+    <Tag className={cls} disabled={disabled || isCurrentlyLoading} {...props}>
+      {isCurrentlyLoading && <span className="btn__spinner" aria-hidden="true" />}
       {children}
     </Tag>
   );

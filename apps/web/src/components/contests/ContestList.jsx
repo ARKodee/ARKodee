@@ -30,9 +30,9 @@ const getCtaConfig = (contest) => {
 
   if (status === 'active') {
     return {
-      text: 'Enter Arena',
-      className: 'contest-card__action contest-card__action--enter',
-      icon: <Play />,
+      text: isRegistered ? 'Enter Arena' : 'Register & Enter',
+      className: `contest-card__action ${isRegistered ? 'contest-card__action--enter' : 'contest-card__action--register'}`,
+      icon: isRegistered ? <Play /> : <ArrowRight />,
       disabled: false,
     }
   }
