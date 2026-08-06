@@ -9,6 +9,7 @@ import { PracticeDashboard } from '../pages/PracticeDashboard'
 import { ProblemWorkspace } from '../pages/ProblemWorkspace'
 import { MatchmakingArena } from '../pages/MatchmakingArena'
 import { Arena1v1Page } from '../pages/Arena1v1Page'
+import { ProfilePage } from '../pages/ProfilePage'
 
 import { DebugArenaPage } from '../pages/DebugArenaPage'
 
@@ -44,6 +45,7 @@ export function AppRoutes() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/debug/:bugId" element={<DebugArenaPage />} />
         <Route path="/debug" element={<DebugArenaPage />} />
         <Route path="/contests" element={<ContestsDashboard />} />

@@ -14,9 +14,12 @@ from .serializers import (
     CheckEmailSerializer,
     GoogleLoginSerializer,
     LoginSerializer,
+    ProfileUpdateSerializer,
     RegisterSerializer,
     UserSerializer,
+    ProfileStatsSerializer,
 )
+from .models import UserStats
 
 
 @api_view(["POST"])
@@ -157,10 +160,39 @@ def logout_view(request):
     return Response({"detail": "Logged out successfully."})
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def profile_view(request):
+    if request.method == "PATCH":
+        serializer = ProfileUpdateSerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({"detail": "Invalid profile data.", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.update(request.user, serializer.validated_data)
+        UserStats.objects.get_or_create(user=request.user)
+        return Response(ProfileStatsSerializer(request.user).data, status=status.HTTP_200_OK)
+
     return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def profile_stats_view(request):
+    """
+    Comprehensive profile endpoint with user stats, problem analytics, and activity.
+    
+    Returns:
+        - User basic info (id, email, fullName)
+        - UserStats (ELO ratings, wins/losses, streak, role)
+        - Problem stats by difficulty
+        - Recent activity (submissions, contests)
+        - Contest performance metrics
+        - Language usage statistics
+        - Problem tag statistics
+    """
+    UserStats.objects.get_or_create(user=request.user)
+    serializer = ProfileStatsSerializer(request.user)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

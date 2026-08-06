@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../store/ThemeContext';
-import { getUserProfile, logoutUser } from '../../lib/auth';
+import { logoutUser } from '../../lib/auth';
+import { getProfileStats } from '../../lib/users';
 import './Navbar.css';
 
 /* Icons as minimal inline SVG so no extra dependency */
@@ -44,6 +45,12 @@ const IconShield = () => (
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
   </svg>
 );
+const IconUser = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 21a8 8 0 1 0-16 0" />
+    <circle cx="12" cy="8" r="4" />
+  </svg>
+);
 
 const NAV_LINKS = [
   { name: 'Dashboard', path: '/dashboard' },
@@ -64,14 +71,14 @@ export function Navbar() {
   const location  = useLocation();
   const navigate  = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const [user, setUser]               = useState(null);
+  const [profile, setProfile]         = useState(null);
   const [menuOpen, setMenuOpen]       = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
-    getUserProfile()
-      .then((d) => alive && d && setUser(d))
+    getProfileStats()
+      .then((d) => alive && d && setProfile(d))
       .catch(() => {});
     return () => { alive = false; };
   }, [location.pathname]);
@@ -92,20 +99,43 @@ export function Navbar() {
     navigate('/auth');
   };
 
-  const initial = (user?.username || 'U')[0].toUpperCase();
-  const rating  = user?.contest_rating || 1200;
-  const streak  = user?.streak_count   || 0;
+  const user = profile?.user;
+  const stats = profile?.stats;
+
+  const displayName = (() => {
+    if (!user) return 'Account';
+    const first = user.first_name || '';
+    const last  = user.last_name || '';
+    const full  = `${first} ${last}`.trim();
+    if (full) return full;
+
+    const fn = user.fullName || user.name;
+    if (fn && !fn.includes('@')) return fn;
+
+    const un = user.username;
+    if (un && !un.includes('@')) return un;
+
+    const email = user.email || un;
+    if (email && email.includes('@')) {
+      const raw = email.split('@')[0];
+      return raw.charAt(0).toUpperCase() + raw.slice(1);
+    }
+    return 'Account';
+  })();
+
+  const initial = displayName[0].toUpperCase();
+  const rating  = stats?.contest_rating ?? 0;
+  const streak  = stats?.streak ?? 0;
 
   return (
     <header className="navbar">
       <div className="navbar__inner">
 
-        {/* ── Logo ────────────────────────────────────────────────────────── */}
-        <Link to="/dashboard" className="navbar__logo" aria-label="ARKodee home">
-          <span className="navbar__logo-icon">
-            <IconCode />
-          </span>
-          <span className="navbar__logo-name">ARKodee</span>
+        {/* ── Brand ────────────────────────────────────────────────────────── */}
+        <Link to="/" className="navbar__brand">
+          <span className="navbar__brand-icon">⚡</span>
+          <span className="navbar__brand-name">ARKodee</span>
+          <span className="navbar__brand-badge">BETA</span>
         </Link>
 
         {/* ── Nav Links ───────────────────────────────────────────────────── */}
@@ -129,23 +159,26 @@ export function Navbar() {
 
           {/* Streak */}
           {streak > 0 && (
-            <div className="navbar__stat" title="Daily streak">
-              <IconFlame />
+            <div className="navbar__streak" title="Daily streak active">
+              <span className="navbar__streak-icon">🔥</span>
               <span>{streak}d</span>
             </div>
           )}
 
-          {/* Rating */}
-          <div className="navbar__stat" title={`Rating: ${rating}`}>
-            <IconShield />
-            <span>{getRatingTitle(rating)}</span>
-          </div>
+          {/* ELO Rating Badge */}
+          {rating > 0 && (
+            <div className="navbar__elo" title="Contest ELO Rating">
+              <span className="navbar__elo-label">ELO</span>
+              <span className="navbar__elo-val">{rating}</span>
+            </div>
+          )}
 
           {/* Theme toggle */}
           <button
-            className="navbar__theme-btn"
+            className="navbar__icon-btn"
             onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            aria-label="Toggle theme"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           >
             {theme === 'dark' ? <IconSun /> : <IconMoon />}
           </button>
@@ -160,16 +193,26 @@ export function Navbar() {
               aria-label="User menu"
             >
               <span className="navbar__avatar">{initial}</span>
-              <span>{user?.username || 'Account'}</span>
+              <span>{displayName}</span>
               <IconChevron />
             </button>
 
             {menuOpen && (
               <div className="navbar__dropdown" role="menu">
                 <div className="navbar__dropdown-header">
-                  <p className="navbar__dropdown-username">{user?.username || 'User'}</p>
+                  <p className="navbar__dropdown-username">{displayName}</p>
                   <p className="navbar__dropdown-email">{user?.email || ''}</p>
                 </div>
+
+                <Link
+                  to="/profile"
+                  className="navbar__dropdown-item"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <IconUser />
+                  View profile
+                </Link>
 
                 <button
                   className="navbar__dropdown-item navbar__dropdown-item--danger"

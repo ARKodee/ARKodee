@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext } from 'react'
+import { invalidateProfileCache } from '../lib/users'
 
 // Create Auth Context
 const AuthContext = createContext(null)
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
 
      // Call this after successful login/register
      const setAuth = (authToken, userData) => {
+          invalidateProfileCache()
           setToken(authToken)
           setUser(userData)
           localStorage.setItem('authToken', authToken)
@@ -28,6 +30,7 @@ export function AuthProvider({ children }) {
 
      // Logout user
      const logout = () => {
+          invalidateProfileCache()
           setToken(null)
           setUser(null)
           localStorage.removeItem('authToken')

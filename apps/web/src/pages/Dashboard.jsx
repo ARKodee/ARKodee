@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { getUserProfile } from '../lib/auth';
+import { getProfileStats } from '../lib/users';
 import { Navbar }          from '../components/layout/Navbar';
 import { DailyBugCard }    from '../components/dashboard/DailyBugCard';
 import { GlobalLeaderboard } from '../components/dashboard/GlobalLeaderboard';
@@ -46,12 +46,43 @@ const FEED_COLORS = {
 };
 function pad(n) { return String(n).padStart(2, '0'); }
 
+function getRatingTitle(rating = 0) {
+  if (rating >= 2100) return 'Grandmaster';
+  if (rating >= 1900) return 'Master';
+  if (rating >= 1600) return 'Expert';
+  if (rating >= 1400) return 'Specialist';
+  if (rating >= 1200) return 'Pupil';
+  return 'Newbie';
+}
+
 /* ── Quick nav tiles ─────────────────────────────────────────────────────────── */
 const NAV_TILES = [
   { to: '/practice',   icon: IconBook,   iconVariant: 'accent',  name: 'Practice',  desc: 'Solve problems and build problem-solving skills.' },
   { to: '/contests',   icon: IconTrophy, iconVariant: 'warning', name: 'Contests',  desc: 'Compete in rated and unrated coding contests.' },
   { to: '/matchmaking',icon: IconSwords, iconVariant: 'success', name: '1v1 Arena', desc: 'Challenge others in real-time ranked matches.'  },
 ];
+
+function getUserDisplayName(userObj, authObj) {
+  const u = userObj || authObj || {};
+  const first = u.first_name || authObj?.first_name || '';
+  const last  = u.last_name || authObj?.last_name || '';
+  const full  = `${first} ${last}`.trim();
+  if (full) return full;
+
+  const fn = u.fullName || authObj?.fullName || u.name || authObj?.name;
+  if (fn && !fn.includes('@')) return fn;
+
+  const un = u.username || authObj?.username;
+  if (un && !un.includes('@')) return un;
+
+  const email = u.email || authObj?.email || un;
+  if (email && email.includes('@')) {
+    const raw = email.split('@')[0];
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  return 'Coder';
+}
 
 /* ── Main Component ─────────────────────────────────────────────────────────── */
 export function Dashboard() {
@@ -64,7 +95,7 @@ export function Dashboard() {
   /* Fetch real user profile */
   useEffect(() => {
     let alive = true;
-    getUserProfile()
+    getProfileStats()
       .then((d) => alive && (setProfile(d), setLoading(false)))
       .catch(() => alive && setLoading(false));
     return () => { alive = false; };
@@ -86,19 +117,24 @@ export function Dashboard() {
   }, [feed]);
 
   /* Derive display values */
-  const username     = profile?.username || authUser?.username || authUser?.name || 'Coder';
-  const rating       = profile?.contest_rating ?? 1200;
-  const streak       = profile?.streak_count   ?? 0;
-  const solved       = profile?.problems_solved ?? 0;
-  const totalMatches = profile?.total_matches   ?? 0;
-  const winRate      = profile?.win_rate != null ? `${Math.round(profile.win_rate)}%` : '—';
+  const username = getUserDisplayName(profile?.user, authUser);
+  const rating = profile?.stats?.contest_rating ?? null;
+  const streak = profile?.stats?.streak ?? 0;
+  const solved = profile?.problem_stats?.total_solved ?? 0;
+  const totalMatches = profile?.stats
+    ? (profile.stats.total_wins + profile.stats.total_losses + profile.stats.total_draws)
+    : 0;
+  const winRate = profile?.stats && (profile.stats.total_wins + profile.stats.total_losses) > 0
+    ? `${Math.round((profile.stats.total_wins / (profile.stats.total_wins + profile.stats.total_losses)) * 100)}%`
+    : '—';
+  const contestRatingLabel = rating != null ? getRatingTitle(rating) : '—';
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const STATS = [
-    { label: 'Problems solved', value: solved,       icon: <IconCode />,   iconVariant: 'accent',  trend: '+12 this week', trendDir: 'up' },
-    { label: 'Contest rating',  value: rating,       icon: <IconTarget />, iconVariant: 'warning', trend: 'Pupil',         trendDir: 'flat' },
+    { label: 'Problems solved', value: solved,       icon: <IconCode />,   iconVariant: 'accent',  trend: 'Profile stats', trendDir: 'up' },
+    { label: 'Contest rating',  value: rating ?? '—',       icon: <IconTarget />, iconVariant: 'warning', trend: contestRatingLabel,         trendDir: 'flat' },
     { label: 'Win rate',        value: winRate,      icon: <IconSwords />, iconVariant: 'success', trend: `${totalMatches} matches`,  trendDir: 'up' },
     { label: 'Day streak',      value: `${streak}d`, icon: <IconFlame />,  iconVariant: 'info',    trend: streak > 0 ? 'Keep it up!' : 'Start today', trendDir: streak > 0 ? 'up' : 'flat' },
   ];
