@@ -103,9 +103,11 @@ def compare_outputs(user_output, expected_output, is_case_insensitive=False):
     if u_unquoted == e_unquoted:
         return True
 
-    # 3. Normalized whitespace match
-    u_norm = u_unquoted.replace(" ", "").replace("\r", "")
-    e_norm = e_unquoted.replace(" ", "").replace("\r", "")
+    # 3. Normalized whitespace match — collapse runs of whitespace to single space
+    #    Do NOT strip all spaces: "1 2 3" should NOT match "123"
+    import re
+    u_norm = re.sub(r'[\r\t ]+', ' ', u_unquoted).strip()
+    e_norm = re.sub(r'[\r\t ]+', ' ', e_unquoted).strip()
     if u_norm == e_norm:
         return True
 
@@ -122,9 +124,16 @@ def compare_outputs(user_output, expected_output, is_case_insensitive=False):
 
     # 6. Structural JSON/AST object match
     try:
-        import ast
-        u_obj = ast.literal_eval(u_unquoted.replace("null", "None").replace("true", "True").replace("false", "False"))
-        e_obj = ast.literal_eval(e_unquoted.replace("null", "None").replace("true", "True").replace("false", "False"))
+        # Use word-boundary-safe replacements to avoid mangling words like
+        # "nullable" → "Noneable" or "truer" → "Trueer"
+        def _to_py_literal(s):
+            import re as _re
+            s = _re.sub(r'\bnull\b',  'None',  s)
+            s = _re.sub(r'\btrue\b',  'True',  s)
+            s = _re.sub(r'\bfalse\b', 'False', s)
+            return s
+        u_obj = ast.literal_eval(_to_py_literal(u_unquoted))
+        e_obj = ast.literal_eval(_to_py_literal(e_unquoted))
         if u_obj == e_obj:
             return True
     except Exception:
