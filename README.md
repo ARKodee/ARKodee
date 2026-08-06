@@ -65,3 +65,23 @@ npm run dev
 cd apps/backend
 python manage.py test tests.test_auth
 ```
+
+### SET-UP TO RUN THE PROJECT FOR THE FIRST TIME 
+
+# Navigate to backend directory
+cd ARKodee/apps/backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+.\venv\Scripts\Activate.ps1
+
+# Upgrade pip
+python -m pip install --upgrade pip
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Verify installation
+python manage.py check

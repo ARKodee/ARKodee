@@ -194,3 +194,58 @@ class UserProblemStats(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.problem.title} ({self.status.upper()})"
 
+
+class ChangeRequest(models.Model):
+    """
+    Stores change requests (Create/Update/Delete) for Problems and Contests submitted by Moderators
+    awaiting Superadmin approval.
+    """
+    ENTITY_CHOICES = [
+        ("problem", "Problem"),
+        ("contest", "Contest"),
+    ]
+    ACTION_CHOICES = [
+        ("CREATE", "Create"),
+        ("UPDATE", "Update"),
+        ("DELETE", "Delete"),
+    ]
+    STATUS_CHOICES = [
+        ("PENDING", "Pending Approval"),
+        ("APPROVED", "Approved"),
+        ("REJECTED", "Rejected"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    entity_type = models.CharField(max_length=20, choices=ENTITY_CHOICES)
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="PENDING")
+
+    target_id = models.UUIDField(null=True, blank=True)
+    title_preview = models.CharField(max_length=200)
+    payload = models.JSONField(default=dict, blank=True)
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="change_requests"
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_change_requests"
+    )
+    rejection_reason = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "change_requests"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.action} {self.entity_type.upper()}: {self.title_preview} [{self.status}]"
+
+

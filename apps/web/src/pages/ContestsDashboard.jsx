@@ -41,7 +41,7 @@ function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
     setSubmitting(true)
     setErr('')
     try {
-      await onRegisterConfirm(contest.id, accessCode)
+      await onRegisterConfirm(contest.slug || contest.id, accessCode)
       onClose()
     } catch (error) {
       setErr(error.message || 'Registration failed. Check your access PIN.')
@@ -51,22 +51,22 @@ function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
   }
 
   return (
-    <div className="cd-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="cd-modal-backdrop cd-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
       <div className="cd-modal" onClick={(e) => e.stopPropagation()}>
         <div className="cd-modal__header">
           <div className="cd-modal__title-row">
             <h2 className="cd-modal__title">Contest Registration</h2>
-            <span className="cd-modal__subtitle">{contest.title}</span>
+            <span className="cd-modal__subtitle" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{contest.title}</span>
           </div>
-          <button className="cd-modal__close-btn" onClick={onClose} aria-label="Close dialog">
+          <button className="cd-modal__close cd-modal__close-btn" onClick={onClose} aria-label="Close dialog">
             <IconClose />
           </button>
         </div>
 
         <form onSubmit={handleRegister} className="cd-modal__form">
-          {err && <div className="cd-modal__error" role="alert">{err}</div>}
+          {err && <div className="cd-modal__err cd-modal__error" role="alert">{err}</div>}
 
-          <div className="cd-modal__meta">
+          <div className="cd-modal__meta-grid cd-modal__meta">
             <div className="cd-modal__meta-item">
               <span className="cd-modal__meta-label">Access</span>
               <span className="cd-modal__meta-value">
@@ -83,7 +83,7 @@ function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
 
           {contest.access_code_required && (
             <div className="cd-modal__input-group">
-              <label htmlFor="reg-pin" className="cd-modal__input-label">Access PIN Code</label>
+              <label htmlFor="reg-pin" className="cd-modal__meta-label" style={{ display: 'block', marginBottom: '4px' }}>Access PIN Code</label>
               <Input
                 id="reg-pin"
                 type="password"
@@ -96,19 +96,20 @@ function RegistrationModal({ contest, onClose, onRegisterConfirm }) {
             </div>
           )}
 
-          <label className="cd-modal__checkbox-label">
+          <label className="cd-modal__consent cd-modal__checkbox-label">
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
               className="cd-modal__checkbox"
+              style={{ marginTop: '3px' }}
             />
             <span>I agree to follow the code of conduct, solve problems individually, and prevent plagiarism.</span>
           </label>
 
-          <div className="cd-modal__actions">
+          <div className="cd-modal__actions" style={{ justifyContent: 'flex-end', marginTop: '8px' }}>
             <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
-            <Button variant="primary" type="submit" isLoading={submitting}>Register</Button>
+            <Button variant="primary" type="submit" isLoading={submitting}>Register & Confirm</Button>
           </div>
         </form>
       </div>

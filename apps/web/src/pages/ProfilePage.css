@@ -1,0 +1,138 @@
+/* ============================================
+   Profile Page Main Stylesheet
+   ============================================ */
+
+.profile-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent-subtle) 65%, transparent) 0%, transparent 36%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--info-subtle) 55%, transparent) 0%, transparent 30%),
+    linear-gradient(180deg, var(--bg-base) 0%, color-mix(in srgb, var(--bg-base) 88%, var(--bg-surface)) 100%);
+  color: var(--text-primary);
+}
+
+.profile-body {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.profile-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ─── Page Header ─── */
+.profile-section {
+  margin-bottom: 0;
+}
+
+.profile-section--badges {
+  margin-bottom: 0;
+}
+
+.profile-section--heatmap {
+  margin-bottom: 0;
+}
+
+.profile-section--header {
+  margin-bottom: 0;
+}
+
+.profile-section--stats {
+  margin-bottom: 0;
+}
+
+/* ─── Error State ─── */
+.profile-error {
+  padding: 16px 20px;
+  background-color: var(--danger-subtle);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-lg);
+  color: var(--danger);
+  margin-bottom: 24px;
+  font-size: var(--text-sm);
+}
+
+.profile-error p {
+  margin: 0;
+}
+
+/* ─── Grid Layout ─── */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.profile-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.profile-column--main {
+  /* Left column takes more space */
+}
+
+.profile-column--side {
+  /* Right column for secondary content */
+}
+
+/* ─── Responsive Design ─── */
+@media (max-width: 1024px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-column--main {
+    order: 1;
+  }
+
+  .profile-column--side {
+    order: 2;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-body {
+    padding: 24px 16px;
+  }
+
+  .profile-grid {
+    gap: 16px;
+  }
+
+  .profile-column--side {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-body {
+    padding: 16px 12px;
+  }
+
+}
+
+/* ─── Animations ─── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-page {
+  animation: fadeIn 0.3s ease-out;
+}

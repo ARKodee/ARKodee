@@ -1,5 +1,22 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from apps.auth.models import UserStats
+
+
+# ==========================================
+# 0. User Stats Serializer
+# ==========================================
+class UserStatsSerializer(serializers.ModelSerializer):
+    """
+    Serializes gamified user statistics including ELO ratings and achievements.
+    """
+    class Meta:
+        model = UserStats
+        fields = [
+            'contest_rating', 'duel_rating', 'role',
+            'total_wins', 'total_losses', 'total_draws',
+            'streak', 'avatar_url', 'created_at', 'updated_at'
+        ]
 
 
 # ==========================================
@@ -84,25 +101,37 @@ class GoogleLoginSerializer(serializers.Serializer):
 
 
 # ==========================================
-# 4. User Serializer (Public & Protected Flow)
+# 5. User Serializer (Public & Protected Flow)
 # ==========================================
 class UserSerializer(serializers.ModelSerializer):
     """
-    Serializes basic user metadata for API responses.
+    Serializes user metadata for API responses.
+    Includes computed role tier for frontend routing guards and gamified ratings.
     """
     fullName = serializers.SerializerMethodField()
     firstName = serializers.CharField(source="first_name", read_only=True)
     lastName = serializers.CharField(source="last_name", read_only=True)
+    role = serializers.SerializerMethodField()
     duelRating = serializers.SerializerMethodField()
     contestRating = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "fullName", "firstName", "lastName", "duelRating", "contestRating"]
+        fields = ["id", "username", "email", "fullName", "firstName", "lastName", "role", "is_staff", "is_superuser", "duelRating", "contestRating"]
 
     def get_fullName(self, obj):
         full_name = f"{obj.first_name} {obj.last_name}".strip()
         return full_name if full_name else (obj.first_name or "User")
+
+    def get_role(self, obj):
+        if obj.is_superuser:
+            return "superadmin"
+        stats_role = getattr(getattr(obj, "stats", None), "role", None)
+        if obj.is_staff or stats_role in ("superadmin", "moderator"):
+            if stats_role == "superadmin":
+                return "superadmin"
+            return "moderator"
+        return "competitor"
 
     def get_duelRating(self, obj):
         if hasattr(obj, "stats"):
@@ -115,8 +144,155 @@ class UserSerializer(serializers.ModelSerializer):
         return 1200
 
 
+# ==========================================
+# 6. Profile Update Serializer (Protected Flow)
+# ==========================================
+class ProfileUpdateSerializer(serializers.Serializer):
+    """
+    Validates profile updates for the authenticated user.
+    Expects any subset of: { "fullName": "...", "avatar_url": "https://..." }
+    """
+    fullName = serializers.CharField(required=False, allow_blank=True)
+    avatar_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
+
+    def update(self, instance, validated_data):
+        full_name = validated_data.get("fullName")
+        avatar_url = validated_data.get("avatar_url", serializers.empty)
+
+        if full_name is not None:
+            cleaned_name = full_name.strip()
+            if cleaned_name:
+                name_parts = cleaned_name.split(" ", 1)
+                instance.first_name = name_parts[0]
+                instance.last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        if avatar_url is not serializers.empty:
+            stats, _ = UserStats.objects.get_or_create(user=instance)
+            stats.avatar_url = avatar_url or None
+            stats.save(update_fields=["avatar_url", "updated_at"])
+
+        instance.save()
+        return instance
 
 
+# ==========================================
+# 7. Profile Stats Serializer (Protected Flow)
+# ==========================================
+class ProfileStatsSerializer(serializers.Serializer):
+    """
+    Comprehensive profile response with user info, stats, and activity.
+    Combines data from multiple sources into a single response.
+    """
+    user = serializers.SerializerMethodField()
+    stats = serializers.SerializerMethodField()
+    problem_stats = serializers.SerializerMethodField()
+    activity = serializers.SerializerMethodField()
+    contest_stats = serializers.SerializerMethodField()
+    language_stats = serializers.SerializerMethodField()
+    tag_stats = serializers.SerializerMethodField()
+    earned_badges = serializers.SerializerMethodField()
 
+    class Meta:
+        fields = [
+            'user', 'stats', 'problem_stats', 'activity',
+            'contest_stats', 'language_stats', 'tag_stats', 'earned_badges'
+        ]
 
+    def get_user(self, obj):
+        """Return basic user information."""
+        return UserSerializer(obj).data
 
+    def get_stats(self, obj):
+        """Return the user's competitive stats, creating them if needed."""
+        stats, _ = UserStats.objects.get_or_create(user=obj)
+        return UserStatsSerializer(stats).data
+
+    def get_problem_stats(self, obj):
+        """Return aggregated problem statistics."""
+        from apps.auth.utils import get_user_problem_stats
+        return get_user_problem_stats(obj)
+
+    def get_activity(self, obj):
+        """Return recent activity."""
+        from apps.auth.utils import get_user_recent_activity
+        return get_user_recent_activity(obj, limit=5)
+
+    def get_contest_stats(self, obj):
+        """Return contest performance statistics."""
+        from apps.auth.utils import get_contest_stats
+        return get_contest_stats(obj)
+
+    def get_language_stats(self, obj):
+        """Return language usage statistics."""
+        from apps.auth.utils import get_user_language_stats
+        return get_user_language_stats(obj)
+
+    def get_tag_stats(self, obj):
+        """Return problem tag statistics."""
+        from apps.auth.utils import get_user_tag_stats
+        return get_user_tag_stats(obj)
+
+    def get_earned_badges(self, obj):
+        """Return a compact, derived badge list for the profile UI."""
+        stats, _ = UserStats.objects.get_or_create(user=obj)
+        problem_stats = self.get_problem_stats(obj)
+        contest_stats = self.get_contest_stats(obj)
+
+        badges = [
+            {
+                "key": "role",
+                "title": stats.get_role_display(),
+                "shortTitle": "CMP",
+                "description": "Current access level",
+                "variant": "accent",
+            },
+            {
+                "key": "rating",
+                "title": self._get_rating_title(stats.contest_rating),
+                "shortTitle": "RANK",
+                "description": f"Contest rating {stats.contest_rating}",
+                "variant": "warning",
+            },
+        ]
+
+        if stats.streak > 0:
+            badges.append({
+                "key": "streak",
+                "title": f"{stats.streak}-Day Streak",
+                "shortTitle": "STRK",
+                "description": "Active solving streak",
+                "variant": "success",
+            })
+
+        if problem_stats["total_solved"] > 0:
+            badges.append({
+                "key": "solver",
+                "title": "Problem Solver",
+                "shortTitle": "SOLV",
+                "description": f"{problem_stats['total_solved']} solved problems",
+                "variant": "info",
+            })
+
+        if contest_stats["total_contests"] > 0:
+            badges.append({
+                "key": "contestant",
+                "title": "Contest Competitor",
+                "shortTitle": "CNT",
+                "description": f"{contest_stats['total_contests']} contests joined",
+                "variant": "default",
+            })
+
+        return badges[:5]
+
+    def _get_rating_title(self, rating):
+        if rating >= 2100:
+            return "Grandmaster"
+        if rating >= 1900:
+            return "Master"
+        if rating >= 1600:
+            return "Expert"
+        if rating >= 1400:
+            return "Specialist"
+        if rating >= 1200:
+            return "Pupil"
+        return "Newbie"

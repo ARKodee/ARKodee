@@ -16,7 +16,7 @@ import {
   AlertCircle,
   Trophy,
 } from 'lucide-react';
-import { getContestDetails, startVirtualContest, getContestLeaderboard } from '../lib/contests';
+import { getContestDetails, startVirtualContest, getContestLeaderboard, registerForContest } from '../lib/contests';
 import { Leaderboard } from '../components/contests/Leaderboard';
 import { Navbar } from '../components/layout/Navbar';
 import { useAuth } from '../store/AuthContext';
@@ -68,8 +68,29 @@ export function ContestDetailsPage() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('problems');
-  const [personalResult, setPersonalResult] = useState(null);
+  const [registering, setRegistering] = useState(false);
+  const [pinCode, setPinCode] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [showPinInput, setShowPinInput] = useState(false);
   const sidebarRef = useRef(null);
+
+  const handleDetailRegister = async () => {
+    if (contest?.access_code_required && !pinCode.trim()) {
+      setShowPinInput(true);
+      return;
+    }
+    setRegistering(true);
+    setPinError('');
+    try {
+      await registerForContest(slug, pinCode);
+      setContest((prev) => ({ ...prev, is_registered: true }));
+      setShowPinInput(false);
+    } catch (err) {
+      setPinError(err.message || 'Registration failed.');
+    } finally {
+      setRegistering(false);
+    }
+  };
 
   // Fetch personal result if registered
   useEffect(() => {
@@ -454,6 +475,82 @@ export function ContestDetailsPage() {
 
           {/* Right Column: Metadata Sidebar */}
           <aside className="cd-sidebar" ref={sidebarRef}>
+            {/* Live / Upcoming Registration & Arena Access Box */}
+            {timeInfo.status !== 'ended' && (
+              <div className="cd-virtual-box">
+                <div className="cd-virtual-box-content">
+                  <span className="cd-virtual-box-title">
+                    {timeInfo.status === 'active' ? '⚡ Live Match' : '📅 Upcoming Match'}
+                  </span>
+                  <p className="cd-virtual-box-desc">
+                    {contest.is_registered
+                      ? timeInfo.status === 'active'
+                        ? 'You are registered for this live match! Enter the arena now.'
+                        : 'You are registered! Match will start when the timer hits 00:00.'
+                      : timeInfo.status === 'active'
+                        ? 'This match is currently live. Register now to participate and solve problems.'
+                        : 'Register now to secure your spot in this upcoming contest.'}
+                  </p>
+                </div>
+
+                {pinError && (
+                  <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '8px' }}>
+                    {pinError}
+                  </div>
+                )}
+
+                {showPinInput && !contest.is_registered && (
+                  <input
+                    type="password"
+                    placeholder="Enter 4-digit PIN"
+                    value={pinCode}
+                    onChange={(e) => setPinCode(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(15,23,42,0.8)',
+                      border: '1px solid #334155',
+                      color: '#fff',
+                      fontSize: '13px',
+                      marginBottom: '10px',
+                    }}
+                  />
+                )}
+
+                {contest.is_registered ? (
+                  timeInfo.status === 'active' ? (
+                    <button
+                      className="cd-btn cd-btn--primary"
+                      onClick={() => navigate(`/contests/${slug}/arena`)}
+                    >
+                      <Trophy size={16} />
+                      <span>Enter Arena</span>
+                    </button>
+                  ) : (
+                    <div style={{ padding: '8px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '6px', color: '#10b981', fontWeight: 600, textAlign: 'center', fontSize: '13px' }}>
+                      ✓ Registered
+                    </div>
+                  )
+                ) : (
+                  <button
+                    className="cd-btn cd-btn--primary"
+                    onClick={handleDetailRegister}
+                    disabled={registering}
+                  >
+                    {registering ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Trophy size={16} />
+                    )}
+                    <span>
+                      {timeInfo.status === 'active' ? 'Register & Enter' : 'Register Now'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Virtual Practice Box (for ended contests) */}
             {timeInfo.status === 'ended' && (
               <div className="cd-virtual-box">

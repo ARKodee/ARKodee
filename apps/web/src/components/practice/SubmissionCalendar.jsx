@@ -1,7 +1,7 @@
 // src/components/practice/SubmissionCalendar.jsx
 // Presentational Component — renders an immersive pixel-heatmap activity grid.
 // Consumes a timestamp-to-count dictionary map through props.
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import './SubmissionCalendar.css';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -27,6 +27,16 @@ function getIntensityClass(count, maxCount) {
   return 'sc-cell--t4';
 }
 
+function normalizeDate(dateLike) {
+  if (!dateLike) return null;
+
+  const parsedDate = dateLike instanceof Date ? new Date(dateLike) : new Date(dateLike);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+
+  parsedDate.setHours(0, 0, 0, 0);
+  return parsedDate;
+}
+
 /**
  * Build the calendar grid data structure from a timestamp→count dictionary.
  *
@@ -35,19 +45,31 @@ function getIntensityClass(count, maxCount) {
  *
  * We work backwards from today to produce the trailing WEEKS_TO_SHOW weeks.
  */
-function buildCalendarGrid(calendarData) {
+function buildCalendarGrid(calendarData, startDate, weeksToShow = WEEKS_TO_SHOW) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Determine the Sunday that starts our visible window
+  const anchorDate = normalizeDate(startDate);
+
+  // Determine the Sunday that starts our visible window.
+  // If an anchor is available, start from the first activity; otherwise show the trailing year.
+  const defaultWindowStart = new Date(today);
   const dayOfWeek = today.getDay(); // 0 = Sun
-  const windowStart = new Date(today);
-  windowStart.setDate(today.getDate() - dayOfWeek - (WEEKS_TO_SHOW - 1) * 7);
+  const windowWeeks = Math.max(1, weeksToShow);
+  defaultWindowStart.setDate(today.getDate() - dayOfWeek - (windowWeeks - 1) * 7);
+
+  const windowStart = anchorDate
+    ? (anchorDate > defaultWindowStart ? new Date(anchorDate) : new Date(defaultWindowStart))
+    : defaultWindowStart;
+
+  const startDay = windowStart.getDay();
+  windowStart.setDate(windowStart.getDate() - startDay);
+  windowStart.setHours(0, 0, 0, 0);
 
   const grid = [];
   let maxCount = 0;
 
-  for (let w = 0; w < WEEKS_TO_SHOW; w++) {
+  for (let w = 0; w < windowWeeks; w++) {
     const week = [];
     for (let d = 0; d < DAYS_PER_WEEK; d++) {
       const cellDate = new Date(windowStart);
@@ -86,14 +108,16 @@ function buildCalendarGrid(calendarData) {
 function buildMonthMarkers(grid) {
   const markers = [];
   let lastMonth = -1;
+  let lastMarkerWeek = -10;
 
   grid.forEach((week, wi) => {
     // Use the first non-future day in the week
     const firstDay = week[0];
     const month = firstDay.date.getMonth();
-    if (month !== lastMonth) {
+    if (month !== lastMonth && wi - lastMarkerWeek >= 3) {
       markers.push({ weekIndex: wi, label: MONTH_LABELS[month] });
       lastMonth = month;
+      lastMarkerWeek = wi;
     }
   });
 
@@ -110,11 +134,18 @@ function buildMonthMarkers(grid) {
  *                          e.g. { 1718841600: 3, 1718928000: 1 }
  *  - isLoading    {boolean} Shows skeleton shimmer while data loads.
  */
-export function SubmissionCalendar({ calendarData = {}, isLoading = false }) {
+export function SubmissionCalendar({
+  calendarData = {},
+  isLoading = false,
+  startDate = null,
+  weeksToShow = WEEKS_TO_SHOW,
+  compact = false,
+}) {
   const { grid, maxCount } = useMemo(
-    () => buildCalendarGrid(calendarData),
-    [calendarData]
+    () => buildCalendarGrid(calendarData, startDate, weeksToShow),
+    [calendarData, startDate, weeksToShow]
   );
+  const [selectedDay, setSelectedDay] = useState(null);
 
   const monthMarkers = useMemo(() => buildMonthMarkers(grid), [grid]);
 
@@ -131,7 +162,7 @@ export function SubmissionCalendar({ calendarData = {}, isLoading = false }) {
 
   if (isLoading) {
     return (
-      <div className="sc-root sc-root--loading" aria-busy="true" aria-label="Loading activity calendar">
+      <div className={`sc-root sc-root--loading${compact ? ' sc-root--compact' : ''}`} aria-busy="true" aria-label="Loading activity calendar">
         <div className="sc-header">
           <div className="sc-skeleton sc-skeleton--title" />
           <div className="sc-skeleton sc-skeleton--stat" />
@@ -150,7 +181,7 @@ export function SubmissionCalendar({ calendarData = {}, isLoading = false }) {
   }
 
   return (
-    <div className="sc-root" aria-label="Submission activity calendar">
+    <div className={`sc-root${compact ? ' sc-root--compact' : ''}`} aria-label="Submission activity calendar">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="sc-header">
         <h3 className="sc-title">Activity</h3>
@@ -169,46 +200,50 @@ export function SubmissionCalendar({ calendarData = {}, isLoading = false }) {
 
       {/* ── Calendar Grid Wrapper ──────────────────────────────────────── */}
       <div className="sc-scroll-wrap">
-        <div className="sc-canvas">
-          {/* Month labels row */}
-          <div className="sc-month-row" aria-hidden="true">
-            {/* Left gutter to align with day labels */}
-            <div className="sc-day-gutter" />
-            <div className="sc-month-track">
-              {monthMarkers.map(({ weekIndex, label }) => (
-                <span
-                  key={`${weekIndex}-${label}`}
-                  className="sc-month-label"
-                  style={{ gridColumnStart: weekIndex + 1 }}
-                >
-                  {label}
-                </span>
-              ))}
+        <div className="sc-canvas" style={{ '--sc-weeks': grid.length }}>
+          {!compact && (
+            <div className="sc-month-row" aria-hidden="true">
+              <div className="sc-day-gutter" />
+              <div className="sc-month-track" style={{ '--sc-weeks': grid.length }}>
+                {monthMarkers.map(({ weekIndex, label }) => (
+                  <span
+                    key={`${weekIndex}-${label}`}
+                    className="sc-month-label"
+                    style={{ '--sc-week-index': weekIndex }}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Grid body: day-of-week labels + cell columns */}
-          <div className="sc-body">
-            {/* Day-of-week label column */}
-            <div className="sc-day-labels" aria-hidden="true">
-              {DAY_LABELS.map((d, i) => (
-                <span key={d} className={`sc-day-label${i % 2 === 0 ? ' sc-day-label--hidden' : ''}`}>
-                  {d}
-                </span>
-              ))}
-            </div>
+          <div className={`sc-body${compact ? ' sc-body--compact' : ''}`}>
+            {!compact && (
+              <div className="sc-day-labels" aria-hidden="true">
+                {DAY_LABELS.map((d, i) => (
+                  <span key={d} className={`sc-day-label${i % 2 === 0 ? ' sc-day-label--hidden' : ''}`}>
+                    {d}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* Week columns */}
             <div className="sc-grid" role="grid" aria-label="Contribution grid">
               {grid.map((week, wi) => (
                 <div key={wi} className="sc-week" role="row">
                   {week.map((day, di) => (
-                    <div
+                    <button
                       key={di}
+                      type="button"
                       role="gridcell"
-                      className={`sc-cell ${day.isFuture ? 'sc-cell--future' : getIntensityClass(day.count, maxCount)}`}
+                      aria-pressed={selectedDay?.date?.getTime() === day.date.getTime()}
+                      className={`sc-cell ${day.isFuture ? 'sc-cell--future' : getIntensityClass(day.count, maxCount)}${selectedDay?.date?.getTime() === day.date.getTime() ? ' sc-cell--selected' : ''}`}
                       title={day.label}
                       aria-label={day.label}
+                      onClick={() => setSelectedDay(day)}
                     />
                   ))}
                 </div>
@@ -228,6 +263,12 @@ export function SubmissionCalendar({ calendarData = {}, isLoading = false }) {
         <div className="sc-cell sc-cell--t4 sc-legend-cell" />
         <span className="sc-legend-label">More</span>
       </div>
+
+      {selectedDay && (
+        <div className="sc-selection" aria-live="polite">
+          Selected: <span className="sc-selection__date">{selectedDay.label}</span>
+        </div>
+      )}
     </div>
   );
 }

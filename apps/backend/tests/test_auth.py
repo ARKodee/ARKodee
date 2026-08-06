@@ -13,6 +13,7 @@ class AuthTests(APITestCase):
         self.google_login_url = reverse("auth:google-login")
         self.logout_url = reverse("auth:logout")
         self.profile_url = reverse("auth:profile")
+        self.profile_stats_url = reverse("auth:profile-stats")
         
         self.user_data = {
             "email": "test@example.com",
@@ -81,6 +82,43 @@ class AuthTests(APITestCase):
         self.client.credentials()  # clear credentials
         response_profile_after = self.client.get(self.profile_url)
         self.assertEqual(response_profile_after.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_profile_stats_returns_complete_payload(self):
+        response = self.client.post(self.register_url, self.user_data)
+        token = response.data["token"]
+
+        self.client.credentials(HTTP_AUTHORIZATION="Token " + token)
+        response_stats = self.client.get(self.profile_stats_url)
+
+        self.assertEqual(response_stats.status_code, status.HTTP_200_OK)
+        self.assertIn("user", response_stats.data)
+        self.assertIn("stats", response_stats.data)
+        self.assertIn("problem_stats", response_stats.data)
+        self.assertIn("activity", response_stats.data)
+        self.assertIn("contest_stats", response_stats.data)
+        self.assertIn("language_stats", response_stats.data)
+        self.assertIn("tag_stats", response_stats.data)
+        self.assertIn("earned_badges", response_stats.data)
+        self.assertEqual(response_stats.data["user"]["username"], self.user_data["email"])
+        self.assertGreaterEqual(len(response_stats.data["earned_badges"]), 2)
+
+    def test_profile_update_changes_name_and_avatar(self):
+        response = self.client.post(self.register_url, self.user_data)
+        token = response.data["token"]
+
+        self.client.credentials(HTTP_AUTHORIZATION="Token " + token)
+        response_update = self.client.patch(
+            self.profile_url,
+            {
+                "fullName": "Updated User",
+                "avatar_url": "https://example.com/avatar.png",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response_update.status_code, status.HTTP_200_OK)
+        self.assertEqual(response_update.data["user"]["fullName"], "Updated User")
+        self.assertEqual(response_update.data["stats"]["avatar_url"], "https://example.com/avatar.png")
 
     @patch("apps.auth.views.id_token.verify_oauth2_token")
     @patch("apps.auth.views.settings.GOOGLE_OAUTH_CLIENT_ID", "test-google-client-id")

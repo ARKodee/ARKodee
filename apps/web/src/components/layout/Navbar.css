@@ -247,6 +247,7 @@
   border: none;
   font-family: var(--font-ui);
   text-align: left;
+  text-decoration: none;
   transition:
     color var(--duration-fast) var(--ease),
     background-color var(--duration-fast) var(--ease);

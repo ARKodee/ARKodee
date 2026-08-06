@@ -33,6 +33,20 @@ export function AuthForm() {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
+  /**
+   * Resolves the correct post-login home route based on the user's exact role.
+   * Each role has its own completely separate home — they never share a dashboard.
+   *   superadmin → /admin/dashboard     (Platform Governor panel)
+   *   moderator  → /moderator/dashboard (Contributor / Problem Setter panel)
+   *   competitor → /dashboard           (Standard user arena)
+   */
+  const getHomeRoute = (userData) => {
+    const role = userData?.role
+    if (role === 'superadmin') return '/admin/dashboard'
+    if (role === 'moderator')  return '/moderator/dashboard'
+    return '/dashboard'
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (step === 'EMAIL') {
@@ -41,7 +55,7 @@ export function AuthForm() {
       try {
         const res = await loginUser(email, password)
         setAuth(res.token, res.user)
-        navigate('/dashboard')
+        navigate(getHomeRoute(res.user))
       } catch {
         // error surfaced via hook
       }
@@ -49,7 +63,7 @@ export function AuthForm() {
       try {
         const res = await registerUser({ email, password, fullName })
         setAuth(res.token, res.user)
-        navigate('/dashboard')
+        navigate(getHomeRoute(res.user))
       } catch {
         // error surfaced via hook
       }
@@ -64,7 +78,7 @@ export function AuthForm() {
     try {
       const res = await googleLoginUser(idToken)
       setAuth(res.token, res.user)
-      navigate('/dashboard')
+      navigate(getHomeRoute(res.user))
     } catch (err) {
       setGoogleError(err?.message || 'Google sign-in failed. Please try again.')
     } finally {
@@ -73,8 +87,10 @@ export function AuthForm() {
   }
 
   const handleDevBypass = () => {
-    setAuth('mock-token', { email: 'dev@arkodee.io', fullName: 'Developer', name: 'Developer' })
-    navigate('/dashboard')
+    // Dev bypass defaults to competitor — change role to 'moderator' or 'superadmin' to test admin routing
+    const mockUser = { email: 'dev@arkodee.io', fullName: 'Developer', role: 'competitor' }
+    setAuth('mock-token', mockUser)
+    navigate(getHomeRoute(mockUser))
   }
 
   const { heading, sub } = COPY[step] || COPY.EMAIL
