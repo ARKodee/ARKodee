@@ -1,9 +1,21 @@
 from django.test import TestCase
 from apps.problems.models import Problem, TestCase as ProblemTestCase
-from apps.problems.sandbox import sanitize_error_message, run_code_in_sandbox
+from apps.problems.sandbox import sanitize_error_message, run_code_in_sandbox, compare_outputs
 
 
 class SandboxExecutionTests(TestCase):
+    def test_compare_outputs_empty_equivalence(self):
+        # Verify [] vs None vs null vs {} vs empty string are all treated as equivalent empty values
+        self.assertTrue(compare_outputs("[]", "None"))
+        self.assertTrue(compare_outputs("None", "[]"))
+        self.assertTrue(compare_outputs("null", "None"))
+        self.assertTrue(compare_outputs("{}", "None"))
+        self.assertTrue(compare_outputs("", "None"))
+        self.assertTrue(compare_outputs(None, "[]"))
+        # Verify non-empty values do not match empty values
+        self.assertFalse(compare_outputs("[1]", "None"))
+        self.assertFalse(compare_outputs("None", "[1]"))
+
     def test_sanitize_error_message_strips_temp_paths(self):
         raw_err = (
             'Traceback (most recent call last):\n'

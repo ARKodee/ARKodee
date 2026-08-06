@@ -82,6 +82,16 @@ def compare_outputs(user_output, expected_output, is_case_insensitive=False):
       4. Case-insensitive text matching for case-insensitive string problems.
       5. Structural JSON/AST list/dict equality.
     """
+    # Normalize null/empty representations to avoid false-negatives on no-solution outputs (e.g. [] vs None vs null)
+    def _is_empty_or_null(s):
+        if s is None:
+            return True
+        s_str = str(s).strip().lower()
+        return s_str in ["none", "null", "[]", "{}", ""]
+
+    if _is_empty_or_null(user_output) and _is_empty_or_null(expected_output):
+        return True
+
     if user_output is None or expected_output is None:
         return False
 
