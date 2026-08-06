@@ -105,21 +105,33 @@ class GoogleLoginSerializer(serializers.Serializer):
 # ==========================================
 class UserSerializer(serializers.ModelSerializer):
     """
-    Serializes basic user metadata for API responses.
+    Serializes user metadata for API responses.
+    Includes computed role tier for frontend routing guards and gamified ratings.
     """
     fullName = serializers.SerializerMethodField()
     firstName = serializers.CharField(source="first_name", read_only=True)
     lastName = serializers.CharField(source="last_name", read_only=True)
+    role = serializers.SerializerMethodField()
     duelRating = serializers.SerializerMethodField()
     contestRating = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "fullName", "firstName", "lastName", "duelRating", "contestRating"]
+        fields = ["id", "username", "email", "fullName", "firstName", "lastName", "role", "is_staff", "is_superuser", "duelRating", "contestRating"]
 
     def get_fullName(self, obj):
         full_name = f"{obj.first_name} {obj.last_name}".strip()
         return full_name if full_name else (obj.first_name or "User")
+
+    def get_role(self, obj):
+        if obj.is_superuser:
+            return "superadmin"
+        stats_role = getattr(getattr(obj, "stats", None), "role", None)
+        if obj.is_staff or stats_role in ("superadmin", "moderator"):
+            if stats_role == "superadmin":
+                return "superadmin"
+            return "moderator"
+        return "competitor"
 
     def get_duelRating(self, obj):
         if hasattr(obj, "stats"):

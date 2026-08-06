@@ -14,4 +14,11 @@ urlpatterns = [
     path("profile-stats/", views.profile_stats_view, name="profile-stats"),
     path("duels/create/", views.create_duel_view, name="duel-create"),
     path("duels/history/", views.duel_history_view, name="duel-history"),
+
+    # Superadmin Player Management
+    path("admin/players/", views.admin_players_list, name="admin-players-list"),
+    path("admin/players/<int:user_id>/role/", views.admin_player_update_role, name="admin-player-role"),
+    path("admin/players/<int:user_id>/ban/", views.admin_player_toggle_ban, name="admin-player-ban"),
+    path("admin/players/<int:user_id>/flag/", views.admin_player_toggle_flag, name="admin-player-flag"),
+    path("admin/players/<int:user_id>/rating/", views.admin_player_adjust_rating, name="admin-player-rating"),
 ]

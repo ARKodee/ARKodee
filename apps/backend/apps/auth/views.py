@@ -10,6 +10,8 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from google.auth.exceptions import GoogleAuthError
 
+from .permissions import IsModerator, IsSuperadmin
+
 from .serializers import (
     CheckEmailSerializer,
     GoogleLoginSerializer,
@@ -180,19 +182,22 @@ def profile_view(request):
 def profile_stats_view(request):
     """
     Comprehensive profile endpoint with user stats, problem analytics, and activity.
-    
-    Returns:
-        - User basic info (id, email, fullName)
-        - UserStats (ELO ratings, wins/losses, streak, role)
-        - Problem stats by difficulty
-        - Recent activity (submissions, contests)
-        - Contest performance metrics
-        - Language usage statistics
-        - Problem tag statistics
     """
     UserStats.objects.get_or_create(user=request.user)
     serializer = ProfileStatsSerializer(request.user)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsModerator])
+def moderator_only_view(request):
+    return Response({"detail": "Moderator access granted.", "role": UserSerializer(request.user).data.get("role")})
+
+
+@api_view(["GET"])
+@permission_classes([IsSuperadmin])
+def superadmin_only_view(request):
+    return Response({"detail": "Superadmin access granted.", "role": UserSerializer(request.user).data.get("role")})
 
 
 @api_view(["GET"])
@@ -293,3 +298,251 @@ def duel_history_view(request):
     serializer = DuelMatchHistorySerializer(matches, many=True, context={"request_user": request.user})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
+# ==============================================================================
+# 👑 SUPERADMIN PLAYER MANAGEMENT ENDPOINTS
+# ==============================================================================
+from django.db.models import Q
+from django.core.paginator import Paginator
+from django.db import transaction as db_transaction
+from .models import UserStats
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_players_list(request):
+    """
+    Superadmin endpoint: List all platform users with metrics, filtering, and search.
+    Guarantees every user has a UserStats record and staff roles are synchronized.
+    """
+    search_q = request.GET.get("search", "").strip()
+    role_f = request.GET.get("role", "all").strip().lower()
+    status_f = request.GET.get("status", "all").strip().lower()
+    page = int(request.GET.get("page", 1))
+    page_size = int(request.GET.get("page_size", 20))
+
+    # 1. Sync UserStats & role flags for any existing users
+    all_users = User.objects.select_related("stats").all()
+    for u in all_users:
+        stats = getattr(u, "stats", None)
+        if not stats:
+            initial_role = "superadmin" if u.is_superuser else "moderator" if u.is_staff else "competitor"
+            stats, _ = UserStats.objects.get_or_create(user=u, defaults={"role": initial_role})
+        else:
+            # Sync role with Django flags if mismatched
+            if u.is_superuser and stats.role != "superadmin":
+                stats.role = "superadmin"
+                stats.save()
+            elif u.is_staff and not u.is_superuser and stats.role == "competitor":
+                stats.role = "moderator"
+                stats.save()
+
+    qs = User.objects.select_related("stats").all().order_by("-date_joined")
+
+    # Global counts summary
+    total_count = qs.count()
+    competitors_count = qs.filter(stats__role="competitor").count()
+    moderators_count = qs.filter(stats__role="moderator").count()
+    superadmins_count = qs.filter(stats__role="superadmin").count()
+    banned_count = qs.filter(is_active=False).count()
+    flagged_count = qs.filter(stats__is_flagged=True).count()
+
+    # Search filter
+    if search_q:
+        qs = qs.filter(
+            Q(username__icontains=search_q) |
+            Q(email__icontains=search_q) |
+            Q(first_name__icontains=search_q) |
+            Q(last_name__icontains=search_q)
+        )
+
+    # Role filter
+    if role_f in ("competitor", "moderator", "superadmin"):
+        qs = qs.filter(stats__role=role_f)
+
+    # Status filter
+    if status_f == "active":
+        qs = qs.filter(is_active=True)
+    elif status_f == "banned":
+        qs = qs.filter(is_active=False)
+    elif status_f == "flagged":
+        qs = qs.filter(stats__is_flagged=True)
+
+    paginator = Paginator(qs, page_size)
+    current_page = paginator.get_page(page)
+
+    results = []
+    for user_obj in current_page.object_list:
+        stats = user_obj.stats
+        results.append({
+            "id": user_obj.id,
+            "username": user_obj.username,
+            "email": user_obj.email,
+            "first_name": user_obj.first_name,
+            "last_name": user_obj.last_name,
+            "is_active": user_obj.is_active,
+            "is_staff": user_obj.is_staff,
+            "is_superuser": user_obj.is_superuser,
+            "date_joined": user_obj.date_joined.isoformat() if user_obj.date_joined else None,
+            "last_login": user_obj.last_login.isoformat() if user_obj.last_login else None,
+            "role": stats.role,
+            "contest_rating": stats.contest_rating,
+            "duel_rating": stats.duel_rating,
+            "total_wins": stats.total_wins,
+            "total_losses": stats.total_losses,
+            "total_draws": stats.total_draws,
+            "streak": stats.streak,
+            "avatar_url": stats.avatar_url,
+            "is_flagged": stats.is_flagged,
+            "flag_reason": stats.flag_reason,
+        })
+
+    return Response({
+        "summary": {
+            "total": total_count,
+            "competitors": competitors_count,
+            "moderators": moderators_count,
+            "superadmins": superadmins_count,
+            "banned": banned_count,
+            "flagged": flagged_count,
+        },
+        "count": paginator.count,
+        "page": current_page.number,
+        "total_pages": paginator.num_pages,
+        "results": results,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_update_role(request, user_id):
+    """
+    Superadmin endpoint: Elevate or demote user role (competitor, moderator, superadmin).
+    Synchronizes Django staff/superuser flags with UserStats.role.
+    """
+    new_role = request.data.get("role", "").strip().lower()
+    if new_role not in ("competitor", "moderator", "superadmin"):
+        return Response({"detail": "Invalid role specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user_obj = User.objects.select_related("stats").get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Self-demotion check
+    if user_obj.id == request.user.id and new_role != "superadmin":
+        return Response({"detail": "You cannot demote your own Superadmin account."}, status=status.HTTP_400_BAD_REQUEST)
+
+    stats = getattr(user_obj, "stats", None)
+    if not stats:
+        stats, _ = UserStats.objects.get_or_create(user=user_obj)
+
+    with db_transaction.atomic():
+        stats.role = new_role
+        stats.save()
+
+        if new_role == "superadmin":
+            user_obj.is_staff = True
+            user_obj.is_superuser = True
+        elif new_role == "moderator":
+            user_obj.is_staff = True
+            user_obj.is_superuser = False
+        else:
+            user_obj.is_staff = False
+            user_obj.is_superuser = False
+        user_obj.save()
+
+    return Response({
+        "detail": f"Role updated to {new_role} successfully.",
+        "user_id": user_obj.id,
+        "role": stats.role,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_toggle_ban(request, user_id):
+    """
+    Superadmin endpoint: Toggle player active status (Ban / Unban).
+    """
+    try:
+        user_obj = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if user_obj.id == request.user.id:
+        return Response({"detail": "You cannot ban your own Superadmin account."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user_obj.is_active = not user_obj.is_active
+    user_obj.save()
+
+    action_str = "unbanned" if user_obj.is_active else "banned"
+    return Response({
+        "detail": f"User @{user_obj.username} has been {action_str}.",
+        "is_active": user_obj.is_active,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_toggle_flag(request, user_id):
+    """
+    Superadmin endpoint: Toggle player Anti-Cheat flag status.
+    """
+    try:
+        user_obj = User.objects.select_related("stats").get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    stats = getattr(user_obj, "stats", None)
+    if not stats:
+        stats, _ = UserStats.objects.get_or_create(user=user_obj)
+
+    reason = request.data.get("reason", "").strip()
+
+    stats.is_flagged = not stats.is_flagged
+    stats.flag_reason = reason if stats.is_flagged else None
+    stats.save()
+
+    status_str = "flagged for Anti-Cheat investigation" if stats.is_flagged else "cleared from Anti-Cheat flags"
+    return Response({
+        "detail": f"User @{user_obj.username} has been {status_str}.",
+        "is_flagged": stats.is_flagged,
+        "flag_reason": stats.flag_reason,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_adjust_rating(request, user_id):
+    """
+    Superadmin endpoint: Adjust or reset player ELO rating.
+    """
+    rating_type = request.data.get("rating_type", "").strip().lower()
+    if rating_type not in ("contest", "duel"):
+        return Response({"detail": "Rating type must be 'contest' or 'duel'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        new_rating = int(request.data.get("new_rating", 1200))
+    except (ValueError, TypeError):
+        return Response({"detail": "Invalid new_rating integer provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user_obj = User.objects.select_related("stats").get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    stats = getattr(user_obj, "stats", None)
+    if not stats:
+        stats, _ = UserStats.objects.get_or_create(user=user_obj)
+
+    if rating_type == "contest":
+        stats.contest_rating = max(100, new_rating)
+    else:
+        stats.duel_rating = max(100, new_rating)
+    stats.save()
+
+    return Response({
+        "detail": f"{rating_type.capitalize()} rating updated to {new_rating}.",
+        "contest_rating": stats.contest_rating,
+        "duel_rating": stats.duel_rating,
+    }, status=status.HTTP_200_OK)
