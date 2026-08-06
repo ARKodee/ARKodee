@@ -122,7 +122,8 @@
 }
 
 /* Theme toggle button */
-.navbar__theme-btn {
+.navbar__theme-btn,
+.navbar__icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -139,7 +140,8 @@
     background-color var(--duration-fast) var(--ease);
 }
 
-.navbar__theme-btn:hover {
+.navbar__theme-btn:hover,
+.navbar__icon-btn:hover {
   color: var(--text-primary);
   border-color: var(--border-strong);
   background-color: var(--bg-elevated);

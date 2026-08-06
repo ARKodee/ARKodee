@@ -31,14 +31,14 @@
   --bg-overlay:  #1e1e26;   /* hover overlays, selected rows */
 
   /* Borders */
-  --border:        #22222a; /* default divider */
+  --border:        #2a2a35; /* default divider */
   --border-strong: #2e2e3a; /* active inputs, focused elements */
-  --border-subtle: #1a1a20; /* very faint separators */
+  --border-subtle: #1e1e28; /* very faint separators */
 
   /* Text */
   --text-primary:   #f0f0f3; /* headings, key labels */
-  --text-secondary: #8b8b9a; /* body text, descriptions */
-  --text-muted:     #4a4a5a; /* placeholders, disabled, metadata */
+  --text-secondary: #a0a0b0; /* body text, descriptions — 5.2:1 on bg-surface */
+  --text-muted:     #6a6a7a; /* placeholders, disabled, metadata — 3.5:1 */
   --text-inverse:   #0a0a0c; /* text on accent/light bg */
 
   /* Accent — soft violet */

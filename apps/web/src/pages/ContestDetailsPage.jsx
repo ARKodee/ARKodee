@@ -72,6 +72,7 @@ export function ContestDetailsPage() {
   const [pinCode, setPinCode] = useState('');
   const [pinError, setPinError] = useState('');
   const [showPinInput, setShowPinInput] = useState(false);
+  const [personalResult, setPersonalResult] = useState(null);
   const sidebarRef = useRef(null);
 
   const handleDetailRegister = async () => {

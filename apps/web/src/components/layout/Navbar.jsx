@@ -162,7 +162,7 @@ export function Navbar() {
           {/* Streak */}
           {streak > 0 && (
             <div className="navbar__streak" title="Daily streak active">
-              <span className="navbar__streak-icon">🔥</span>
+              <IconFlame />
               <span>{streak}d</span>
             </div>
           )}
