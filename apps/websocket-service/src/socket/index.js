@@ -652,6 +652,32 @@ class SocketManager {
         this.io.to(matchId).emit('room_updated', room);
       });
 
+      // 8.5. socket.on('use_advantage', (payload) => { ... })
+      socket.on('use_advantage', (payload = {}) => {
+        const { matchId, advantageType } = payload;
+        const room = customRooms.get(matchId);
+        if (!room || room.status !== 'ACTIVE') return;
+
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (!player) return;
+
+        const costs = {
+          'autocomplete': 30,
+          'hint': 35
+        };
+        const cost = costs[advantageType] || 30;
+
+        if ((player.ap || 0) < cost) {
+          socket.emit('room_error', 'Not enough AP to buy advantage');
+          return;
+        }
+
+        player.ap -= cost;
+        setRoomDocument(room);
+        this.io.to(matchId).emit('room_updated', room);
+        logger.info(`[Advantage] Player ${player.username} bought ${advantageType} for ${cost} AP`);
+      });
+
       // 4. socket.on('disconnect', () => { ... })
       socket.on('disconnect', (reason) => {
         logger.info(`Player client disconnected: ${user.username} (Socket ID: ${socket.id}, Reason: ${reason})`);

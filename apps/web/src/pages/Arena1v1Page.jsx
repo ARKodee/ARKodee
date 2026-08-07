@@ -176,6 +176,20 @@ function RulesModal({ onDismiss, myUsername, opponentUsername, myRating, opponen
   );
 }
 
+const getProblemHint = (problemId) => {
+  const hints = {
+    'reverse-string': 'Swap characters in-place using two pointers (left and right) moving towards each other.',
+    'move-zeroes': 'Use a write pointer to keep track of non-zero elements, then fill the remaining elements with zeroes.',
+    'sort-colors': 'Use the Dutch National Flag algorithm (three pointers: low, mid, high) to sort in one pass.',
+    'rotate-array': 'Try reversing parts of the array: reverse the whole array, reverse first k, then reverse the rest.',
+  };
+  const key = String(problemId || '').toLowerCase();
+  for (const k of Object.keys(hints)) {
+    if (key.includes(k)) return hints[k];
+  }
+  return 'Check constraint boundaries, input lengths, and handle empty/null inputs.';
+};
+
 // ─── Main Page Component ───────────────────────────────────────────────────────
 export function Arena1v1Page() {
   const { theme } = useTheme();
@@ -512,10 +526,36 @@ export function Arena1v1Page() {
     }
   }, [theme]);
 
+  // Dynamically update Monaco editor suggestions when toggled
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.updateOptions({
+        quickSuggestions: isSuggestionsEnabled ? { other: true, comments: false, strings: false } : false,
+        parameterHints: { enabled: isSuggestionsEnabled },
+        suggestOnTriggerCharacters: isSuggestionsEnabled,
+        tabCompletion: isSuggestionsEnabled ? 'on' : 'off',
+        wordBasedSuggestions: isSuggestionsEnabled ? 'allDocuments' : 'none',
+      });
+    }
+  }, [isSuggestionsEnabled]);
+
   // ── Shop Handlers ───────────────────────────────────────────────────────────
-  const handleBuyAutocomplete = () => { if (myAp < 30) return; setAutocompleteActiveUntil(Date.now() + 60000); setToastMessage('✨ Autocomplete active for 60s!'); };
-  const handleBuyHint = () => { if (myAp < 35) return; setToastMessage(`💡 Hint: Focus on constraints and edge cases!`); };
-  const handleCastJam = () => { if (myAp < 50) return; sendSabotage('jam'); setOpponentSabotageActiveUntil(Date.now() + 5000); setToastMessage('💥 Jam cast on opponent (5s)!'); };
+  const handleBuyAutocomplete = () => {
+    if (myAp < 30) return;
+    socket?.emit('use_advantage', { matchId, advantageType: 'autocomplete' });
+    setAutocompleteActiveUntil(Date.now() + 60000);
+    setToastMessage('✨ Autocomplete active for 60s!');
+  };
+
+  const handleBuyHint = () => {
+    if (myAp < 35) return;
+    const currentProblem = activeProblemsList[activeProblemIndex] || activeProblemsList[0];
+    const hintText = getProblemHint(currentProblem?.id || currentProblem?.uuid || currentProblem?.slug || currentProblem?.title);
+    socket?.emit('use_advantage', { matchId, advantageType: 'hint' });
+    setToastMessage(`💡 Hint: ${hintText}`);
+  };
+
+  const handleCastJam = () => { if (myAp < 50) return; sendSabotage('monaco-jam'); setOpponentSabotageActiveUntil(Date.now() + 5000); setToastMessage('💥 Jam cast on opponent (5s)!'); };
   const handleCastBlur = () => { if (myAp < 40) return; sendSabotage('blur'); setOpponentSabotageActiveUntil(Date.now() + 10000); setToastMessage('🌫️ Haze cast on opponent (10s)!'); };
   const handleCastBlindfold = () => { if (myAp < 60) return; sendSabotage('blindfold'); setOpponentSabotageActiveUntil(Date.now() + 60000); setToastMessage('🫣 Blindfold cast on opponent (60s)!'); };
   const handleCastImmunity = () => { if (myAp < 40) return; sendShield('immunity'); setLocalShieldActiveUntil(Date.now() + 15000); setToastMessage('🛡️ Immunity shield activated (15s)!'); };
