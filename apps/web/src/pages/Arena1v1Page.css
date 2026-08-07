@@ -1186,14 +1186,15 @@
 ══════════════════════════════════════════════════════════════════════════════ */
 .a1-sabotage-banner {
   position: fixed;
-  bottom: 0;
+  top: 52px;
+  bottom: auto;
   left: 0;
   right: 0;
   z-index: 200;
   height: 36px;
   padding: 0 var(--space-4);
   background-color: var(--danger-subtle);
-  border-top: 1px solid var(--danger-border);
+  border-bottom: 1px solid var(--danger-border);
   color: var(--danger);
   display: flex;
   align-items: center;
@@ -1203,7 +1204,7 @@
   font-weight: 600;
   animation: a1-banner-in var(--duration-base) var(--ease);
 }
-@keyframes a1-banner-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes a1-banner-in { from { transform: translateY(-100%); } to { transform: translateY(0); } }
 
 .a1-sabotage-banner-inner {
   display: flex;
