@@ -495,7 +495,7 @@ export function ContestDetailsPage() {
                 </div>
 
                 {pinError && (
-                  <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '8px' }}>
+                  <div style={{ color: 'var(--danger)', fontSize: '12px', marginBottom: '8px' }}>
                     {pinError}
                   </div>
                 )}
@@ -509,10 +509,10 @@ export function ContestDetailsPage() {
                     style={{
                       width: '100%',
                       padding: '8px 12px',
-                      borderRadius: '6px',
-                      background: 'rgba(15,23,42,0.8)',
-                      border: '1px solid #334155',
-                      color: '#fff',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border-strong)',
+                      color: 'var(--text-primary)',
                       fontSize: '13px',
                       marginBottom: '10px',
                     }}
@@ -529,7 +529,7 @@ export function ContestDetailsPage() {
                       <span>Enter Arena</span>
                     </button>
                   ) : (
-                    <div style={{ padding: '8px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '6px', color: '#10b981', fontWeight: 600, textAlign: 'center', fontSize: '13px' }}>
+                    <div style={{ padding: '8px', background: 'var(--success-subtle)', border: '1px solid var(--success-border)', borderRadius: 'var(--radius-md)', color: 'var(--success)', fontWeight: 600, textAlign: 'center', fontSize: '13px' }}>
                       ✓ Registered
                     </div>
                   )
