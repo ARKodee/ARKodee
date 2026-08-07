@@ -56,12 +56,127 @@ function formatDate(iso) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   CSV UTILITIES
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Robust CSV parser that handles quoted values, newlines, and header detection.
+ */
+function parseCSV(text) {
+  const rows = [];
+  let currentRow = [];
+  let currentVal = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (inQuotes) {
+      if (char === '"' && nextChar === '"') {
+        currentVal += '"';
+        i++; // skip escaped quote
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        currentVal += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        currentRow.push(currentVal.trim());
+        currentVal = '';
+      } else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
+        if (char === '\r') i++; // skip \r
+        currentRow.push(currentVal.trim());
+        if (currentRow.some((cell) => cell.length > 0)) {
+          rows.push(currentRow);
+        }
+        currentRow = [];
+        currentVal = '';
+      } else {
+        currentVal += char;
+      }
+    }
+  }
+
+  if (currentVal.trim() || currentRow.length > 0) {
+    currentRow.push(currentVal.trim());
+    if (currentRow.some((cell) => cell.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (rows.length === 0) return [];
+
+  // Detect header row
+  const firstRow = rows[0].map((c) => c.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+  const hasInputHeader = firstRow.includes('input');
+  const hasOutputHeader = firstRow.some((c) => c.includes('output') || c.includes('expected'));
+
+  let startIndex = 0;
+  let inputIdx = 0;
+  let outputIdx = 1;
+  let sampleIdx = 2;
+
+  if (hasInputHeader || hasOutputHeader) {
+    startIndex = 1; // Skip header row
+    inputIdx = firstRow.findIndex((c) => c === 'input');
+    outputIdx = firstRow.findIndex((c) => c.includes('output') || c.includes('expected'));
+    sampleIdx = firstRow.findIndex((c) => c.includes('sample'));
+    if (inputIdx === -1) inputIdx = 0;
+    if (outputIdx === -1) outputIdx = 1;
+  }
+
+  const parsedTestCases = [];
+  for (let i = startIndex; i < rows.length; i++) {
+    const row = rows[i];
+    const input = row[inputIdx] !== undefined ? row[inputIdx] : (row[0] || '');
+    const expected = row[outputIdx] !== undefined ? row[outputIdx] : (row[1] || '');
+    const sampleRaw = sampleIdx !== -1 && row[sampleIdx] !== undefined ? row[sampleIdx].toLowerCase() : 'false';
+    const isSample = sampleRaw === 'true' || sampleRaw === '1' || sampleRaw === 'yes';
+
+    if (input.length > 0 || expected.length > 0) {
+      parsedTestCases.push({
+        input,
+        expected_output: expected,
+        is_sample: isSample,
+      });
+    }
+  }
+
+  return parsedTestCases;
+}
+
+/** Downloads a ready-to-use 15-case CSV template */
+function downloadCSVTemplate() {
+  let csvContent = 'input,expected_output,is_sample\n';
+  for (let i = 1; i <= 15; i++) {
+    const isSample = i <= 2 ? 'true' : 'false';
+    csvContent += `"2 7 11 15\\n9","0 1",${isSample}\n`;
+  }
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'arkodee_testcases_15_template.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    TEST CASE BUILDER — reusable inner component
    ══════════════════════════════════════════════════════════════════════════════ */
 function TestCaseBuilder({ testCases, onChange }) {
   const count = testCases.length;
   const progress = Math.min(count / MIN_TEST_CASES, 1);
   const done     = count >= MIN_TEST_CASES;
+
+  const fileInputRef = useRef(null);
+  const [csvNotice, setCsvNotice] = useState('');
+  const [csvError, setCsvError]   = useState('');
 
   const addCase = () => onChange([...testCases, blankTC()]);
   const removeCase = (idx) => onChange(testCases.filter((_, i) => i !== idx));
@@ -70,6 +185,42 @@ function TestCaseBuilder({ testCases, onChange }) {
       i === idx ? { ...tc, [field]: value } : tc
     );
     onChange(updated);
+  };
+
+  const handleFileUpload = (e, mode = 'append') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setCsvNotice('');
+    setCsvError('');
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        const parsed = parseCSV(text);
+
+        if (parsed.length === 0) {
+          setCsvError('CSV file is empty or could not be parsed.');
+          return;
+        }
+
+        let newCases;
+        if (mode === 'replace') {
+          newCases = parsed;
+        } else {
+          newCases = [...testCases, ...parsed];
+        }
+
+        onChange(newCases);
+        setCsvNotice(`Successfully imported ${parsed.length} test cases from CSV. Total: ${newCases.length}`);
+      } catch (err) {
+        setCsvError('Failed to parse CSV file. Ensure valid formatting.');
+      }
+    };
+    reader.readAsText(file);
+
+    e.target.value = '';
   };
 
   return (
@@ -90,6 +241,48 @@ function TestCaseBuilder({ testCases, onChange }) {
           <span>{count < MIN_TEST_CASES ? `${MIN_TEST_CASES - count} more needed` : '✓ Minimum met'}</span>
         </div>
       </div>
+
+      {/* CSV Import & Template Toolbar */}
+      <div className="mod-tc__csv-toolbar">
+        <div className="mod-tc__csv-buttons">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".csv"
+            style={{ display: 'none' }}
+            onChange={(e) => handleFileUpload(e, 'append')}
+          />
+          <button
+            type="button"
+            className="mod-tc__csv-btn mod-tc__csv-btn--import"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            📄 Import CSV (Append)
+          </button>
+          <button
+            type="button"
+            className="mod-tc__csv-btn mod-tc__csv-btn--replace"
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.onchange = (e) => handleFileUpload(e, 'replace');
+                fileInputRef.current.click();
+              }
+            }}
+          >
+            🔄 Import CSV (Replace All)
+          </button>
+          <button
+            type="button"
+            className="mod-tc__csv-btn mod-tc__csv-btn--template"
+            onClick={downloadCSVTemplate}
+          >
+            ⬇️ Download CSV Template (15 cases)
+          </button>
+        </div>
+      </div>
+
+      {csvNotice && <div className="mod-tc__notice">{csvNotice}</div>}
+      {csvError  && <div className="mod-tc__error-banner"><IconWarn /> {csvError}</div>}
 
       {/* Warning if below minimum */}
       {!done && (
