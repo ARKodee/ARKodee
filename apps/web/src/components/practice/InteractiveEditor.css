@@ -347,9 +347,11 @@
   background-color: var(--accent-hover);
 }
 
+.ie-btn:disabled,
 .ie-btn--disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* ── Sabotage Locked State ───────────────────────────────────────────────────── */
@@ -479,4 +481,18 @@
   color: var(--accent) !important;
   background-color: var(--accent-subtle) !important;
   border-color: var(--accent-border) !important;
+}
+
+/* Spinner Loader */
+.ie-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ie-spin 0.6s linear infinite;
+}
+
+@keyframes ie-spin {
+  to { transform: rotate(360deg); }
 }

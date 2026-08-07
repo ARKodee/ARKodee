@@ -1,0 +1,134 @@
+/* src/components/layout/WorkspaceLayout.css
+   Shared distraction-free IDE split layout stylesheet.
+   Adheres to φ golden ratio design tokens.
+*/
+
+.workspace-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  min-height: var(--h-btn);
+  flex-shrink: 0;
+}
+
+.workspace-header-left,
+.workspace-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ── Split Canvas Viewport ─────────────────────────────────────────────────── */
+.workspace-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.workspace-canvas {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.workspace-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  height: 100%;
+}
+
+.workspace-pane--left {
+  border-right: 1px solid var(--border);
+  overflow: visible; /* allows collapse button to hang off right edge */
+  transition: width var(--duration-slow) var(--ease);
+}
+
+.workspace-pane-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.workspace-pane--collapsed {
+  border-right: none;
+}
+
+.workspace-pane--right {
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg-base);
+}
+
+/* ── Resize handle divider line ────────────────────────────────────────────── */
+.workspace-resize-handle {
+  width: 5px;
+  margin-left: -2px;
+  margin-right: -2px;
+  cursor: col-resize;
+  z-index: 5;
+  background-color: transparent;
+  transition: background-color var(--duration-fast) var(--ease);
+  position: relative;
+}
+
+.workspace-resize-handle:hover,
+.workspace-resize-handle--active {
+  background-color: var(--accent);
+}
+
+/* ── Collapsible drawer handle trigger ──────────────────────────────────────── */
+.workspace-collapse-toggle {
+  position: absolute;
+  top: 50%;
+  right: -10px;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color     var(--duration-fast) var(--ease),
+    color            var(--duration-fast) var(--ease);
+}
+
+.workspace-collapse-toggle:hover {
+  background-color: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.workspace-pane--collapsed .workspace-collapse-toggle {
+  right: -20px; /* shift toggle right when collapsed */
+}

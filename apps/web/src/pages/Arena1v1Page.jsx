@@ -176,6 +176,20 @@ function RulesModal({ onDismiss, myUsername, opponentUsername, myRating, opponen
   );
 }
 
+const getProblemHint = (problemId) => {
+  const hints = {
+    'reverse-string': 'Swap characters in-place using two pointers (left and right) moving towards each other.',
+    'move-zeroes': 'Use a write pointer to keep track of non-zero elements, then fill the remaining elements with zeroes.',
+    'sort-colors': 'Use the Dutch National Flag algorithm (three pointers: low, mid, high) to sort in one pass.',
+    'rotate-array': 'Try reversing parts of the array: reverse the whole array, reverse first k, then reverse the rest.',
+  };
+  const key = String(problemId || '').toLowerCase();
+  for (const k of Object.keys(hints)) {
+    if (key.includes(k)) return hints[k];
+  }
+  return 'Check constraint boundaries, input lengths, and handle empty/null inputs.';
+};
+
 // ─── Main Page Component ───────────────────────────────────────────────────────
 export function Arena1v1Page() {
   const { theme } = useTheme();
@@ -219,6 +233,10 @@ export function Arena1v1Page() {
 
   // Submissions list
   const [submissionsList, setSubmissionsList] = useState([]);
+
+  // Voting states for tie resolution
+  const [selectedVote, setSelectedVote] = useState(null);
+  const [isVoteConfirmed, setIsVoteConfirmed] = useState(false);
 
   // Active Powerups & Sabotages
   const [autocompleteActiveUntil, setAutocompleteActiveUntil] = useState(0);
@@ -295,11 +313,24 @@ export function Arena1v1Page() {
   // ── Timers & Phase Transitions ──────────────────────────────────────────────
   useEffect(() => {
     if (!startedAt || matchPhase === 'IDLE' || matchPhase === 'RULES') return;
-    const calc = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)));
-    calc();
-    const id = setInterval(calc, 1000);
+    
+    const checkExpiry = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+      setElapsedSeconds(elapsed);
+
+      const limit = roomState?.isOvertime ? 600 : 3600;
+      const refTime = roomState?.isOvertime ? roomState.overtimeStartedAt : startedAt;
+      const actualElapsed = Math.max(0, Math.floor((Date.now() - new Date(refTime).getTime()) / 1000));
+
+      if (actualElapsed >= limit && socket && socket.connected) {
+        socket.emit('check_match_expiry', { matchId });
+      }
+    };
+
+    checkExpiry();
+    const id = setInterval(checkExpiry, 1000);
     return () => clearInterval(id);
-  }, [startedAt, matchPhase]);
+  }, [startedAt, matchPhase, roomState, socket, matchId]);
 
   useEffect(() => {
     if (isMatchStarted) {
@@ -320,6 +351,13 @@ export function Arena1v1Page() {
   useEffect(() => {
     if (toastMessage) { const t = setTimeout(() => setToastMessage(''), 5000); return () => clearTimeout(t); }
   }, [toastMessage, setToastMessage]);
+
+  useEffect(() => {
+    if (roomState?.status !== 'TIE_PROMPT') {
+      setSelectedVote(null);
+      setIsVoteConfirmed(false);
+    }
+  }, [roomState?.status]);
 
   // Sync visible test cases when switching problems
   useEffect(() => {
@@ -393,14 +431,15 @@ export function Arena1v1Page() {
 
   // ── Run Code ────────────────────────────────────────────────────────────────
   const handleRunCode = async () => {
-    if (!activeProblem?.slug) return;
+    const problemSlug = activeProblem?.slug || activeProblem?.id;
+    if (!problemSlug) return;
     setIsRunning(true);
     setIsTerminalOpen(true);
     setActiveTerminalTab('testcases');
     setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: '> Running against sample test cases...' }));
     setTestCaseResultsMap(prev => ({ ...prev, [currentProblemId]: [] }));
     try {
-      const res = await runProblemCode(activeProblem.slug, currentCode, currentLanguage, currentVisibleTestCases);
+      const res = await runProblemCode(problemSlug, currentCode, currentLanguage, currentVisibleTestCases);
       setTestCaseResultsMap(prev => ({ ...prev, [currentProblemId]: res.results || [] }));
       setTerminalOutputMap(prev => ({
         ...prev,
@@ -418,14 +457,15 @@ export function Arena1v1Page() {
 
   // ── Submit Code ─────────────────────────────────────────────────────────────
   const handleSubmitCode = async () => {
-    if (!activeProblem?.slug) return;
+    const problemSlug = activeProblem?.slug || activeProblem?.id;
+    if (!problemSlug) return;
     setIsSubmitting(true);
     setIsTerminalOpen(true);
     setActiveTerminalTab('submission');
     setTerminalOutputMap(prev => ({ ...prev, [currentProblemId]: '> Submitting solution for full evaluation...' }));
     setSubmissionResultMap(prev => ({ ...prev, [currentProblemId]: null }));
     try {
-      const res = await submitProblemCode(activeProblem.slug, currentCode, currentLanguage);
+      const res = await submitProblemCode(problemSlug, currentCode, currentLanguage);
       const isCorrect = res.verdict === 'AC';
       setSubmissionResultMap(prev => ({ ...prev, [currentProblemId]: res }));
       setTerminalOutputMap(prev => ({
@@ -486,10 +526,36 @@ export function Arena1v1Page() {
     }
   }, [theme]);
 
+  // Dynamically update Monaco editor suggestions when toggled
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.updateOptions({
+        quickSuggestions: isSuggestionsEnabled ? { other: true, comments: false, strings: false } : false,
+        parameterHints: { enabled: isSuggestionsEnabled },
+        suggestOnTriggerCharacters: isSuggestionsEnabled,
+        tabCompletion: isSuggestionsEnabled ? 'on' : 'off',
+        wordBasedSuggestions: isSuggestionsEnabled ? 'allDocuments' : 'none',
+      });
+    }
+  }, [isSuggestionsEnabled]);
+
   // ── Shop Handlers ───────────────────────────────────────────────────────────
-  const handleBuyAutocomplete = () => { if (myAp < 30) return; setAutocompleteActiveUntil(Date.now() + 60000); setToastMessage('✨ Autocomplete active for 60s!'); };
-  const handleBuyHint = () => { if (myAp < 35) return; setToastMessage(`💡 Hint: Focus on constraints and edge cases!`); };
-  const handleCastJam = () => { if (myAp < 50) return; sendSabotage('jam'); setOpponentSabotageActiveUntil(Date.now() + 5000); setToastMessage('💥 Jam cast on opponent (5s)!'); };
+  const handleBuyAutocomplete = () => {
+    if (myAp < 30) return;
+    socket?.emit('use_advantage', { matchId, advantageType: 'autocomplete' });
+    setAutocompleteActiveUntil(Date.now() + 60000);
+    setToastMessage('✨ Autocomplete active for 60s!');
+  };
+
+  const handleBuyHint = () => {
+    if (myAp < 35) return;
+    const currentProblem = activeProblemsList[activeProblemIndex] || activeProblemsList[0];
+    const hintText = getProblemHint(currentProblem?.id || currentProblem?.uuid || currentProblem?.slug || currentProblem?.title);
+    socket?.emit('use_advantage', { matchId, advantageType: 'hint' });
+    setToastMessage(`💡 Hint: ${hintText}`);
+  };
+
+  const handleCastJam = () => { if (myAp < 50) return; sendSabotage('monaco-jam'); setOpponentSabotageActiveUntil(Date.now() + 5000); setToastMessage('💥 Jam cast on opponent (5s)!'); };
   const handleCastBlur = () => { if (myAp < 40) return; sendSabotage('blur'); setOpponentSabotageActiveUntil(Date.now() + 10000); setToastMessage('🌫️ Haze cast on opponent (10s)!'); };
   const handleCastBlindfold = () => { if (myAp < 60) return; sendSabotage('blindfold'); setOpponentSabotageActiveUntil(Date.now() + 60000); setToastMessage('🫣 Blindfold cast on opponent (60s)!'); };
   const handleCastImmunity = () => { if (myAp < 40) return; sendShield('immunity'); setLocalShieldActiveUntil(Date.now() + 15000); setToastMessage('🛡️ Immunity shield activated (15s)!'); };
@@ -520,6 +586,29 @@ export function Arena1v1Page() {
     if (displayTime.secs < 600) return 'a1-timer a1-timer--warning';
     return 'a1-timer a1-timer--normal';
   };
+
+  if (connectionState === 'ERROR') {
+    return (
+      <div className="a1-root">
+        <div className="a1-lobby" style={{ justifyContent: 'center' }}>
+          <div className="a1-lobby-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '3rem', maxWidth: '480px', textAlign: 'center' }}>
+            <AlertTriangle size={38} style={{ color: 'var(--danger)', animation: 'pulse 2s infinite' }} />
+            <h1 className="a1-lobby-title" style={{ margin: 0 }}>Connection Failed</h1>
+            <p className="a1-lobby-desc" style={{ margin: 0 }}>
+              {toastMessage ? toastMessage.replace('⚠️ ', '') : 'Could not connect to the match arena. The match may have already concluded or the server restarted.'}
+            </p>
+            <button
+              className="a1-btn a1-btn--primary"
+              style={{ marginTop: '1.5rem', width: '100%', justifyContent: 'center' }}
+              onClick={() => navigate('/matchmaking')}
+            >
+              Back to Matchmaking
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ════════════════════════════════════════════════════════════════════════════
   // IDLE / LOBBY RENDER
@@ -635,8 +724,8 @@ export function Arena1v1Page() {
             <div className="a1-victory-accent-bar" />
             <div className="a1-victory-icon-wrapper"><Swords size={32} /></div>
             <h2 className="a1-victory-title">
-              {!matchFinishedData.winnerId ? 'Match Tied'
-                : matchFinishedData.winnerId === activeUserId ? '🏆 Victory' : 'Defeat'}
+              {!matchFinishedData.winnerId ? 'Match Tied (Draw)'
+                : String(matchFinishedData.winnerId) === String(activeUserId) ? '🏆 Victory' : 'Defeat'}
             </h2>
             <p className="a1-victory-subtitle">
               {matchFinishedData.reason || 'The duel has concluded.'}
@@ -655,7 +744,7 @@ export function Arena1v1Page() {
 
             <div className="a1-victory-stats-box">
               {[
-                ['Result', !matchFinishedData.winnerId ? 'Draw' : matchFinishedData.winnerId === activeUserId ? 'You Won' : 'Opponent Won'],
+                ['Result', !matchFinishedData.winnerId ? 'Draw' : String(matchFinishedData.winnerId) === String(activeUserId) ? 'You Won' : 'Opponent Won'],
                 ['Your Solved', `${roomState?.players?.find(p => String(p.userId) === String(activeUserId))?.solvedProblems ? Object.keys(roomState.players.find(p => String(p.userId) === String(activeUserId)).solvedProblems).filter(k => roomState.players.find(p => String(p.userId) === String(activeUserId)).solvedProblems[k]).length : 0} / 4`],
                 ['Opponent Solved', `${opponentProfile?.solvedCount || 0} / 4`],
                 ['Your Penalties', `${roomState?.players?.find(p => String(p.userId) === String(activeUserId))?.failedAttempts ? Object.values(roomState.players.find(p => String(p.userId) === String(activeUserId)).failedAttempts).reduce((a, b) => a + b, 0) : 0} failed`],
@@ -686,7 +775,7 @@ export function Arena1v1Page() {
       )}
 
       {/* Tie Resolution Voting Overlay */}
-      {roomState?.status === 'TIE_PROMPT' && (
+      {roomState?.status === 'TIE_PROMPT' && !matchFinishedData && (
         <div className="a1-tie-prompt-overlay">
           <div className="a1-tie-prompt-card">
             <div className="a1-tie-prompt-accent-bar" />
@@ -714,9 +803,9 @@ export function Arena1v1Page() {
             </div>
 
             {(() => {
-              const myId = activeUserId;
-              const hasVotedDraw = roomState.votes?.draw?.includes(myId);
-              const hasVotedOvertime = roomState.votes?.overtime?.includes(myId);
+              const myId = String(activeUserId);
+              const hasVotedDraw = roomState.votes?.draw?.some(uid => String(uid) === myId);
+              const hasVotedOvertime = roomState.votes?.overtime?.some(uid => String(uid) === myId);
               const hasVoted = hasVotedDraw || hasVotedOvertime;
 
               if (hasVoted) {
@@ -728,19 +817,59 @@ export function Arena1v1Page() {
                 );
               }
 
+              if (selectedVote && isVoteConfirmed) {
+                return (
+                  <div className="a1-tie-prompt-waiting">
+                    <span className="a1-tie-prompt-spinner" />
+                    <span>Locking in vote for {selectedVote.toUpperCase()}...</span>
+                  </div>
+                );
+              }
+
+              if (selectedVote) {
+                return (
+                  <div className="a1-tie-prompt-confirm-box" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: '500' }}>
+                      Confirm vote for: <strong style={{ color: 'var(--accent)' }}>{selectedVote === 'draw' ? 'DRAW 🤝' : 'OVERTIME 🔥'}</strong>
+                    </div>
+                    <div className="a1-tie-prompt-actions" style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        className="a1-btn a1-btn--secondary"
+                        onClick={() => setSelectedVote(null)}
+                        style={{ padding: '6px 16px', fontSize: '12px' }}
+                      >
+                        Change
+                      </button>
+                      <button
+                        className="a1-btn a1-btn--primary"
+                        onClick={() => {
+                          setIsVoteConfirmed(true);
+                          socket?.emit('vote_tie_resolution', { matchId, vote: selectedVote });
+                        }}
+                        style={{ padding: '6px 16px', fontSize: '12px' }}
+                      >
+                        Confirm Lock-in
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
-                <div className="a1-tie-prompt-actions">
+                <div className="a1-tie-prompt-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
                   <button
                     className="a1-tie-prompt-btn a1-tie-prompt-btn--draw"
-                    onClick={() => socket?.emit('vote_tie_resolution', { matchId, vote: 'draw' })}
+                    onClick={() => setSelectedVote('draw')}
+                    style={{ flex: 1, padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   >
                     🤝 Vote DRAW
                   </button>
                   <button
                     className="a1-tie-prompt-btn a1-tie-prompt-btn--ot"
-                    onClick={() => socket?.emit('vote_tie_resolution', { matchId, vote: 'overtime' })}
+                    onClick={() => setSelectedVote('overtime')}
+                    style={{ flex: 1, padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   >
-                    🔥 Vote OVERTIME (+10m)
+                    🔥 Vote OVERTIME
                   </button>
                 </div>
               );
@@ -910,7 +1039,7 @@ export function Arena1v1Page() {
                 onMount={handleEditorMount}
                 theme={theme === 'dark' ? 'arkodee-dark' : 'arkodee-light'}
                 options={{
-                  readOnly: isEditorLocked || activeSabotage === 'jam',
+                  readOnly: isEditorLocked || activeSabotage === 'jam' || isRunning || isSubmitting,
                   contextmenu: false,
                   fontSize: 14,
                   lineHeight: 22,
@@ -969,7 +1098,12 @@ export function Arena1v1Page() {
               <div className="a1-console-body">
                 {activeTerminalTab === 'testcases' ? (
                   <div className="a1-tc-root">
-                    {currentTerminalOutput && (currentTerminalOutput.includes('Compilation Error') || currentTerminalOutput.includes('Execution Error') || currentTerminalOutput.includes('ERROR:')) ? (
+                    {isRunning ? (
+                      <div className="a1-submission-pending">
+                        <div className="a1-spinner" />
+                        <span>Running code against sample testcases...</span>
+                      </div>
+                    ) : currentTerminalOutput && (currentTerminalOutput.includes('Compilation Error') || currentTerminalOutput.includes('Execution Error') || currentTerminalOutput.includes('ERROR:')) ? (
                       <div className="a1-tc-content" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         <div style={{ padding: '10px 14px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', color: '#ef4444', fontWeight: 'bold' }}>
                           {currentTerminalOutput.includes('Compilation Error') ? 'Compilation Error' : 'Execution Error'}
@@ -1125,19 +1259,26 @@ export function Arena1v1Page() {
         )}
 
         {/* Right Panel — Telemetry + Shop (collapsible) */}
-        <aside className={`a1-right-panel ${isRightPanelCollapsed ? 'is-collapsed' : ''}`} style={{ width: isRightPanelCollapsed ? 0 : `${rightPanelWidth}px`, display: isRightPanelCollapsed ? 'none' : 'flex' }}>
-          {!isRightPanelCollapsed && (
-            <button
-              className="a1-panel-toggle-chip a1-panel-toggle-chip--right"
-              onClick={() => setIsRightPanelCollapsed(v => !v)}
-              title="Collapse shop panel"
-            >
-              <ChevronRight size={14} />
-            </button>
-          )}
+        <aside className={`a1-right-panel ${isRightPanelCollapsed ? 'is-collapsed' : ''}`} style={{ width: isRightPanelCollapsed ? 0 : `${rightPanelWidth}px` }}>
+          <button
+            className="a1-panel-toggle-chip a1-panel-toggle-chip--right"
+            onClick={() => setIsRightPanelCollapsed(v => !v)}
+            title={isRightPanelCollapsed ? "Expand shop panel" : "Collapse shop panel"}
+          >
+            {isRightPanelCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </button>
 
-          {!isRightPanelCollapsed && (
-            <>
+          <div
+            style={{
+              opacity: isRightPanelCollapsed ? 0 : 1,
+              pointerEvents: isRightPanelCollapsed ? 'none' : 'auto',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
               {/* ── Top: Opponent Telemetry ────────────────────────────────── */}
               <div className="a1-right-section">
                 <button className="a1-right-section-header" aria-expanded={!isTelemetryCollapsed} onClick={() => setIsTelemetryCollapsed(v => !v)}>
@@ -1280,8 +1421,7 @@ export function Arena1v1Page() {
                 </div>
               )}
             </div>
-            </>
-          )}
+          </div>
         </aside>
       </div>
     </div>

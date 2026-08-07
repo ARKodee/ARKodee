@@ -57,6 +57,7 @@ const NAV_LINKS = [
   { name: 'Practice',  path: '/practice'  },
   { name: 'Contests',  path: '/contests'  },
   { name: '1v1 Arena', path: '/matchmaking' },
+  { name: 'Bounty',    path: '/debug'        },
 ];
 
 function getRatingTitle(rating = 1200) {
@@ -162,7 +163,7 @@ export function Navbar() {
           {/* Streak */}
           {streak > 0 && (
             <div className="navbar__streak" title="Daily streak active">
-              <span className="navbar__streak-icon">🔥</span>
+              <IconFlame />
               <span>{streak}d</span>
             </div>
           )}

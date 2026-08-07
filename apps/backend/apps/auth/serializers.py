@@ -282,7 +282,26 @@ class ProfileStatsSerializer(serializers.Serializer):
                 "variant": "default",
             })
 
-        return badges[:5]
+        if contest_stats.get("best_rank") == 1:
+            badges.append({
+                "key": "champion",
+                "title": "Contest Champion",
+                "shortTitle": "CHMP",
+                "description": "Placed 1st in a coding contest!",
+                "variant": "danger",
+            })
+
+        total_duels = (stats.total_wins or 0) + (stats.total_losses or 0) + (stats.total_draws or 0)
+        if total_duels > 0:
+            badges.append({
+                "key": "duelist",
+                "title": "Arena Duelist",
+                "shortTitle": "DUEL",
+                "description": f"Fought {total_duels} arena duels",
+                "variant": "success",
+            })
+
+        return badges[:7]
 
     def _get_rating_title(self, rating):
         if rating >= 2100:

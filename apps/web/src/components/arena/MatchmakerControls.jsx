@@ -2,12 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Zap, Users, Swords, X } from 'lucide-react';
 
-export function MatchmakerControls({ socket, onOpenCustomModal }) {
+export function MatchmakerControls({ socket, onOpenCustomModal, autoQueue }) {
   const navigate = useNavigate();
   const [queueState, setQueueState] = useState('IDLE'); // IDLE | QUEUED | FOUND
   const [searchElapsed, setSearchElapsed] = useState(0);
   const [matchInfo, setMatchInfo] = useState(null); // { roomId, opponent }
   const timerRef = useRef(null);
+
+  // Auto-join queue if autoQueue flag is set
+  useEffect(() => {
+    if (autoQueue && socket && queueState === 'IDLE') {
+      socket.emit('join_queue');
+    }
+  }, [autoQueue, socket, queueState]);
 
   const formatSearchTime = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');

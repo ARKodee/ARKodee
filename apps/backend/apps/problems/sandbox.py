@@ -82,6 +82,16 @@ def compare_outputs(user_output, expected_output, is_case_insensitive=False):
       4. Case-insensitive text matching for case-insensitive string problems.
       5. Structural JSON/AST list/dict equality.
     """
+    # Normalize null/empty representations to avoid false-negatives on no-solution outputs (e.g. [] vs None vs null)
+    def _is_empty_or_null(s):
+        if s is None:
+            return True
+        s_str = str(s).strip().lower()
+        return s_str in ["none", "null", "[]", "{}", ""]
+
+    if _is_empty_or_null(user_output) and _is_empty_or_null(expected_output):
+        return True
+
     if user_output is None or expected_output is None:
         return False
 
@@ -103,9 +113,11 @@ def compare_outputs(user_output, expected_output, is_case_insensitive=False):
     if u_unquoted == e_unquoted:
         return True
 
-    # 3. Normalized whitespace match
-    u_norm = u_unquoted.replace(" ", "").replace("\r", "")
-    e_norm = e_unquoted.replace(" ", "").replace("\r", "")
+    # 3. Normalized whitespace match — collapse runs of whitespace to single space
+    #    Do NOT strip all spaces: "1 2 3" should NOT match "123"
+    import re
+    u_norm = re.sub(r'[\r\t ]+', ' ', u_unquoted).strip()
+    e_norm = re.sub(r'[\r\t ]+', ' ', e_unquoted).strip()
     if u_norm == e_norm:
         return True
 
@@ -122,9 +134,16 @@ def compare_outputs(user_output, expected_output, is_case_insensitive=False):
 
     # 6. Structural JSON/AST object match
     try:
-        import ast
-        u_obj = ast.literal_eval(u_unquoted.replace("null", "None").replace("true", "True").replace("false", "False"))
-        e_obj = ast.literal_eval(e_unquoted.replace("null", "None").replace("true", "True").replace("false", "False"))
+        # Use word-boundary-safe replacements to avoid mangling words like
+        # "nullable" → "Noneable" or "truer" → "Trueer"
+        def _to_py_literal(s):
+            import re as _re
+            s = _re.sub(r'\bnull\b',  'None',  s)
+            s = _re.sub(r'\btrue\b',  'True',  s)
+            s = _re.sub(r'\bfalse\b', 'False', s)
+            return s
+        u_obj = ast.literal_eval(_to_py_literal(u_unquoted))
+        e_obj = ast.literal_eval(_to_py_literal(e_unquoted))
         if u_obj == e_obj:
             return True
     except Exception:
@@ -292,6 +311,136 @@ def extract_user_python_details(code):
         }
     except Exception:
         return None
+
+
+def extract_java_details(code):
+    import re
+    # Match return type, method name, and arguments
+    # e.g., public int[] twoSum(int[] nums, int target)
+    match = re.search(r'(?:public|private|protected)?\s+(?:static\s+)?([\w\[\]<>]+)\s+(\w+)\s*\(([^)]*)\)', code)
+    if not match:
+        return None
+    ret_type_raw = match.group(1)
+    func_name = match.group(2)
+    params_raw = match.group(3)
+
+    if func_name in ["if", "for", "while", "switch", "catch", "Solution", "Main"]:
+        return None
+
+    ret_map = {
+        "int": "int",
+        "int[]": "List[int]",
+        "int[][]": "List[List[int]]",
+        "String": "str",
+        "String[]": "List[str]",
+        "boolean": "bool",
+        "double": "float",
+        "void": "None"
+    }
+    ret_type = ret_map.get(ret_type_raw, "int")
+
+    params = []
+    if params_raw.strip():
+        for p in params_raw.split(","):
+            parts = p.strip().split()
+            if len(parts) >= 2:
+                p_type_raw = parts[0]
+                p_name = parts[1]
+                p_type_map = {
+                    "int": "int",
+                    "int[]": "List[int]",
+                    "int[][]": "List[List[int]]",
+                    "String": "str",
+                    "String[]": "List[str]",
+                    "boolean": "bool",
+                    "double": "float"
+                }
+                params.append((p_name, p_type_map.get(p_type_raw, "int")))
+
+    return {
+        "func_name": func_name,
+        "params": params,
+        "ret_type": ret_type,
+        "has_class": True
+    }
+
+
+def extract_js_details(code):
+    import re
+    # Match: function funcName(params)
+    match = re.search(r'function\s+(\w+)\s*\(([^)]*)\)', code)
+    if not match:
+        # Match class method: funcName(params) {
+        match = re.search(r'^\s*(\w+)\s*\(([^)]*)\)\s*\{', code, re.MULTILINE)
+    if not match:
+        return None
+    func_name = match.group(1)
+    params_raw = match.group(2)
+
+    if func_name in ["if", "for", "while", "switch", "catch"]:
+        return None
+    
+    params = []
+    if params_raw.strip():
+        for p in params_raw.split(","):
+            p_name = p.strip().split("=")[0].strip() # handle defaults if any
+            params.append((p_name, "int"))
+            
+    return {
+        "func_name": func_name,
+        "params": params,
+        "ret_type": "int",
+        "has_class": "class Solution" in code
+    }
+
+
+def extract_cpp_details(code):
+    import re
+    # Match C++ method definition inside class: int lengthOfLongestSubstring(string s) {
+    match = re.search(r'([\w\[\]<>]+)\s+(\w+)\s*\(([^)]*)\)\s*\{', code)
+    if not match:
+        return None
+    ret_type_raw = match.group(1)
+    func_name = match.group(2)
+    params_raw = match.group(3)
+
+    if func_name in ["if", "for", "while", "switch", "catch", "Solution"]:
+        return None
+    
+    ret_map = {
+        "int": "int",
+        "vector<int>": "List[int]",
+        "vector<vector<int>>": "List[List[int]]",
+        "string": "str",
+        "vector<string>": "List[str]",
+        "bool": "bool",
+        "double": "float"
+    }
+    ret_type = ret_map.get(ret_type_raw, "int")
+    
+    params = []
+    if params_raw.strip():
+        for p in params_raw.split(","):
+            parts = p.strip().split()
+            if len(parts) >= 2:
+                p_type_raw = parts[0].replace("&", "").replace("const", "").strip()
+                p_name = parts[1].replace("&", "").strip()
+                p_type_map = {
+                    "int": "int",
+                    "vector<int>": "List[int]",
+                    "vector<vector<int>>": "List[List[int]]",
+                    "string": "str",
+                    "vector<string>": "List[str]",
+                    "bool": "bool"
+                }
+                params.append((p_name, p_type_map.get(p_type_raw, "int")))
+                
+    return {
+        "func_name": func_name,
+        "params": params,
+        "ret_type": ret_type,
+        "has_class": True
+    }
 
 
 def generate_java_driver(func_name, params, ret_type):
@@ -1103,9 +1252,23 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
         return "CE", [], f"Language '{language}' is not supported in the sandbox runner."
         
     # Inspect user code directly first, fallback to starter code signature if needed
-    details = extract_user_python_details(code)
-    if not details and starter_code:
-        details = extract_user_python_details(starter_code)
+    details = None
+    if language == "python":
+        details = extract_user_python_details(code)
+        if not details and starter_code:
+            details = extract_user_python_details(starter_code)
+    elif language == "java":
+        details = extract_java_details(code)
+        if not details and starter_code:
+            details = extract_java_details(starter_code)
+    elif language == "javascript":
+        details = extract_js_details(code)
+        if not details and starter_code:
+            details = extract_js_details(starter_code)
+    elif language == "cpp":
+        details = extract_cpp_details(code)
+        if not details and starter_code:
+            details = extract_cpp_details(starter_code)
 
     # Check if user code already contains its own main/runner entry point
     is_standalone_cpp = "int main(" in code
@@ -1135,12 +1298,15 @@ def run_code_in_sandbox(code, language, test_cases, time_limit_ms, starter_code=
                     compile_files = ["Solution.java", "DriverMain.java"]
                     exec_cmd = ["java", "DriverMain"]
                 else:
-                    # Direct Main.java execution
-                    src_path = os.path.join(temp_dir, "Main.java")
+                    # Direct Java execution - detect class name dynamically to prevent public class mismatch
+                    class_name = "Solution"
+                    if "public class Main" in code or "class Main" in code:
+                        class_name = "Main"
+                    src_path = os.path.join(temp_dir, f"{class_name}.java")
                     with open(src_path, "w", encoding="utf-8") as f:
                         f.write(code)
-                    compile_files = ["Main.java"]
-                    exec_cmd = ["java", "Main"]
+                    compile_files = [f"{class_name}.java"]
+                    exec_cmd = ["java", class_name]
                     
                 compile_proc = subprocess.run(
                     ["javac"] + compile_files,
