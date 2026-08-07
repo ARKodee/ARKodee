@@ -139,6 +139,7 @@ export function ProblemWorkspace() {
       onChange={handleLanguageChange}
       aria-label="Select programming language"
       id="select-language"
+      disabled={isRunning || isSubmitting}
     >
       {LANGUAGES.map((lang) => (
         <option key={lang.value} value={lang.value}>

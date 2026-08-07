@@ -205,7 +205,7 @@ export function InteractiveEditor({
           onMount={handleEditorMount}
           theme={theme === 'dark' ? 'arkodee-dark' : 'arkodee-light'}
           options={{
-            readOnly: readOnly,
+            readOnly: readOnly || isRunning || isSubmitting,
             contextmenu: false,
             minimap: { enabled: false },
             automaticLayout: true,
@@ -270,7 +270,23 @@ export function InteractiveEditor({
           </div>
 
           <div className="ie-terminal-body">
-            {activeTerminalTab === 'testcases' ? (
+            {isRunning || isSubmitting ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                minHeight: '140px',
+                gap: 'var(--space-3)',
+                color: 'var(--text-secondary)'
+              }}>
+                <div className="ie-spinner" />
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
+                  {isRunning ? 'Running visible test cases...' : 'Submitting code to evaluation suite...'}
+                </span>
+              </div>
+            ) : activeTerminalTab === 'testcases' ? (
               <div>
                 {/* Global error fallback (Compilation Error / Execution Error) */}
                 {terminalOutput && (terminalOutput.includes('Compilation Error') || terminalOutput.includes('Execution Error')) ? (
