@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { getProfileStats } from '../lib/users';
+import { getDuelHistory } from '../lib/auth';
 import { Navbar }          from '../components/layout/Navbar';
 import { DailyBugCard }    from '../components/dashboard/DailyBugCard';
 import { GlobalLeaderboard } from '../components/dashboard/GlobalLeaderboard';
 import { MatchmakerPanel } from '../components/dashboard/MatchmakerPanel';
+import { PastMatchesList } from '../components/arena/PastMatchesList';
 import { Button }          from '../components/ui/Button';
 import { Badge }           from '../components/ui/Badge';
 import { Skeleton }        from '../components/ui/Skeleton';
@@ -67,6 +69,8 @@ export function Dashboard() {
   const { user: authUser } = useAuth();
   const [profile, setProfile]   = useState(null);
   const [loading, setLoading]   = useState(true);
+  const [matches, setMatches]   = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(true);
 
   /* Fetch real user profile */
   useEffect(() => {
@@ -74,6 +78,15 @@ export function Dashboard() {
     getProfileStats()
       .then((d) => alive && (setProfile(d), setLoading(false)))
       .catch(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
+
+  /* Fetch duel history */
+  useEffect(() => {
+    let alive = true;
+    getDuelHistory()
+      .then((d) => alive && (setMatches(Array.isArray(d) ? d : []), setMatchesLoading(false)))
+      .catch(() => alive && setMatchesLoading(false));
     return () => { alive = false; };
   }, []);
 
@@ -94,10 +107,10 @@ export function Dashboard() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const STATS = [
-    { label: 'Problems solved', value: solved,       icon: <IconCode />,   iconVariant: 'accent',  trend: 'Profile stats', trendDir: 'up' },
-    { label: 'Contest rating',  value: rating ?? '—',       icon: <IconTarget />, iconVariant: 'warning', trend: contestRatingLabel,         trendDir: 'flat' },
-    { label: 'Win rate',        value: winRate,      icon: <IconSwords />, iconVariant: 'success', trend: `${totalMatches} matches`,  trendDir: 'up' },
-    { label: 'Day streak',      value: `${streak}d`, icon: <IconFlame />,  iconVariant: 'info',    trend: streak > 0 ? 'Keep it up!' : 'Start today', trendDir: streak > 0 ? 'up' : 'flat' },
+    { label: 'Total Problems Solved', value: solved,       icon: <IconCode />,   iconVariant: 'accent',  trend: 'Profile stats', trendDir: 'up' },
+    { label: 'Contest ELO Rating',  value: rating ?? '—',       icon: <IconTarget />, iconVariant: 'warning', trend: contestRatingLabel,         trendDir: 'flat' },
+    { label: '1v1 Match Win Ratio',        value: winRate,      icon: <IconSwords />, iconVariant: 'success', trend: `${totalMatches} matches`,  trendDir: 'up' },
+    { label: 'Bug Bounty Solve Streak',      value: `${streak}d`, icon: <IconFlame />,  iconVariant: 'info',    trend: streak > 0 ? 'Keep it up!' : 'Start today', trendDir: streak > 0 ? 'up' : 'flat' },
   ];
 
   return (
@@ -118,7 +131,7 @@ export function Dashboard() {
           </div>
           <div className="dash__hero-actions">
             <Button as={Link} to="/practice" variant="secondary">Practice</Button>
-            <Button as={Link} to="/matchmaking" variant="primary">Find Match</Button>
+            <Button as={Link} to="/matchmaking" variant="primary">1v1 Arena</Button>
           </div>
         </div>
 
@@ -168,12 +181,12 @@ export function Dashboard() {
                   <IconBug style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
                   Daily Bug Bounty
                 </span>
-                <Badge variant="warning">Today</Badge>
+                <Badge variant="accent">Coming Soon</Badge>
               </div>
               <DailyBugCard />
             </div>
 
-            {/* Recent matches — empty state */}
+            {/* Recent matches */}
             <div>
               <div className="dash-section__head">
                 <span className="dash-section__title">
@@ -181,10 +194,7 @@ export function Dashboard() {
                   Recent Matches
                 </span>
               </div>
-              <div className="dash-empty">
-                <span className="dash-empty__label">No matches yet</span>
-                <p className="dash-empty__sub">Find a match to start your ranked history.</p>
-              </div>
+              <PastMatchesList matches={matches} loading={matchesLoading} />
             </div>
 
           </div>

@@ -295,7 +295,7 @@ export function DebugArenaPage() {
         <ArrowLeft size={18} />
       </button>
       <span className="da-toolbar-sep" />
-      <span className="da-title">#{bug_id}</span>
+      <span className="da-title">#{bug_id?.substring(0, 8).toUpperCase()}</span>
       <h1 className="da-title">{title}</h1>
       {category && (
         <span className="da-category-badge">{category}</span>
@@ -326,6 +326,38 @@ export function DebugArenaPage() {
 
   const leftPane = (
     <div className="da-description">
+      {/* Solved Status Banner */}
+      {bugData?.is_solved && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-3)',
+          backgroundColor: 'var(--success-subtle)',
+          border: '1px solid var(--success-border)',
+          borderRadius: 'var(--radius-md)',
+          padding: 'var(--space-3) var(--space-4)',
+          marginBottom: 'var(--space-4)',
+          color: 'var(--success)'
+        }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(52, 211, 153, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '14px'
+          }}>🏆</div>
+          <div>
+            <h4 style={{ fontWeight: 700, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bounty Completed</h4>
+            <p style={{ fontSize: 'var(--text-nano)', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              You have already solved today's bug bounty challenge. Good job!
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Constraint Banner */}
       <div className="da-constraint-banner">
         <AlertTriangle size={16} />
@@ -383,6 +415,7 @@ export function DebugArenaPage() {
             scrollBeyondLastLine: false,
             padding: { top: 12, bottom: 12 },
             automaticLayout: true,
+            readOnly: !!bugData?.is_solved,
           }}
         />
       </div>
@@ -400,7 +433,7 @@ export function DebugArenaPage() {
         <button
           className="da-btn da-btn--ghost"
           onClick={handleRunCode}
-          disabled={isRunning || isSubmitting}
+          disabled={isRunning || isSubmitting || !!bugData?.is_solved}
         >
           <Terminal size={14} />
           <span>Run</span>
@@ -408,10 +441,10 @@ export function DebugArenaPage() {
         <button
           className="da-btn da-btn--primary"
           onClick={handleSubmitCode}
-          disabled={isRunning || isSubmitting}
+          disabled={isRunning || isSubmitting || !!bugData?.is_solved}
         >
           <Zap size={14} />
-          <span>Submit</span>
+          <span>{bugData?.is_solved ? 'Solved' : 'Submit'}</span>
         </button>
       </div>
     </div>

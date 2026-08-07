@@ -952,12 +952,15 @@ from apps.auth.models import UserStats
 def daily_bug_summary(request):
     """
     Returns a summary of today's DailyBug challenge.
-    If none exists for today's date, falls back to the most recent DailyBug.
+    If none exists for today's date, falls back to a deterministic daily loop of active bugs.
     """
     today = datetime.date.today()
     bug = DailyBug.objects.filter(date=today, is_active=True).first()
     if not bug:
-        bug = DailyBug.objects.filter(is_active=True).order_by("-date").first()
+        active_bugs = list(DailyBug.objects.filter(is_active=True).order_by("id"))
+        if active_bugs:
+            day_index = today.toordinal() % len(active_bugs)
+            bug = active_bugs[day_index]
 
     if not bug:
         return Response({"detail": "No active bug bounty today."}, status=status.HTTP_404_NOT_FOUND)
@@ -975,7 +978,7 @@ def daily_bug_summary(request):
         "bug_id": str(bug.id),
         "title": bug.title,
         "category": bug.category,
-        "date": bug.date.isoformat(),
+        "date": bug.date.isoformat() if hasattr(bug, 'date') and bug.date else today.isoformat(),
         "description": bug.description,
         "sample_input": bug.sample_input,
         "expected_output": bug.expected_output,
@@ -996,6 +999,8 @@ def daily_bug_detail(request, bug_id):
     except (DailyBug.DoesNotExist, ValidationError):
         return Response({"detail": "Bug bounty challenge not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    is_solved = UserBugSolve.objects.filter(user=request.user, bug=bug).exists()
+
     return Response({
         "bug_id": str(bug.id),
         "title": bug.title,
@@ -1004,7 +1009,8 @@ def daily_bug_detail(request, bug_id):
         "line_budget": bug.line_budget,
         "xp_reward": bug.xp_reward,
         "starter_codes": bug.starter_codes,
-        "examples": bug.examples
+        "examples": bug.examples,
+        "is_solved": is_solved
     }, status=status.HTTP_200_OK)
 
 

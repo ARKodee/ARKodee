@@ -1,53 +1,35 @@
 // src/components/dashboard/MatchmakerPanel.jsx
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import './dashboard-widgets.css';
 
-// No MODES array needed — only 1v1 Ranked exists
-
-function fmtTime(s) {
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-}
-
 export function MatchmakerPanel() {
-  const [isSearching, setIsSearching]   = useState(false);
-  const [elapsed, setElapsed]           = useState(0);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!isSearching) { setElapsed(0); return; }
-    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [isSearching]);
+  const handleStartMatchmaking = () => {
+    navigate('/matchmaking?autoQueue=true');
+  };
 
   return (
     <div className="widget">
       <div className="widget__header">
-        <span className="widget__title">Matchmaking</span>
-        {isSearching && (
-          <span className="matchmaker__search-status">
-            <span className="matchmaker__ping-dot" />
-            {fmtTime(elapsed)}
-          </span>
-        )}
+        <span className="widget__title">1v1 Combat Matchmaking</span>
       </div>
 
       <div className="widget__body">
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-3)', lineHeight: '1.4' }}>
+          Instantly search for an active opponent near your ELO ranking and battle in real-time.
+        </p>
         <Button
           id="launch-matchmaking-btn"
-          variant={isSearching ? 'danger' : 'primary'}
+          variant="primary"
           style={{ width: '100%' }}
-          onClick={() => setIsSearching((s) => !s)}
+          onClick={handleStartMatchmaking}
         >
-          {isSearching ? `Searching… ${fmtTime(elapsed)}` : 'Find Match — 1v1 Ranked'}
+          ⚔️ Find Match — 1v1 Ranked
         </Button>
-
-        {isSearching && (
-          <span className="matchmaker__search-status">
-            <span className="matchmaker__ping-dot" />
-            Searching for an opponent
-          </span>
-        )}
       </div>
     </div>
   );
-}
+}

@@ -57,6 +57,7 @@ const NAV_LINKS = [
   { name: 'Practice',  path: '/practice'  },
   { name: 'Contests',  path: '/contests'  },
   { name: '1v1 Arena', path: '/matchmaking' },
+  { name: 'Bounty',    path: '/debug'        },
 ];
 
 function getRatingTitle(rating = 1200) {
