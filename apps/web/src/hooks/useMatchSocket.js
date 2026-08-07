@@ -44,7 +44,7 @@ export function useMatchSocket(matchId) {
   const [matchFinishedData, setMatchFinishedData] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);
 
   // Handle active sabotage countdown tick
   useEffect(() => {
@@ -86,7 +86,7 @@ export function useMatchSocket(matchId) {
       transports: ['websocket', 'polling'],
     });
 
-    socketRef.current = socket;
+    setSocket(socket);
     setConnectionState('CONNECTING');
 
     socket.on('connect', () => {
@@ -235,6 +235,7 @@ export function useMatchSocket(matchId) {
 
     return () => {
       socket.disconnect();
+      setSocket(null);
     };
   }, [matchId, token, user?.id]);
 
@@ -243,70 +244,70 @@ export function useMatchSocket(matchId) {
    */
   const requestStartMatch = useCallback(() => {
     const activeUserId = user?.id || user?.userId;
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('request_start_match', {
+    if (socket && socket.connected) {
+      socket.emit('request_start_match', {
         roomId: matchId,
         roomCode: matchId,
         userId: activeUserId,
       });
-      socketRef.current.emit('start_custom_match', {
+      socket.emit('start_custom_match', {
         roomId: matchId,
         roomCode: matchId,
         userId: activeUserId,
       });
     }
-  }, [matchId, user?.id, user?.userId]);
+  }, [matchId, user?.id, user?.userId, socket]);
 
   /**
    * Leave arena lobby signal (dissolves match for both host & guest)
    */
   const leaveArenaLobby = useCallback(() => {
     const activeUserId = user?.id || user?.userId;
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('leave_arena_lobby', {
+    if (socket && socket.connected) {
+      socket.emit('leave_arena_lobby', {
         matchId,
         roomId: matchId,
         userId: activeUserId,
       });
     }
-  }, [matchId, user?.id, user?.userId]);
+  }, [matchId, user?.id, user?.userId, socket]);
 
   /**
    * Initiate match signal to backend socket
    */
   const initiateMatch = useCallback(() => {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('initiate_match', { matchId, userId: user?.id });
+    if (socket && socket.connected) {
+      socket.emit('initiate_match', { matchId, userId: user?.id });
     }
     // Problems come from the server via match_ready — do not pre-populate with fallbacks
-  }, [matchId, user?.id]);
+  }, [matchId, user?.id, socket]);
 
   /**
    * Emit code submission progress
    */
   const sendSubmission = useCallback((problemId, status, code) => {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('submit_code', { matchId, problemId, status, code });
+    if (socket && socket.connected) {
+      socket.emit('submit_code', { matchId, problemId, status, code });
     }
-  }, [matchId]);
+  }, [matchId, socket]);
 
   /**
    * Emit sabotage move to opponent
    */
   const sendSabotage = useCallback((sabotageType) => {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('use_sabotage', { matchId, sabotageType });
+    if (socket && socket.connected) {
+      socket.emit('use_sabotage', { matchId, sabotageType });
     }
-  }, [matchId]);
+  }, [matchId, socket]);
 
   /**
    * Emit shield activation
    */
   const sendShield = useCallback((shieldType) => {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('use_shield', { matchId, shieldType });
+    if (socket && socket.connected) {
+      socket.emit('use_shield', { matchId, shieldType });
     }
-  }, [matchId]);
+  }, [matchId, socket]);
 
   return {
     problems,
@@ -336,6 +337,6 @@ export function useMatchSocket(matchId) {
     toastMessage,
     setToastMessage,
     roomState,
-    socket: socketRef.current,
+    socket,
   };
 }

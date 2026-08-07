@@ -11,7 +11,7 @@ import { logger } from './utils/logger.js';
 // Authoritative internal Map tracking roomID -> Set of socket.ids
 // Key: roomId (string), Value: Set<string> (socket IDs)
 const roomSocketsMap = new Map();
-const roomsStore = new Map();
+export const roomsStore = new Map();
 const activeIntervals = new Map();
 
 /**
@@ -79,60 +79,60 @@ export function getRoomDocument(roomId) {
  */
 export const DEFAULT_ARENA_PROBLEMS = [
   {
-    id: 'p1',
-    slug: 'two-sum-defusal',
-    title: 'Two Sum Defusal',
+    id: 'bce1285f-7b99-420e-88a1-99fa13ea9ca8',
+    slug: 'reverse-string',
+    title: 'Reverse String',
     difficulty: 'EASY',
-    description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to target.',
-    constraints: '2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9',
-    input_format: 'First line contains n and target.\nSecond line contains n integers.',
-    output_format: 'Print two space-separated indices.',
-    sample_input: ['4 9\n2 7 11 15'],
-    sample_output: ['0 1'],
+    description: 'Write a function that reverses a string. The input string is given as an array of characters s.\nYou must do this by modifying the input array in-place with O(1) extra memory.',
+    constraints: '1 <= s.length <= 10^5\ns[i] is a printable ascii character.',
+    input_format: 'Array of characters s.',
+    output_format: 'Modify array s in-place.',
+    sample_input: ['s = ["1","2","3","4","5"]'],
+    sample_output: ['["5","4","3","2","1"]'],
     time_limit_ms: 2000,
     memory_limit_mb: 256,
   },
   {
-    id: 'p2',
-    slug: 'subtree-synchronizer',
-    title: 'Subtree Synchronizer',
-    difficulty: 'MEDIUM',
-    description: 'Given the roots of two binary trees `root` and `subRoot`, return `true` if there is a subtree of `root` with the same structure and node values of `subRoot`.',
-    constraints: 'The number of nodes in root is in [1, 2000].',
-    input_format: 'Tree serialization in level order.',
-    output_format: 'Print "true" or "false".',
-    sample_input: ['root = [3,4,5,1,2], subRoot = [4,1,2]'],
-    sample_output: ['true'],
+    id: '7e193e47-c0a9-4bd7-9c84-bf7b1fb90bda',
+    slug: 'move-zeroes',
+    title: 'Move Zeroes',
+    difficulty: 'EASY',
+    description: 'Given an integer array nums, move all 0\'s to the end of it while maintaining the relative order of the non-zero elements.\nNote that you must do this in-place without making a copy of the array.',
+    constraints: '1 <= nums.length <= 10^4\n-2^31 <= nums[i] <= 2^31 - 1',
+    input_format: 'Array of integers nums.',
+    output_format: 'Modify array nums in-place.',
+    sample_input: ['nums = [0,0,1]'],
+    sample_output: ['[1,0,0]'],
     time_limit_ms: 2000,
     memory_limit_mb: 256,
   },
   {
-    id: 'p3',
-    slug: 'maximum-subarray-overdrive',
-    title: 'Maximum Subarray Overdrive',
+    id: '4d0aa817-998a-4ade-b500-a143d5dd54cf',
+    slug: 'sort-colors',
+    title: 'Sort Colors',
     difficulty: 'MEDIUM',
-    description: 'Given an integer array `nums`, find the subarray with the largest sum, and return its sum in optimal O(N) time complexity.',
-    constraints: '1 <= nums.length <= 10^5',
-    input_format: 'First line contains n. Second line contains n integers.',
-    output_format: 'Print maximum subarray sum.',
-    sample_input: ['9\n-2 1 -3 4 -1 2 1 -5 4'],
-    sample_output: ['6'],
-    time_limit_ms: 1000,
-    memory_limit_mb: 128,
+    description: 'Given an array nums with n objects colored red, white, or blue, sort them in-place so that objects of the same color are adjacent, with the colors in the order red, white, and blue.\nWe will use the integers 0, 1, and 2 to represent the color red, white, and blue, respectively.\nYou must solve this problem without using the library\'s sort function.',
+    constraints: 'n == nums.length\n1 <= n <= 300\nnums[i] is either 0, 1, or 2.',
+    input_format: 'Array of integers nums.',
+    output_format: 'Modify array nums in-place.',
+    sample_input: ['nums = [1,0,2,0,1,2,1]'],
+    sample_output: ['[0,0,1,1,1,2,2]'],
+    time_limit_ms: 2000,
+    memory_limit_mb: 256,
   },
   {
-    id: 'p4',
-    slug: 'network-core-flow',
-    title: 'Network Core Flow',
-    difficulty: 'HARD',
-    description: 'Find the critical path with maximum throughput constraint under latency bounds.',
-    constraints: '2 <= n <= 10^5',
-    input_format: 'Standard graph adjacency specification.',
-    output_format: 'Single maximum bottleneck capacity integer.',
-    sample_input: ['4 5\n0 1 10\n1 2 15\n0 2 5\n2 3 10\n1 3 20'],
-    sample_output: ['15'],
-    time_limit_ms: 3000,
-    memory_limit_mb: 512,
+    id: 'c21bdabe-7fc1-4e56-9124-f4c09329c40e',
+    slug: 'rotate-array',
+    title: 'Rotate Array',
+    difficulty: 'MEDIUM',
+    description: 'Given an integer array nums, rotate the array to the right by k steps, where k is non-negative.',
+    constraints: '1 <= nums.length <= 10^5\n-2^31 <= nums[i] <= 2^31 - 1\n0 <= k <= 10^5',
+    input_format: 'Array of integers nums and step k.',
+    output_format: 'Modify array nums in-place.',
+    sample_input: ['nums = [1,2,3,4,5,6,7,8,9,10], k = 1'],
+    sample_output: ['[10,1,2,3,4,5,6,7,8,9]'],
+    time_limit_ms: 2000,
+    memory_limit_mb: 256,
   },
 ];
 
@@ -275,7 +275,7 @@ export async function handleRequestStartMatch(io, socket, payload = {}) {
   logger.info(`[Matchmaker] Background fetching dynamic problems for room ${roomId} from ${backendUrl}/api/duels/problems/`);
   
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5 seconds timeout limit
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout limit
 
   fetch(`${backendUrl}/api/duels/problems/`, { signal: controller.signal })
     .then(async (res) => {
@@ -415,11 +415,30 @@ export function handleMatchTimeExpired(io, roomId, room, isOvertime = false) {
       setRoomDocument(room);
       io.to(roomId).emit('room_updated', room);
 
-      // Set timeout to auto-draw if they don't both vote overtime
+      // Set timeout to resolve tie resolution votes when time limit expires
       setTimeout(() => {
         const latestRoom = getRoomDocument(roomId);
         if (latestRoom && latestRoom.status === 'TIE_PROMPT') {
-          finishMatch(io, roomId, latestRoom, null, 'Tie prompt expired. Match ended in a draw.');
+          const drawVotes = latestRoom.votes?.draw?.length || 0;
+          const overtimeVotes = latestRoom.votes?.overtime?.length || 0;
+
+          if (drawVotes === 0 && overtimeVotes === 0) {
+            finishMatch(io, roomId, latestRoom, null, 'Voting period expired. Match ended in a draw by default.');
+          } else if (overtimeVotes > 0 && drawVotes === 0) {
+            latestRoom.status = 'ACTIVE';
+            latestRoom.isOvertime = true;
+            latestRoom.overtimeStartedAt = new Date().toISOString();
+            latestRoom.votes = null;
+            latestRoom.tiePromptExpiresAt = null;
+            setRoomDocument(latestRoom);
+            io.to(roomId).emit('room_updated', latestRoom);
+
+            setupApAndMatchTimer(io, roomId);
+          } else if (drawVotes > 0 && overtimeVotes === 0) {
+            finishMatch(io, roomId, latestRoom, null, 'Voting period expired. Match settled as a draw.');
+          } else {
+            finishMatch(io, roomId, latestRoom, null, 'Voting period expired. Match ended in a draw.');
+          }
         }
       }, 30000);
     } else {
@@ -461,13 +480,18 @@ export function finishMatch(io, roomId, room, winnerId, reason) {
 
   logger.info(`[Matchmaker] Finalizing duel room ${roomId}. Winner: ${winnerId}, Reason: ${reason}`);
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 seconds timeout
+
   fetch(`${backendUrl}/api/duels/create/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(postData)
+    body: JSON.stringify(postData),
+    signal: controller.signal
   })
   .then(res => res.json())
   .then(data => {
+    clearTimeout(timeoutId);
     logger.info(`[Duel Persistence] Saved match: ${data.match_id}, ELO delta A: ${data.elo_delta_a}, B: ${data.elo_delta_b}`);
     io.to(roomId).emit('match_finished', {
       winnerId,
@@ -481,10 +505,11 @@ export function finishMatch(io, roomId, room, winnerId, reason) {
     });
   })
   .catch(err => {
-    logger.error(`[Duel Persistence] Failed to save duel outcome:`, err);
+    clearTimeout(timeoutId);
+    logger.error(`[Duel Persistence] Failed to save duel outcome or timeout reached:`, err.message || err);
     io.to(roomId).emit('match_finished', {
       winnerId,
-      scores: room.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
+      scores: room.players.map(p => ({ userId: p.userId, username: p.username, score: p.score, eloDelta: 0 })),
       reason
     });
   });

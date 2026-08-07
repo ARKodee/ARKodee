@@ -16,10 +16,12 @@ import {
   handleRequestStartMatch,
   finishMatch,
   setupApAndMatchTimer,
+  handleMatchTimeExpired,
+  roomsStore,
 } from '../matchmaker.js';
 
 // Authoritative state tracking map instance directly inside memory module scope
-const customRooms = new Map();
+const customRooms = roomsStore;
 
 /**
  * Generates a unique 5-character uppercase room code.
@@ -261,14 +263,32 @@ class SocketManager {
         let room = customRooms.get(roomId) || getRoomDocument(roomId);
 
         if (room) {
-          logger.info(`[Socket] client_ready for room ${roomId} from ${socket.user?.username}. Emitting match_ready`);
-          
+          if (room.status === 'FINISHED') {
+            logger.warn(`[Socket] client_ready failed: room ${roomId} has already concluded. Emitting match_error.`);
+            socket.emit('match_error', {
+              success: false,
+              message: `This match has already concluded.`,
+            });
+            return;
+          }
+
           const pIdx = room.players.findIndex(
             (p) => String(p.userId) === String(socket.user?.id)
           );
-          if (pIdx !== -1) {
-            room.players[pIdx].socketId = socket.id;
+          if (pIdx === -1) {
+            logger.warn(`[Socket] client_ready failed: user ${socket.user?.username} is not a participant in room ${roomId}.`);
+            socket.emit('match_error', {
+              success: false,
+              message: `You are not a participant in this match.`,
+            });
+            return;
           }
+
+          logger.info(`[Socket] client_ready for room ${roomId} from ${socket.user?.username}. Emitting match_ready`);
+          room.players[pIdx].socketId = socket.id;
+          room.players[pIdx].hasJoinedArena = true;
+          setRoomDocument(room);
+          customRooms.set(roomId, room);
 
           socket.emit('match_ready', {
             success: true,
@@ -386,6 +406,29 @@ class SocketManager {
         }
       });
 
+      // 5.5. socket.on('check_match_expiry', (payload) => { ... })
+      socket.on('check_match_expiry', (payload = {}) => {
+        const roomId = payload.matchId || payload.roomId;
+        const room = customRooms.get(roomId) || getRoomDocument(roomId);
+        if (!room || room.status !== 'ACTIVE') return;
+
+        const elapsedSec = Math.floor((Date.now() - new Date(room.startedAt).getTime()) / 1000);
+        const baseLimit = 3600; // 60 minutes
+
+        if (room.isOvertime) {
+          const overtimeElapsed = Math.floor((Date.now() - new Date(room.overtimeStartedAt).getTime()) / 1000);
+          if (overtimeElapsed >= 600) {
+            logger.info(`[Socket] Expiry trigger: Overtime expired for room ${roomId}. Concluding match.`);
+            handleMatchTimeExpired(this.io, roomId, room, true);
+          }
+        } else {
+          if (elapsedSec >= baseLimit) {
+            logger.info(`[Socket] Expiry trigger: Base time expired for room ${roomId}. Concluding match.`);
+            handleMatchTimeExpired(this.io, roomId, room, false);
+          }
+        }
+      });
+
       // 6. socket.on('submit_code', (payload) => { ... })
       socket.on('submit_code', (payload = {}) => {
         const { matchId, problemId, status, code } = payload;
@@ -477,14 +520,14 @@ class SocketManager {
         const room = customRooms.get(roomId) || getRoomDocument(roomId);
         if (!room || room.status !== 'TIE_PROMPT') return;
 
-        const player = room.players.find(p => p.socketId === socket.id);
+        const player = room.players.find(p => String(p.userId) === String(socket.user?.id) || p.socketId === socket.id);
         if (!player) return;
 
         if (!room.votes) room.votes = { draw: [], overtime: [] };
 
         // Deduplicate vote lists
-        room.votes.draw = (room.votes.draw || []).filter(uid => uid !== player.userId);
-        room.votes.overtime = (room.votes.overtime || []).filter(uid => uid !== player.userId);
+        room.votes.draw = (room.votes.draw || []).filter(uid => String(uid) !== String(player.userId));
+        room.votes.overtime = (room.votes.overtime || []).filter(uid => String(uid) !== String(player.userId));
 
         if (vote === 'draw') {
           room.votes.draw.push(player.userId);
@@ -500,24 +543,27 @@ class SocketManager {
         const overtimeVotes = room.votes.overtime.length;
         const drawVotes = room.votes.draw.length;
 
-        if (overtimeVotes >= totalPlayers) {
-          // Both voted overtime: resume match in overtime phase!
-          room.status = 'ACTIVE';
-          room.isOvertime = true;
-          room.overtimeStartedAt = new Date().toISOString();
-          room.votes = null;
-          room.tiePromptExpiresAt = null;
-          setRoomDocument(room);
-          customRooms.set(roomId, room);
-          this.io.to(roomId).emit('room_updated', room);
+        if (overtimeVotes + drawVotes >= totalPlayers) {
+          if (overtimeVotes === totalPlayers) {
+            // Both voted overtime: resume match in overtime phase!
+            room.status = 'ACTIVE';
+            room.isOvertime = true;
+            room.overtimeStartedAt = new Date().toISOString();
+            room.votes = null;
+            room.tiePromptExpiresAt = null;
+            setRoomDocument(room);
+            customRooms.set(roomId, room);
+            this.io.to(roomId).emit('room_updated', room);
 
-          setupApAndMatchTimer(this.io, roomId);
-        } else if (drawVotes >= totalPlayers) {
-          // Both voted draw: end the match as a draw
-          finishMatch(this.io, roomId, room, null, 'Match ended in a draw by mutual agreement.');
+            setupApAndMatchTimer(this.io, roomId);
+          } else if (drawVotes === totalPlayers) {
+            // Both voted draw: end the match as a draw
+            finishMatch(this.io, roomId, room, null, 'Match ended in a draw by mutual agreement.');
+          } else {
+            // Different options (e.g. A voted overtime, B voted draw) -> Draw!
+            finishMatch(this.io, roomId, room, null, 'Match ended in a draw (players voted differently).');
+          }
         }
-        // else: split vote (one draw, one overtime) — stay in TIE_PROMPT;
-        // the 30s auto-draw timeout in matchmaker.js will resolve it
       });
 
       // 7. socket.on('use_sabotage', (payload) => { ... })
@@ -617,13 +663,28 @@ class SocketManager {
           logger.info(`[Queue] ${user.username} removed from queue on disconnect. Queue size: ${waitingQueue.length}`);
         }
         for (const [roomCode, room] of customRooms.entries()) {
+          if (room.status === 'FINISHED') {
+            customRooms.delete(roomCode);
+            continue;
+          }
+
           const playerIndex = room.players.findIndex((p) => p.socketId === socket.id);
           if (playerIndex !== -1) {
             const player = room.players[playerIndex];
 
-            if (room.isStarted || room.status === 'ACTIVE') {
-              logger.info(`Match active in room ${roomCode}. Disconnect transition preserved for player ${player.username}.`);
-              continue;
+            if (room.status === 'ACTIVE' || room.status === 'TIE_PROMPT') {
+              const bothJoined = room.players.length === 2 && room.players.every(p => p.hasJoinedArena);
+              if (bothJoined) {
+                const opponent = room.players.find((p) => p.socketId !== socket.id);
+                const winnerId = opponent ? opponent.userId : null;
+                logger.info(`[Socket] Match active in room ${roomCode}. Player ${player.username} disconnected. Opponent ${winnerId} declared winner.`);
+                finishMatch(this.io, roomCode, room, winnerId, 'Opponent disconnected from the match.');
+                customRooms.delete(roomCode);
+                continue;
+              } else {
+                logger.info(`[Socket] Player ${player.username} disconnected during transition/lobby setup for room ${roomCode}. No forfeit applied yet.`);
+                continue;
+              }
             }
 
             const hostPlayer = room.players[0];
