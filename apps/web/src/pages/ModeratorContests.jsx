@@ -51,6 +51,118 @@ function localToIso(localStr) {
   return isNaN(d.getTime()) ? localStr : d.toISOString();
 }
 
+function isoToLocal(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Robust CSV parser */
+function parseCSV(text) {
+  const rows = [];
+  let currentRow = [];
+  let currentVal = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (inQuotes) {
+      if (char === '"' && nextChar === '"') {
+        currentVal += '"';
+        i++;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        currentVal += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        currentRow.push(currentVal.trim());
+        currentVal = '';
+      } else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
+        if (char === '\r') i++;
+        currentRow.push(currentVal.trim());
+        if (currentRow.some((cell) => cell.length > 0)) {
+          rows.push(currentRow);
+        }
+        currentRow = [];
+        currentVal = '';
+      } else {
+        currentVal += char;
+      }
+    }
+  }
+
+  if (currentVal.trim() || currentRow.length > 0) {
+    currentRow.push(currentVal.trim());
+    if (currentRow.some((cell) => cell.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (rows.length === 0) return [];
+
+  const firstRow = rows[0].map((c) => c.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+  const hasInputHeader = firstRow.includes('input');
+  const hasOutputHeader = firstRow.some((c) => c.includes('output') || c.includes('expected'));
+
+  let startIndex = 0;
+  let inputIdx = 0;
+  let outputIdx = 1;
+  let sampleIdx = 2;
+
+  if (hasInputHeader || hasOutputHeader) {
+    startIndex = 1;
+    inputIdx = firstRow.findIndex((c) => c === 'input');
+    outputIdx = firstRow.findIndex((c) => c.includes('output') || c.includes('expected'));
+    sampleIdx = firstRow.findIndex((c) => c.includes('sample'));
+    if (inputIdx === -1) inputIdx = 0;
+    if (outputIdx === -1) outputIdx = 1;
+  }
+
+  const parsedTestCases = [];
+  for (let i = startIndex; i < rows.length; i++) {
+    const row = rows[i];
+    const input = row[inputIdx] !== undefined ? row[inputIdx] : (row[0] || '');
+    const expected = row[outputIdx] !== undefined ? row[outputIdx] : (row[1] || '');
+    const sampleRaw = sampleIdx !== -1 && row[sampleIdx] !== undefined ? row[sampleIdx].toLowerCase() : 'false';
+    const isSample = sampleRaw === 'true' || sampleRaw === '1' || sampleRaw === 'yes';
+
+    if (input.length > 0 || expected.length > 0) {
+      parsedTestCases.push({
+        input,
+        expected_output: expected,
+        is_sample: isSample,
+      });
+    }
+  }
+
+  return parsedTestCases;
+}
+
+/** Download CSV template for contest problems */
+function downloadCSVTemplate() {
+  let csvContent = 'input,expected_output,is_sample\n';
+  for (let i = 1; i <= 15; i++) {
+    const isSample = i <= 2 ? 'true' : 'false';
+    csvContent += `"2 7 11 15\\n9","0 1",${isSample}\n`;
+  }
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'arkodee_contest_problem_15_template.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 function toLocalInput(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -155,6 +267,38 @@ function ProblemPicker({ selected, onChange }) {
   const addFromBank = (p) => {
     if (selectedIds.has(p.id)) return;
     onChange([...selected, { id: p.id, title: p.title, slug: p.slug, difficulty: p.difficulty, points: 100 }]);
+  };
+
+  const fileInputRef = useRef(null);
+  const [csvNotice, setCsvNotice] = useState('');
+
+  const handleFileUpload = (e, mode = 'append') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCreateError('');
+    setCsvNotice('');
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        const parsed = parseCSV(text);
+        if (parsed.length === 0) {
+          setCreateError('CSV file is empty or invalid.');
+          return;
+        }
+
+        setNewProb((prev) => {
+          const newCases = mode === 'replace' ? parsed : [...prev.test_cases, ...parsed];
+          return { ...prev, test_cases: newCases };
+        });
+        setCsvNotice(`Successfully imported ${parsed.length} test cases from CSV.`);
+      } catch (err) {
+        setCreateError('Failed to parse CSV file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   /* ── Create new problem ──────────────────────────────────────── */
@@ -341,9 +485,50 @@ function ProblemPicker({ selected, onChange }) {
             <button type="button" className="mcc-tc__add-btn" onClick={addTC}>+ Add Case</button>
           </div>
 
+          {/* CSV Import & Template Toolbar */}
+          <div className="mod-tc__csv-toolbar" style={{ margin: '8px 0' }}>
+            <div className="mod-tc__csv-buttons">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".csv"
+                style={{ display: 'none' }}
+                onChange={(e) => handleFileUpload(e, 'append')}
+              />
+              <button
+                type="button"
+                className="mod-tc__csv-btn mod-tc__csv-btn--import"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📄 Import CSV (Append)
+              </button>
+              <button
+                type="button"
+                className="mod-tc__csv-btn mod-tc__csv-btn--replace"
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.onchange = (e) => handleFileUpload(e, 'replace');
+                    fileInputRef.current.click();
+                  }
+                }}
+              >
+                🔄 Import CSV (Replace All)
+              </button>
+              <button
+                type="button"
+                className="mod-tc__csv-btn mod-tc__csv-btn--template"
+                onClick={downloadCSVTemplate}
+              >
+                ⬇️ Download CSV Template
+              </button>
+            </div>
+          </div>
+
+          {csvNotice && <div className="mod-tc__notice">{csvNotice}</div>}
+
           {newProb.test_cases.length === 0 && (
             <div className="mcc-selected__empty" style={{ marginTop: 8 }}>
-              No test cases yet. Click "+ Add Case" to start.<br />
+              No test cases yet. Click "+ Add Case" or "Import CSV" to start.<br />
               <span style={{ fontSize: 'var(--text-nano)', color: 'var(--warning)', fontWeight: 600 }}>⚠ Minimum {MIN_TC} required.</span>
             </div>
           )}
