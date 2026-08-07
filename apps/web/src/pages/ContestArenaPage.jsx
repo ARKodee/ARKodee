@@ -618,9 +618,70 @@ export function ContestArenaPage() {
   }, [contest, activeProblemIdx, problems, language]);
 
   // Handle editor mount
-  const handleEditorMount = useCallback((editor) => {
+  const handleEditorMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
-  }, []);
+    
+    // Register custom dark/light themes to match the practice page
+    monaco.editor.defineTheme('arkodee-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: '', foreground: 'e8e8f0', background: '111113' },
+        { token: 'comment', foreground: '555568', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '818cf8' },
+        { token: 'string', foreground: '34d399' },
+        { token: 'number', foreground: 'fbbf24' },
+        { token: 'type', foreground: '818cf8' },
+        { token: 'function', foreground: 'e8e8f0' },
+      ],
+      colors: {
+        'editor.background':                 '#111113',
+        'editor.foreground':                 '#e8e8f0',
+        'editor.lineHighlightBackground':    '#1a1a1f',
+        'editor.selectionBackground':        '#2a2a3a',
+        'editorLineNumber.foreground':       '#555568',
+        'editorLineNumber.activeForeground': '#8888a0',
+        'editorGutter.background':           '#111113',
+        'editorWidget.background':           '#16161a',
+        'editorWidget.border':               '#1f1f24',
+        'editor.inactiveSelectionBackground':'#1f1f28',
+        'editorCursor.foreground':           '#818cf8',
+        'editorIndentGuide.background':      '#1f1f24',
+        'editorIndentGuide.activeBackground':'#2a2a32',
+      },
+    });
+
+    monaco.editor.defineTheme('arkodee-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [
+        { token: '', foreground: '0f0f14', background: 'f9f9fb' },
+        { token: 'comment', foreground: '9292a0', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '6d58f5' },
+        { token: 'string', foreground: '059669' },
+        { token: 'number', foreground: 'd97706' },
+        { token: 'type', foreground: '6d58f5' },
+        { token: 'function', foreground: '0f0f14' },
+      ],
+      colors: {
+        'editor.background':                 '#f9f9fb',
+        'editor.foreground':                 '#0f0f14',
+        'editor.lineHighlightBackground':    '#f0f0f5',
+        'editor.selectionBackground':        '#e4e4ec',
+        'editorLineNumber.foreground':       '#9292a0',
+        'editorLineNumber.activeForeground': '#52525e',
+        'editorGutter.background':           '#f9f9fb',
+        'editorWidget.background':           '#ffffff',
+        'editorWidget.border':               '#e4e4ec',
+        'editor.inactiveSelectionBackground':'#ededf5',
+        'editorCursor.foreground':           '#6d58f5',
+        'editorIndentGuide.background':      '#e4e4ec',
+        'editorIndentGuide.activeBackground':'#c8c8d8',
+      },
+    });
+
+    monaco.editor.setTheme(theme === 'dark' ? 'arkodee-dark' : 'arkodee-light');
+  }, [theme]);
 
   // Virtual contest: prevent accidental exit
   useEffect(() => {
@@ -1015,7 +1076,11 @@ export function ContestArenaPage() {
                           className={`ca-problem-item ${isActive ? 'ca-problem-item--active' : ''}`}
                           onClick={() => handleSelectProblem(idx)}
                         >
-                          <ProblemStatusIcon status={status} />
+                          {problemSubmitting[key] || problemRunning[key] ? (
+                            <Loader2 size={13} className="animate-spin" style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          ) : (
+                            <ProblemStatusIcon status={status} />
+                          )}
                           <span className="ca-problem-item-name">
                             {String.fromCharCode(65 + idx)}. {prob.title}
                           </span>
@@ -1217,9 +1282,9 @@ export function ContestArenaPage() {
                       value={code}
                       onChange={handleCodeChange}
                       onMount={handleEditorMount}
-                      theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                      theme={theme === 'dark' ? 'arkodee-dark' : 'arkodee-light'}
                       options={{
-                        readOnly: timer.isExpired,
+                        readOnly: timer.isExpired || activeSubmitting,
                         fontSize: 14,
                         fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, monospace",
                         minimap: { enabled: false },
