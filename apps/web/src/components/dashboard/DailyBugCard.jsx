@@ -56,7 +56,6 @@ export function DailyBugCard() {
       <div className="widget__body">
         {/* Meta */}
         <div className="bug-card__meta">
-          {bug_id   && <Badge variant="default">#{bug_id}</Badge>}
           {category && <Badge variant="warning">{category}</Badge>}
           {date && <span style={{ fontSize: 'var(--text-nano)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{date}</span>}
         </div>

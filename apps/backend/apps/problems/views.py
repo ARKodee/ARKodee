@@ -1052,7 +1052,7 @@ def run_daily_bug(request, bug_id):
     if not eval_cases:
         return Response({"detail": "No sample test cases defined for this bug."}, status=status.HTTP_400_BAD_REQUEST)
 
-    starter_code = bug.starter_codes.get(language, "")
+    starter_code = bug.starter_codes.get("python", "")
 
     from .sandbox import run_code_in_sandbox
     verdict, results, compile_error = run_code_in_sandbox(
@@ -1106,7 +1106,7 @@ def submit_daily_bug(request, bug_id):
     if not all_cases:
         return Response({"detail": "No validation test cases defined for this bug."}, status=status.HTTP_400_BAD_REQUEST)
 
-    starter_code = bug.starter_codes.get(language, "")
+    starter_code = bug.starter_codes.get("python", "")
 
     from .sandbox import run_code_in_sandbox
     verdict, results, compile_error = run_code_in_sandbox(

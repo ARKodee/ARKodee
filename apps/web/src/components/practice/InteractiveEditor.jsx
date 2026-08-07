@@ -108,6 +108,7 @@ export function InteractiveEditor({
   addFailedCaseToVisible = () => {},
   onRun = () => {},
   onSubmit = () => {},
+  onReset = null,
   readOnly = false,
   enableSuggestions = true
 }) {
@@ -172,6 +173,28 @@ export function InteractiveEditor({
           <span className="ie-file-dot" aria-hidden="true" />
           <span className="ie-file-name">{fileName}</span>
         </div>
+        {onReset && !readOnly && (
+          <button
+            onClick={onReset}
+            className="ie-reset-btn"
+            title="Reset code to original starter template"
+            style={{
+              marginLeft: 'var(--space-2)',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '2px 8px',
+              fontSize: '10px',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            🔄 Reset Code
+          </button>
+        )}
         {readOnly && (
           <span style={{
             fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700,
