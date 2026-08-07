@@ -249,3 +249,32 @@ class ChangeRequest(models.Model):
         return f"{self.action} {self.entity_type.upper()}: {self.title_preview} [{self.status}]"
 
 
+class DailyBug(models.Model):
+    """
+    Daily Bug Bounty Arena challenges.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=200)
+    category = models.CharField(max_length=30)
+    description = models.TextField()
+    starter_codes = models.JSONField(default=dict)
+    test_cases_json = models.JSONField(default=list)
+    examples = models.JSONField(default=list)
+    sample_input = models.TextField()
+    expected_output = models.TextField()
+    line_budget = models.IntegerField(default=1)
+    xp_reward = models.IntegerField(default=100)
+    time_limit_ms = models.IntegerField(default=2000)
+    date = models.DateField(unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "daily_bugs"
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"DailyBug ({self.date}): {self.title}"
+
+
+

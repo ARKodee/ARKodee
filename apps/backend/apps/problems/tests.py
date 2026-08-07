@@ -46,7 +46,10 @@ class SandboxExecutionTests(TestCase):
         self.assertIn("ValueError: Invalid user argument", results[0]["error"])
         self.assertNotIn("/tmp/", results[0]["error"])
 
-    def test_run_code_missing_java_compiler_returns_friendly_ce(self):
+    from unittest.mock import patch
+
+    @patch("subprocess.run", side_effect=FileNotFoundError)
+    def test_run_code_missing_java_compiler_returns_friendly_ce(self, mock_run):
         code = "class Solution { public int solve() { return 0; } }"
         test_cases = [
             ProblemTestCase(input="1", expected_output="0", is_sample=True, order_index=0)
@@ -56,3 +59,41 @@ class SandboxExecutionTests(TestCase):
         self.assertEqual(len(results), 0)
         self.assertIsNotNone(compile_error)
         self.assertIn("Java", compile_error)
+
+
+from rest_framework.test import APIClient
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class ProblemValidationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_superuser(
+            username="admin", email="admin@test.com", password="password123"
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_create_problem_with_fewer_than_15_test_cases_rejected(self):
+        payload = {
+            "title": "Test Problem 15 Rule",
+            "description": "Description",
+            "difficulty": "easy",
+            "test_cases": [{"input": f"{i}", "expected_output": f"{i}"} for i in range(10)]
+        }
+        res = self.client.post("/api/problems/mod/create/", payload, format="json")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Minimum 15 test cases required", res.data.get("detail", ""))
+
+    def test_create_problem_with_15_test_cases_succeeds(self):
+        payload = {
+            "title": "Valid Problem 15 Rule",
+            "description": "Description",
+            "difficulty": "easy",
+            "test_cases": [{"input": f"{i}", "expected_output": f"{i}"} for i in range(15)]
+        }
+        res = self.client.post("/api/problems/mod/create/", payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data.get("detail"), "Problem created.")
+
+
