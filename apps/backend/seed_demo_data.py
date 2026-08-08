@@ -221,14 +221,18 @@ def seed_all():
     )
     print("Past contest 2 created.")
     
+    # Set ongoing contest specifically from 6:00 AM to 1:30 PM local time on August 8, 2026
+    start_dt = timezone.make_aware(datetime.datetime(2026, 8, 8, 6, 0, 0))
+    end_dt = timezone.make_aware(datetime.datetime(2026, 8, 8, 13, 30, 0))
+
     ongoing_contest = Contest.objects.create(
         title="ARKodee Weekly Code Duel 45",
         slug="arkodee-weekly-code-duel-45",
         description="Join code duel 45 live now! Compete against other players to climb the leaderboards.",
         type="public",
         scoring_mode="codeforces",
-        start_time=now - datetime.timedelta(minutes=30),
-        end_time=now + datetime.timedelta(hours=1, minutes=30),
+        start_time=start_dt,
+        end_time=end_dt,
         is_rated=True,
         is_finalized=False,
         status="approved"
