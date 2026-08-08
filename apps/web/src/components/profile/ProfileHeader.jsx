@@ -26,6 +26,7 @@ export function ProfileHeader({ user, stats, isLoading, onEditProfile }) {
   const getRoleBadgeClass = (role) => {
     const roleMap = {
       competitor: 'role-badge--competitor',
+      player: 'role-badge--competitor',
       moderator: 'role-badge--moderator',
       superadmin: 'role-badge--superadmin',
     }
@@ -55,11 +56,13 @@ export function ProfileHeader({ user, stats, isLoading, onEditProfile }) {
           <h1 className="profile-header__name">{user?.fullName || 'User'}</h1>
           {stats && (
             <span className={`role-badge ${getRoleBadgeClass(stats.role)}`}>
-              {stats.role === 'competitor'
+              {stats.role === 'competitor' || stats.role === 'player'
                 ? 'Competitor'
                 : stats.role === 'moderator'
                 ? 'Moderator'
-                : 'Superadmin'}
+                : stats.role === 'superadmin'
+                ? 'Superadmin'
+                : 'Competitor'}
             </span>
           )}
         </div>

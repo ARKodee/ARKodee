@@ -28,7 +28,7 @@ def seed_all():
             "fullName": "Nihar Kakani",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 2150,
             "duel_rating": 1850,
             "streak": 15,
@@ -56,7 +56,7 @@ def seed_all():
             "fullName": "Alex Rivera",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 2300,
             "duel_rating": 1920,
             "streak": 28,
@@ -70,7 +70,7 @@ def seed_all():
             "fullName": "Sarah Chen",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 1720,
             "duel_rating": 1550,
             "streak": 9,
@@ -84,7 +84,7 @@ def seed_all():
             "fullName": "David Kovacs",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 2050,
             "duel_rating": 1790,
             "streak": 20,
@@ -98,7 +98,7 @@ def seed_all():
             "fullName": "Marcus Aurelius",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 1480,
             "duel_rating": 1410,
             "streak": 12,
@@ -112,7 +112,7 @@ def seed_all():
             "fullName": "Emily Watson",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 1320,
             "duel_rating": 1210,
             "streak": 5,
@@ -126,7 +126,7 @@ def seed_all():
             "fullName": "John Doe",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 1250,
             "duel_rating": 1180,
             "streak": 4,
@@ -140,7 +140,7 @@ def seed_all():
             "fullName": "Sophia Martinez",
             "is_superuser": False,
             "is_staff": False,
-            "role": "player",
+            "role": "competitor",
             "contest_rating": 980,
             "duel_rating": 950,
             "streak": 2,
@@ -221,9 +221,9 @@ def seed_all():
     )
     print("Past contest 2 created.")
     
-    # Set ongoing contest specifically from 6:00 AM to 1:30 PM local time on August 8, 2026
-    start_dt = timezone.make_aware(datetime.datetime(2026, 8, 8, 6, 0, 0))
-    end_dt = timezone.make_aware(datetime.datetime(2026, 8, 8, 13, 30, 0))
+    # Set ongoing contest dynamically to be active right now (relative to timezone.now())
+    start_dt = timezone.now() - datetime.timedelta(hours=2)
+    end_dt = timezone.now() + datetime.timedelta(hours=4)
 
     ongoing_contest = Contest.objects.create(
         title="ARKodee Weekly Code Duel 45",

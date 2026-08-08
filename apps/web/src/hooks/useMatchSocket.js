@@ -207,8 +207,10 @@ export function useMatchSocket(matchId) {
     });
 
     socket.on('reduce_sabotage', () => {
-      setSabotageTimeLeft((prev) => Math.max(0, Math.floor(prev / 2)));
-      setToastMessage(`✨ Cleanse activated! Sabotage duration reduced by 50%.`);
+      setSabotageTimeLeft(0);
+      setActiveSabotage(null);
+      setIsEditorLocked(false);
+      setToastMessage(`✨ Cleanse activated! All active sabotages have been cleared.`);
     });
 
     socket.on('match_finished', (payload) => {

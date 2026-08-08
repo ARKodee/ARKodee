@@ -888,9 +888,13 @@ export function Arena1v1Page() {
             <AlertTriangle size={13} className="a1-sabotage-icon" />
             <span>SABOTAGE ACTIVE: <strong>{activeSabotage.toUpperCase()}</strong> — {sabotageTimeLeft}s remaining</span>
           </div>
-          {myAp >= 20 && (
-            <button onClick={handleCastCleanse} className="a1-sabotage-cleanse-btn">Cleanse (20 AP)</button>
-          )}
+          <button 
+            disabled={myAp < 20} 
+            onClick={handleCastCleanse} 
+            className="a1-sabotage-cleanse-btn"
+          >
+            Cleanse (20 AP)
+          </button>
         </div>
       )}
 
