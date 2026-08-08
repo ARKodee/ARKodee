@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 import uuid
+import datetime
 
 
 class Tag(models.Model):
@@ -251,21 +252,50 @@ class ChangeRequest(models.Model):
 
 class DailyBug(models.Model):
     """
-    Daily Bug Bounty Arena challenges.
+    A daily debugging challenge. Each bug has broken starter code that the user
+    must fix within a strict line-edit budget.
     """
+    CATEGORY_CHOICES = [
+        ("arrays", "Arrays"),
+        ("strings", "Strings"),
+        ("loops", "Loops"),
+        ("recursion", "Recursion"),
+        ("sorting", "Sorting"),
+        ("math", "Math"),
+        ("logic", "Logic"),
+        ("other", "Other"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
-    category = models.CharField(max_length=30)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default="other")
     description = models.TextField()
-    starter_codes = models.JSONField(default=dict)
-    test_cases_json = models.JSONField(default=list)
-    examples = models.JSONField(default=list)
-    sample_input = models.TextField()
-    expected_output = models.TextField()
-    line_budget = models.IntegerField(default=1)
-    xp_reward = models.IntegerField(default=100)
+
+    # The broken code the user starts with, keyed by language
+    starter_codes = models.JSONField(
+        default=dict,
+        help_text='{"python": "def solve():\\n    pass", "javascript": "...", "cpp": "..."}'
+    )
+
+    # Hidden test cases for full submission stored as JSON list of {input, expected_output}
+    test_cases_json = models.JSONField(default=list, blank=True)
+
+    # Visible example cases for the problem description: [{input, output, explanation}]
+    examples = models.JSONField(default=list, blank=True)
+
+    # A brief one-line sample for the dashboard card
+    sample_input = models.TextField(blank=True, default="")
+    expected_output = models.TextField(blank=True, default="")
+
+    line_budget = models.PositiveIntegerField(
+        default=3,
+        help_text="Max number of lines the user is allowed to modify."
+    )
+    xp_reward = models.PositiveIntegerField(default=100)
     time_limit_ms = models.IntegerField(default=2000)
-    date = models.DateField(unique=True)
+
+    # Which calendar date this bug is active for
+    date = models.DateField(unique=True, default=datetime.date.today)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -274,7 +304,34 @@ class DailyBug(models.Model):
         ordering = ["-date"]
 
     def __str__(self):
-        return f"DailyBug ({self.date}): {self.title}"
+        return f"[{self.date}] {self.title}"
+
+
+class UserBugSolve(models.Model):
+    """
+    Records when a user successfully solves a DailyBug.
+    Used for the dashboard is_solved flag and streak calculations.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="bug_solves",
+    )
+    bug = models.ForeignKey(
+        DailyBug,
+        on_delete=models.CASCADE,
+        related_name="solves",
+    )
+    solved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "user_bug_solves"
+        unique_together = ("user", "bug")
+
+    def __str__(self):
+        return f"{self.user.username} solved [{self.bug.date}] {self.bug.title}"
+
 
 
 

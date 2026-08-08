@@ -39,9 +39,6 @@ export function DailyBugCard() {
   if (error || !bugData) {
     return (
       <div className="widget">
-        <div className="widget__header">
-          <span className="widget__title">Daily Bug Bounty</span>
-        </div>
         <div className="widget__body">
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
             {error || 'No active bug bounty today.'}
@@ -55,18 +52,12 @@ export function DailyBugCard() {
 
   return (
     <div className="widget">
-      {/* Header */}
-      <div className="widget__header">
-        <span className="widget__title">Daily Bug Bounty</span>
-        {date && <span style={{ fontSize: 'var(--text-nano)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{date}</span>}
-      </div>
-
       {/* Body */}
       <div className="widget__body">
         {/* Meta */}
         <div className="bug-card__meta">
-          {bug_id   && <Badge variant="default">#{bug_id}</Badge>}
           {category && <Badge variant="warning">{category}</Badge>}
+          {date && <span style={{ fontSize: 'var(--text-nano)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{date}</span>}
         </div>
 
         {/* Title + desc */}

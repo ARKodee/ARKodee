@@ -30,6 +30,8 @@ const IconSwords = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="n
 export function MatchmakingArena() {
   const { token, user } = useAuth();
   const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const autoQueue = queryParams.get('autoQueue') === 'true';
   const [isModalOpen, setIsModalOpen] = useState(false);
   const socketRef = useRef(null);
   const [socket, setSocket] = useState(null);
@@ -138,7 +140,7 @@ export function MatchmakingArena() {
             </div>
 
             {/* Matchmaker controls (queue, custom room) */}
-            <MatchmakerControls socket={socket} onOpenCustomModal={() => setIsModalOpen(true)} />
+            <MatchmakerControls socket={socket} onOpenCustomModal={() => setIsModalOpen(true)} autoQueue={autoQueue} />
           </div>
 
           {/* Right — past matches */}

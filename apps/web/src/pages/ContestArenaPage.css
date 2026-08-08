@@ -1188,9 +1188,11 @@
   background-color: var(--accent-hover);
 }
 
+.ca-btn:disabled,
 .ca-btn--disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .ca-btn svg {

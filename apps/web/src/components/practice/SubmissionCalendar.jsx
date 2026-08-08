@@ -1,7 +1,7 @@
 // src/components/practice/SubmissionCalendar.jsx
 // Presentational Component — renders an immersive pixel-heatmap activity grid.
 // Consumes a timestamp-to-count dictionary map through props.
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import './SubmissionCalendar.css';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -146,6 +146,14 @@ export function SubmissionCalendar({
     [calendarData, startDate, weeksToShow]
   );
   const [selectedDay, setSelectedDay] = useState(null);
+  const scrollRef = useRef(null);
+
+  // Automatically scroll to the right (the latest status) when loaded or data changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [grid, isLoading]);
 
   const monthMarkers = useMemo(() => buildMonthMarkers(grid), [grid]);
 
@@ -199,7 +207,7 @@ export function SubmissionCalendar({
       </div>
 
       {/* ── Calendar Grid Wrapper ──────────────────────────────────────── */}
-      <div className="sc-scroll-wrap">
+      <div className="sc-scroll-wrap" ref={scrollRef}>
         <div className="sc-canvas" style={{ '--sc-weeks': grid.length }}>
           {!compact && (
             <div className="sc-month-row" aria-hidden="true">

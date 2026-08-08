@@ -17,6 +17,12 @@ urlpatterns = [
     path("mod/<uuid:problem_id>/update/", views.mod_problem_update, name="mod_problem_update"),
     path("mod/<uuid:problem_id>/delete/", views.mod_problem_delete, name="mod_problem_delete"),
 
+    # ── Daily Bug Bounty ───────────────────────────────────────────────────────
+    path("daily-bug/", views.daily_bug_summary, name="daily_bug_summary"),
+    path("daily-bug/<uuid:bug_id>/", views.daily_bug_detail, name="daily_bug_detail"),
+    path("daily-bug/<uuid:bug_id>/run/", views.run_daily_bug, name="run_daily_bug"),
+    path("daily-bug/<uuid:bug_id>/submit/", views.submit_daily_bug, name="submit_daily_bug"),
+
     # ── Player routes (slug catch-alls — must come AFTER mod/) ────────────────
     path("<slug:problem_slug>/", views.problem_detail, name="problem_detail"),
     path("<slug:problem_slug>/run/", views.run_code, name="run_code"),

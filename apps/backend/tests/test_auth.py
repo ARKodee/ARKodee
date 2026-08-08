@@ -99,7 +99,7 @@ class AuthTests(APITestCase):
         self.assertIn("language_stats", response_stats.data)
         self.assertIn("tag_stats", response_stats.data)
         self.assertIn("earned_badges", response_stats.data)
-        self.assertEqual(response_stats.data["user"]["username"], self.user_data["email"])
+        self.assertEqual(response_stats.data["user"]["email"], self.user_data["email"])
         self.assertGreaterEqual(len(response_stats.data["earned_badges"]), 2)
 
     def test_profile_update_changes_name_and_avatar(self):
