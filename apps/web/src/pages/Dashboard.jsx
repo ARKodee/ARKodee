@@ -181,7 +181,6 @@ export function Dashboard() {
                   <IconBug style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
                   Daily Bug Bounty
                 </span>
-                <Badge variant="accent">Coming Soon</Badge>
               </div>
               <DailyBugCard />
             </div>
