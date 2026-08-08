@@ -1,3 +1,4 @@
+import logging
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
@@ -9,6 +10,8 @@ from rest_framework.authtoken.models import Token
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from google.auth.exceptions import GoogleAuthError
+
+logger = logging.getLogger(__name__)
 
 from .permissions import IsModerator, IsSuperadmin
 
@@ -27,129 +30,147 @@ from .models import UserStats
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def check_email_view(request):
-    serializer = CheckEmailSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
-    
-    email = serializer.validated_data["email"]
-    exists = User.objects.filter(email=email).exists()
-    return Response({"exists": exists})
+    try:
+        serializer = CheckEmailSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = serializer.validated_data["email"]
+        exists = User.objects.filter(email=email).exists()
+        return Response({"exists": exists})
+    except Exception as e:
+        import traceback
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register_view(request):
-    serializer = RegisterSerializer(data=request.data)
-    if not serializer.is_valid():
-        errors = serializer.errors
-        if "email" in errors:
-            detail_msg = errors["email"][0]
-        elif "password" in errors:
-            detail_msg = errors["password"][0]
-        else:
-            detail_msg = "Email and password are required."
-        return Response({"detail": detail_msg}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        serializer = RegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            errors = serializer.errors
+            if "email" in errors:
+                detail_msg = errors["email"][0]
+            elif "password" in errors:
+                detail_msg = errors["password"][0]
+            else:
+                detail_msg = "Email and password are required."
+            return Response({"detail": detail_msg}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user = serializer.save()
+        token, _ = Token.objects.get_or_create(user=user)
         
-    user = serializer.save()
-    token, _ = Token.objects.get_or_create(user=user)
-    
-    return Response({
-        "token": token.key,
-        "user": UserSerializer(user).data
-    }, status=status.HTTP_201_CREATED)
+        return Response({
+            "token": token.key,
+            "user": UserSerializer(user).data
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        import traceback
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
-    serializer = LoginSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-    email = serializer.validated_data["email"]
-    password = serializer.validated_data["password"]
-    
     try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
-        return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = LoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        email = serializer.validated_data["email"]
+        password = serializer.validated_data["password"]
         
-    authenticated_user = authenticate(username=user.username, password=password)
-    
-    if authenticated_user is not None:
-        token, _ = Token.objects.get_or_create(user=authenticated_user)
-        return Response({
-            "token": token.key,
-            "user": UserSerializer(authenticated_user).data
-        }, status=status.HTTP_200_OK)
-    else:
-        return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        authenticated_user = authenticate(username=user.username, password=password)
+        
+        if authenticated_user is not None:
+            token, _ = Token.objects.get_or_create(user=authenticated_user)
+            return Response({
+                "token": token.key,
+                "user": UserSerializer(authenticated_user).data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def google_login_view(request):
-    serializer = GoogleLoginSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response({"detail": "Google id_token is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-    client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
-    if not client_id:
-        return Response({"detail": "Google authentication is not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-    raw_id_token = serializer.validated_data["id_token"]
-
     try:
-        # Verify the token directly with Google's servers to ensure it wasn't forged
-        id_info = id_token.verify_oauth2_token(
-            raw_id_token,
-            google_requests.Request(),
-            client_id,
+        serializer = GoogleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"detail": "Google id_token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+        if not client_id:
+            return Response({"detail": "Google authentication is not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        raw_id_token = serializer.validated_data["id_token"]
+
+        try:
+            # Verify the token directly with Google's servers to ensure it wasn't forged
+            id_info = id_token.verify_oauth2_token(
+                raw_id_token,
+                google_requests.Request(),
+                client_id,
+            )
+        except (ValueError, GoogleAuthError) as e:
+            return Response({"detail": f"Invalid Google token: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = id_info.get("email")
+        email_verified = id_info.get("email_verified", False)
+        full_name = id_info.get("name", "").strip()
+
+        if not email or not email_verified:
+            return Response({"detail": "Google account email is unavailable or not verified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email=email).first()
+
+        if user is None:
+            # Create a new user account if they've never logged in with Google before
+            base_username = email.split("@")[0]
+            username = base_username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
+
+            user = User(
+                username=username,
+                email=email,
+            )
+
+            if full_name:
+                name_parts = full_name.split(" ", 1)
+                user.first_name = name_parts[0]
+                user.last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+            # Google-created accounts can later set a password via a dedicated flow.
+            user.set_unusable_password()
+            user.save()
+
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response(
+            {
+                "token": token.key,
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
         )
-    except (ValueError, GoogleAuthError):
-        return Response({"detail": "Invalid Google token."}, status=status.HTTP_400_BAD_REQUEST)
-
-    email = id_info.get("email")
-    email_verified = id_info.get("email_verified", False)
-    full_name = id_info.get("name", "").strip()
-
-    if not email or not email_verified:
-        return Response({"detail": "Google account email is unavailable or not verified."}, status=status.HTTP_400_BAD_REQUEST)
-
-    user = User.objects.filter(email=email).first()
-
-    if user is None:
-        # Create a new user account if they've never logged in with Google before
-        base_username = email.split("@")[0]
-        username = base_username
-        counter = 1
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username}_{counter}"
-            counter += 1
-
-        user = User(
-            username=username,
-            email=email,
-        )
-
-        if full_name:
-            name_parts = full_name.split(" ", 1)
-            user.first_name = name_parts[0]
-            user.last_name = name_parts[1] if len(name_parts) > 1 else ""
-
-        # Google-created accounts can later set a password via a dedicated flow.
-        user.set_unusable_password()
-        user.save()
-
-    token, _ = Token.objects.get_or_create(user=user)
-
-    return Response(
-        {
-            "token": token.key,
-            "user": UserSerializer(user).data,
-        },
-        status=status.HTTP_200_OK,
-    )
+    except Exception as e:
+        import traceback
+        trace = traceback.format_exc()
+        logger.error(f"Google login 500 error: {trace}")
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": trace}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])

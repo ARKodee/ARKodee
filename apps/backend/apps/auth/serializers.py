@@ -282,7 +282,18 @@ class ProfileStatsSerializer(serializers.Serializer):
                 "variant": "default",
             })
 
-        if contest_stats.get("best_rank") == 1:
+        from apps.contests.models import ContestParticipant
+        winners = ContestParticipant.objects.filter(user=obj, rank=1).select_related('contest')
+        if winners.exists():
+            for wp in winners:
+                badges.append({
+                    "key": f"contest_win_{wp.contest.id}",
+                    "title": f"{wp.contest.title} Winner",
+                    "shortTitle": "🏆",
+                    "description": f"Placed 1st in {wp.contest.title}!",
+                    "variant": "danger",
+                })
+        elif contest_stats.get("best_rank") == 1:
             badges.append({
                 "key": "champion",
                 "title": "Contest Champion",
