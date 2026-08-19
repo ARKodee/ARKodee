@@ -1,0 +1,478 @@
+import logging
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
+from django.conf import settings
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+from google.auth.exceptions import GoogleAuthError
+
+logger = logging.getLogger(__name__)
+
+from .permissions import IsModerator, IsSuperadmin
+
+from .serializers import (
+    CheckEmailSerializer,
+    GoogleLoginSerializer,
+    LoginSerializer,
+    ProfileUpdateSerializer,
+    RegisterSerializer,
+    UserSerializer,
+    ProfileStatsSerializer,
+)
+from .models import UserStats
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def check_email_view(request):
+    try:
+        serializer = CheckEmailSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = serializer.validated_data["email"]
+        exists = User.objects.filter(email=email).exists()
+        return Response({"exists": exists})
+    except Exception as e:
+        import traceback
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def register_view(request):
+    try:
+        serializer = RegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            errors = serializer.errors
+            if "email" in errors:
+                detail_msg = errors["email"][0]
+            elif "password" in errors:
+                detail_msg = errors["password"][0]
+            else:
+                detail_msg = "Email and password are required."
+            return Response({"detail": detail_msg}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user = serializer.save()
+        token, _ = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            "token": token.key,
+            "user": UserSerializer(user).data
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        import traceback
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def login_view(request):
+    try:
+        serializer = LoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        email = serializer.validated_data["email"]
+        password = serializer.validated_data["password"]
+        
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        authenticated_user = authenticate(username=user.username, password=password)
+        
+        if authenticated_user is not None:
+            token, _ = Token.objects.get_or_create(user=authenticated_user)
+            return Response({
+                "token": token.key,
+                "user": UserSerializer(authenticated_user).data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({"detail": "Invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def google_login_view(request):
+    try:
+        serializer = GoogleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"detail": "Google id_token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+        if not client_id:
+            return Response({"detail": "Google authentication is not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        raw_id_token = serializer.validated_data["id_token"]
+
+        try:
+            # Verify the token directly with Google's servers to ensure it wasn't forged
+            id_info = id_token.verify_oauth2_token(
+                raw_id_token,
+                google_requests.Request(),
+                client_id,
+            )
+        except (ValueError, GoogleAuthError) as e:
+            return Response({"detail": f"Invalid Google token: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = id_info.get("email")
+        email_verified = id_info.get("email_verified", False)
+        full_name = id_info.get("name", "").strip()
+
+        if not email or not email_verified:
+            return Response({"detail": "Google account email is unavailable or not verified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email=email).first()
+
+        if user is None:
+            # Create a new user account if they've never logged in with Google before
+            base_username = email.split("@")[0]
+            username = base_username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
+
+            user = User(
+                username=username,
+                email=email,
+            )
+
+            if full_name:
+                name_parts = full_name.split(" ", 1)
+                user.first_name = name_parts[0]
+                user.last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+            # Google-created accounts can later set a password via a dedicated flow.
+            user.set_unusable_password()
+            user.save()
+
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response(
+            {
+                "token": token.key,
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+    except Exception as e:
+        import traceback
+        trace = traceback.format_exc()
+        logger.error(f"Google login 500 error: {trace}")
+        return Response({"detail": f"Server Error: {str(e)}", "traceback": trace}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    try:
+        request.user.auth_token.delete()
+    except Exception:
+        pass
+    return Response({"detail": "Logged out successfully."})
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def profile_view(request):
+    if request.method == "PATCH":
+        serializer = ProfileUpdateSerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({"detail": "Invalid profile data.", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.update(request.user, serializer.validated_data)
+        UserStats.objects.get_or_create(user=request.user)
+        return Response(ProfileStatsSerializer(request.user).data, status=status.HTTP_200_OK)
+
+    return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def profile_stats_view(request):
+    """
+    Comprehensive profile endpoint with user stats, problem analytics, and activity.
+    """
+    UserStats.objects.get_or_create(user=request.user)
+    serializer = ProfileStatsSerializer(request.user)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsModerator])
+def moderator_only_view(request):
+    return Response({"detail": "Moderator access granted.", "role": UserSerializer(request.user).data.get("role")})
+
+
+@api_view(["GET"])
+@permission_classes([IsSuperadmin])
+def superadmin_only_view(request):
+    return Response({"detail": "Superadmin access granted.", "role": UserSerializer(request.user).data.get("role")})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health_check(request):
+    return Response({"status": "ok"})
+
+
+
+# ==============================================================================
+# 👑 SUPERADMIN PLAYER MANAGEMENT ENDPOINTS
+# ==============================================================================
+from django.db.models import Q
+from django.core.paginator import Paginator
+from django.db import transaction as db_transaction
+from .models import UserStats
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_players_list(request):
+    """
+    Superadmin endpoint: List all platform users with metrics, filtering, and search.
+    Guarantees every user has a UserStats record and staff roles are synchronized.
+    """
+    search_q = request.GET.get("search", "").strip()
+    role_f = request.GET.get("role", "all").strip().lower()
+    status_f = request.GET.get("status", "all").strip().lower()
+    page = int(request.GET.get("page", 1))
+    page_size = int(request.GET.get("page_size", 20))
+
+    # 1. Sync UserStats & role flags for any existing users
+    all_users = User.objects.select_related("stats").all()
+    for u in all_users:
+        stats = getattr(u, "stats", None)
+        if not stats:
+            initial_role = "superadmin" if u.is_superuser else "moderator" if u.is_staff else "competitor"
+            stats, _ = UserStats.objects.get_or_create(user=u, defaults={"role": initial_role})
+        else:
+            # Sync role with Django flags if mismatched
+            if u.is_superuser and stats.role != "superadmin":
+                stats.role = "superadmin"
+                stats.save()
+            elif u.is_staff and not u.is_superuser and stats.role == "competitor":
+                stats.role = "moderator"
+                stats.save()
+
+    qs = User.objects.select_related("stats").all().order_by("-date_joined")
+
+    # Global counts summary
+    total_count = qs.count()
+    competitors_count = qs.filter(stats__role="competitor").count()
+    moderators_count = qs.filter(stats__role="moderator").count()
+    superadmins_count = qs.filter(stats__role="superadmin").count()
+    banned_count = qs.filter(is_active=False).count()
+    flagged_count = qs.filter(stats__is_flagged=True).count()
+
+    # Search filter
+    if search_q:
+        qs = qs.filter(
+            Q(username__icontains=search_q) |
+            Q(email__icontains=search_q) |
+            Q(first_name__icontains=search_q) |
+            Q(last_name__icontains=search_q)
+        )
+
+    # Role filter
+    if role_f in ("competitor", "moderator", "superadmin"):
+        qs = qs.filter(stats__role=role_f)
+
+    # Status filter
+    if status_f == "active":
+        qs = qs.filter(is_active=True)
+    elif status_f == "banned":
+        qs = qs.filter(is_active=False)
+    elif status_f == "flagged":
+        qs = qs.filter(stats__is_flagged=True)
+
+    paginator = Paginator(qs, page_size)
+    current_page = paginator.get_page(page)
+
+    results = []
+    for user_obj in current_page.object_list:
+        stats = user_obj.stats
+        results.append({
+            "id": user_obj.id,
+            "username": user_obj.username,
+            "email": user_obj.email,
+            "first_name": user_obj.first_name,
+            "last_name": user_obj.last_name,
+            "is_active": user_obj.is_active,
+            "is_staff": user_obj.is_staff,
+            "is_superuser": user_obj.is_superuser,
+            "date_joined": user_obj.date_joined.isoformat() if user_obj.date_joined else None,
+            "last_login": user_obj.last_login.isoformat() if user_obj.last_login else None,
+            "role": stats.role,
+            "contest_rating": stats.contest_rating,
+            "duel_rating": stats.duel_rating,
+            "total_wins": stats.total_wins,
+            "total_losses": stats.total_losses,
+            "total_draws": stats.total_draws,
+            "streak": stats.streak,
+            "avatar_url": stats.avatar_url,
+            "is_flagged": stats.is_flagged,
+            "flag_reason": stats.flag_reason,
+        })
+
+    return Response({
+        "summary": {
+            "total": total_count,
+            "competitors": competitors_count,
+            "moderators": moderators_count,
+            "superadmins": superadmins_count,
+            "banned": banned_count,
+            "flagged": flagged_count,
+        },
+        "count": paginator.count,
+        "page": current_page.number,
+        "total_pages": paginator.num_pages,
+        "results": results,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_update_role(request, user_id):
+    """
+    Superadmin endpoint: Elevate or demote user role (competitor, moderator, superadmin).
+    Synchronizes Django staff/superuser flags with UserStats.role.
+    """
+    new_role = request.data.get("role", "").strip().lower()
+    if new_role not in ("competitor", "moderator", "superadmin"):
+        return Response({"detail": "Invalid role specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user_obj = User.objects.select_related("stats").get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Self-demotion check
+    if user_obj.id == request.user.id and new_role != "superadmin":
+        return Response({"detail": "You cannot demote your own Superadmin account."}, status=status.HTTP_400_BAD_REQUEST)
+
+    stats = getattr(user_obj, "stats", None)
+    if not stats:
+        stats, _ = UserStats.objects.get_or_create(user=user_obj)
+
+    with db_transaction.atomic():
+        stats.role = new_role
+        stats.save()
+
+        if new_role == "superadmin":
+            user_obj.is_staff = True
+            user_obj.is_superuser = True
+        elif new_role == "moderator":
+            user_obj.is_staff = True
+            user_obj.is_superuser = False
+        else:
+            user_obj.is_staff = False
+            user_obj.is_superuser = False
+        user_obj.save()
+
+    return Response({
+        "detail": f"Role updated to {new_role} successfully.",
+        "user_id": user_obj.id,
+        "role": stats.role,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_toggle_ban(request, user_id):
+    """
+    Superadmin endpoint: Toggle player active status (Ban / Unban).
+    """
+    try:
+        user_obj = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if user_obj.id == request.user.id:
+        return Response({"detail": "You cannot ban your own Superadmin account."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user_obj.is_active = not user_obj.is_active
+    user_obj.save()
+
+    action_str = "unbanned" if user_obj.is_active else "banned"
+    return Response({
+        "detail": f"User @{user_obj.username} has been {action_str}.",
+        "is_active": user_obj.is_active,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_toggle_flag(request, user_id):
+    """
+    Superadmin endpoint: Toggle player Anti-Cheat flag status.
+    """
+    try:
+        user_obj = User.objects.select_related("stats").get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    stats = getattr(user_obj, "stats", None)
+    if not stats:
+        stats, _ = UserStats.objects.get_or_create(user=user_obj)
+
+    reason = request.data.get("reason", "").strip()
+
+    stats.is_flagged = not stats.is_flagged
+    stats.flag_reason = reason if stats.is_flagged else None
+    stats.save()
+
+    status_str = "flagged for Anti-Cheat investigation" if stats.is_flagged else "cleared from Anti-Cheat flags"
+    return Response({
+        "detail": f"User @{user_obj.username} has been {status_str}.",
+        "is_flagged": stats.is_flagged,
+        "flag_reason": stats.flag_reason,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsSuperadmin])
+def admin_player_adjust_rating(request, user_id):
+    """
+    Superadmin endpoint: Adjust or reset player ELO rating.
+    """
+    rating_type = request.data.get("rating_type", "").strip().lower()
+    if rating_type not in ("contest", "duel"):
+        return Response({"detail": "Rating type must be 'contest' or 'duel'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        new_rating = int(request.data.get("new_rating", 1200))
+    except (ValueError, TypeError):
+        return Response({"detail": "Invalid new_rating integer provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user_obj = User.objects.select_related("stats").get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "Player not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    stats = getattr(user_obj, "stats", None)
+    if not stats:
+        stats, _ = UserStats.objects.get_or_create(user=user_obj)
+
+    if rating_type == "contest":
+        stats.contest_rating = max(100, new_rating)
+    else:
+        stats.duel_rating = max(100, new_rating)
+    stats.save()
+
+    return Response({
+        "detail": f"{rating_type.capitalize()} rating updated to {new_rating}.",
+        "contest_rating": stats.contest_rating,
+        "duel_rating": stats.duel_rating,
+    }, status=status.HTTP_200_OK)

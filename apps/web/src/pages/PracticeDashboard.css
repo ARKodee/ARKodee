@@ -1,0 +1,186 @@
+/* src/pages/PracticeDashboard.css */
+
+.prac-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+
+.prac-body {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  overflow-x: hidden;
+}
+
+/* Page header */
+.prac-page-header { 
+  display: flex; 
+  flex-direction: column; 
+  gap: var(--space-2); 
+  margin-bottom: var(--space-3);
+}
+.prac-page-title  { 
+  font-size: var(--text-xl); 
+  font-weight: 700; 
+  color: var(--text-primary); 
+  letter-spacing: -0.02em; 
+  line-height: var(--leading-tight);
+}
+.prac-page-sub    { 
+  font-size: var(--text-md); 
+  color: var(--text-secondary); 
+  line-height: var(--leading-normal);
+}
+
+/* Stats strip */
+.prac-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .prac-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+.prac-stat {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-left-width: 3px;
+  transition: border-color var(--duration-fast) var(--ease),
+              box-shadow var(--duration-fast) var(--ease),
+              transform var(--duration-fast) var(--ease);
+}
+
+.prac-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.prac-stat--accent  { border-left-color: var(--accent); }
+.prac-stat--accent:hover { box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 20%, transparent); }
+.prac-stat--success { border-left-color: var(--success); }
+.prac-stat--success:hover { box-shadow: 0 4px 16px color-mix(in srgb, var(--success) 20%, transparent); }
+.prac-stat--warning { border-left-color: var(--warning); }
+.prac-stat--warning:hover { box-shadow: 0 4px 16px color-mix(in srgb, var(--warning) 20%, transparent); }
+.prac-stat--default { border-left-color: var(--border-strong); }
+
+
+.prac-stat__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.prac-stat__label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Main grid: 2fr | 1fr — minmax(0,…) prevents columns from overflowing */
+.prac-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .prac-grid { grid-template-columns: 1fr; }
+}
+
+.prac-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.prac-side {
+  position: sticky;
+  top: calc(var(--h-navbar) + var(--space-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 340px;
+  width: 100%;
+}
+
+/* Error banner */
+.prac-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--danger-subtle);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+/* Pagination controls styling */
+.prac-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px dashed var(--border);
+}
+
+.prac-pagination-btn {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease);
+}
+
+.prac-pagination-btn:hover:not(:disabled) {
+  background-color: var(--bg-overlay);
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+
+.prac-pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--border);
+}
+
+.prac-pagination-info {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+

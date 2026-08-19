@@ -1,0 +1,310 @@
+/* src/pages/ProblemWorkspace.css
+   ProblemWorkspace page styles — resizable split-pane IDE layout
+   Uses design system tokens
+*/
+
+.pw-root {
+  height: 100vh;              /* capped — prevents canvas from growing past viewport */
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+.pw-root .navbar {
+  flex-shrink: 0;
+}
+
+.pw-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Toolbar ───────────────────────────────────────────────────────────────── */
+.pw-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  min-height: var(--h-btn);
+}
+
+.pw-toolbar-left,
+.pw-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pw-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-btn-sm);
+  height: var(--h-btn-sm);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease);
+}
+
+.pw-back-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+}
+
+.pw-back-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.pw-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border);
+}
+
+.pw-toolbar-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.pw-lang-select {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background-color: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.pw-lang-select:hover {
+  border-color: var(--border-strong);
+}
+
+.pw-lang-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+
+
+/* ── Skeleton Loading State ─────────────────────────────────────────────────── */
+.pw-skeleton-root {
+  display: flex;
+  height: 100%;
+}
+
+.pw-skeleton-left {
+  width: 38%;
+  padding: var(--space-4);
+  border-right: 1px solid var(--border);
+}
+
+.pw-skeleton-right {
+  flex: 1;
+}
+
+.pw-skel {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 0%,
+    var(--bg-overlay) 50%,
+    var(--bg-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: pw-skel-shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+.pw-skel--title {
+  height: 28px;
+  width: 60%;
+  margin-bottom: var(--space-4);
+}
+
+.pw-skel--badge {
+  display: inline-block;
+  width: 50px;
+  height: var(--h-badge);
+  margin-bottom: var(--space-4);
+}
+
+.pw-skel--line {
+  height: 14px;
+  margin-bottom: var(--space-2);
+}
+
+.pw-skel--w90 { width: 90%; }
+.pw-skel--w80 { width: 80%; }
+.pw-skel--w70 { width: 70%; }
+.pw-skel--w95 { width: 95%; }
+.pw-skel--w60 { width: 60%; }
+
+.pw-skel--block {
+  height: 120px;
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+.pw-skel--inline-title {
+  display: inline-block;
+  height: 24px;
+  width: 200px;
+  margin-bottom: var(--space-2);
+}
+
+@keyframes pw-skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Error State ─────────────────────────────────────────────────────────────── */
+.pw-error-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-6);
+}
+
+.pw-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-6);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+}
+
+.pw-error-card svg {
+  color: var(--danger);
+}
+
+.pw-error-message {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  max-width: 400px;
+}
+
+.pw-error-retry {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-inverse);
+  background-color: var(--accent);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.pw-error-retry:hover {
+  background-color: var(--accent-hover);
+}
+
+/* ── ProblemDescription Integration ─────────────────────────────────────────── */
+.pw-pane-left .pdsc-root {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── InteractiveEditor Integration ─────────────────────────────────────────── */
+.pw-pane-right .ie-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pw-pane-right .ie-root .ie-terminal {
+  max-height: 240px;
+}
+
+/* ── Responsive Adjustments ─────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .pw-pane--left {
+    width: 40%;
+    min-width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pw-canvas {
+    flex-direction: column;
+  }
+
+  .pw-pane--left {
+    width: 100%;
+    max-height: 40%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pw-pane--right {
+    flex: 1;
+  }
+
+  .pw-resize-handle {
+    display: none;
+  }
+}
+
+/* Collapsed expand tab trigger */
+.pw-collapsed-expand-btn {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 100;
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.pw-collapsed-expand-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay);
+  border-color: var(--border-strong);
+}
+
+.pw-collapsed-expand-btn svg {
+  width: 12px;
+  height: 12px;
+}

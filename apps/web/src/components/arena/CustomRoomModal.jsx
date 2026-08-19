@@ -1,0 +1,406 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Swords, Users, LogOut, ArrowLeft, ShieldAlert, X } from 'lucide-react';
+
+export function CustomRoomModal({ socket, user, onClose }) {
+  const navigate = useNavigate();
+
+  // Internal state machine: 'CHOOSE' | 'CREATE' | 'JOIN'
+  const [viewMode, setViewMode] = useState('CHOOSE');
+
+  // Room lifecycle state — fully owned by this modal
+  const [roomCode, setRoomCode] = useState('');
+  const [roomData, setRoomData] = useState(null);
+  const [joinCode, setJoinCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  // Single unified effect: register listeners FIRST, then emit if needed.
+  useEffect(() => {
+    if (!socket) return;
+
+    const onRoomUpdated = (updatedRoom) => {
+      console.log('[CustomRoomModal] room_updated received:', updatedRoom.id, 'players:', updatedRoom.players.length, updatedRoom.players.map(p => p.username));
+      setRoomData(updatedRoom);
+      setRoomCode(updatedRoom.id);
+      setIsLoading(false);
+      setErrorMsg('');
+    };
+
+    const onRoomDissolved = () => {
+      setRoomData(null);
+      setRoomCode('');
+      setJoinCode('');
+      setErrorMsg('The lobby was dissolved by the host.');
+      setIsLoading(false);
+      setCopied(false);
+      setViewMode('CHOOSE');
+      onClose();
+    };
+
+    const onOpponentLeft = () => {
+      setRoomData((prev) => {
+        if (!prev) return null;
+        const hostOnly = prev.players.filter((p) => p.userId === prev.hostId);
+        return { ...prev, players: hostOnly };
+      });
+    };
+
+    const onRoomError = (msg) => {
+      setErrorMsg(msg);
+      setIsLoading(false);
+    };
+
+    const onMatchStarted = (data) => {
+      const targetMatchId = data?.roomCode || data?.roomId;
+      if (!targetMatchId) {
+        setErrorMsg('Match started but room ID is missing. Please refresh.');
+        return;
+      }
+      onClose();
+      navigate(`/arena/${targetMatchId}`);
+    };
+
+    // Step 1: Attach listeners before any emit
+    socket.on('room_updated', onRoomUpdated);
+    socket.on('room_dissolved', onRoomDissolved);
+    socket.on('opponent_left_lobby', onOpponentLeft);
+    socket.on('room_error', onRoomError);
+    socket.on('match_started', onMatchStarted);
+
+    // Step 2: Emit create_custom_room if we just entered CREATE mode
+    if (viewMode === 'CREATE' && user && !roomCode) {
+      setErrorMsg('');
+      const activeUserId = user?.id || user?.userId;
+      const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+      if (!activeUserId) { setErrorMsg('You must be logged in to create a room.'); return; }
+      socket.emit('create_custom_room', {
+        userId: activeUserId,
+        username: activeUsername
+      });
+    }
+
+    return () => {
+      socket.off('room_updated', onRoomUpdated);
+      socket.off('room_dissolved', onRoomDissolved);
+      socket.off('opponent_left_lobby', onOpponentLeft);
+      socket.off('room_error', onRoomError);
+      socket.off('match_started', onMatchStarted);
+    };
+  }, [socket, viewMode, user, onClose, navigate]);
+
+  // Auto-rejoin lobby on socket reconnect / change
+  useEffect(() => {
+    if (!socket || !roomCode) return;
+
+    const doRejoin = () => {
+      console.log('[CustomRoomModal] Rejoining room:', roomCode);
+      socket.emit('join_custom_room', {
+        roomCode,
+        userId: activeUserId,
+        username: activeUsername,
+      });
+    };
+
+    if (socket.connected) {
+      doRejoin();
+    }
+
+    socket.on('connect', doRejoin);
+    return () => {
+      socket.off('connect', doRejoin);
+    };
+  }, [socket, roomCode, activeUserId, activeUsername]);
+
+  const activeUserId = user?.id || user?.userId;
+  const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
+  const isHostUser = viewMode === 'CREATE';
+
+  // Derived player state
+  const hostPlayer = roomData?.players?.[0] || { username: activeUsername };
+  const challengerPlayer = roomData?.players?.length >= 2 ? roomData.players[1] : null;
+
+  // Handlers
+  const resetAndClose = () => {
+    setRoomData(null);
+    setRoomCode('');
+    setJoinCode('');
+    setErrorMsg('');
+    setIsLoading(false);
+    setCopied(false);
+    setViewMode('CHOOSE');
+    onClose();
+  };
+
+  const handleLeave = () => {
+    if (socket && roomCode && user) {
+      socket.emit('leave_custom_room', {
+        roomCode,
+        userId: activeUserId,
+        username: activeUsername,
+      });
+    }
+    setRoomData(null);
+    setRoomCode('');
+    setJoinCode('');
+    setErrorMsg('');
+    setViewMode('CHOOSE');
+  };
+
+  const handleJoinSubmit = () => {
+    if (!joinCode || joinCode.trim().length !== 5) {
+      setErrorMsg('Please enter a valid 5-character lobby code.');
+      return;
+    }
+    setIsLoading(true);
+    setErrorMsg('');
+    if (socket) {
+      socket.emit('join_custom_room', {
+        roomCode: joinCode.trim().toUpperCase(),
+        userId: activeUserId,
+        username: activeUsername,
+      });
+    }
+  };
+
+  const handleStartMatch = () => {
+    if (!roomData || roomData.players?.length < 2) return;
+    if (!roomCode) {
+      setErrorMsg('Room code missing. Please recreate the lobby.');
+      return;
+    }
+    setIsLoading(true);
+    if (socket) {
+      socket.emit('request_start_match', {
+        roomId: roomCode,
+        roomCode: roomCode,
+        userId: activeUserId,
+        username: activeUsername,
+      });
+    }
+  };
+
+  const handleCopy = () => {
+    if (!roomCode) return;
+    navigator.clipboard.writeText(roomCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Shared leave button renderer
+  const LeaveButton = ({ icon: Icon = LogOut }) => (
+    <button
+      onClick={handleLeave}
+      className="text-zinc-400 hover:text-rose-400 text-sm px-4 py-2 border border-zinc-800 rounded-md transition-colors bg-zinc-900/40 hover:bg-rose-950/20 flex items-center gap-2 cursor-pointer"
+    >
+      <Icon size={12} />
+      <span>Leave Room Lobby</span>
+    </button>
+  );
+
+  return (
+    <div className="crm-overlay">
+      <div className="crm-modal">
+
+        {/* Close button — only when not in an active room */}
+        {!roomData && (
+          <button
+            onClick={resetAndClose}
+            className="crm-close-btn"
+          >
+            <X size={14} />
+          </button>
+        )}
+
+        {/* ─── Unified LOBBY View (Shown to both host and guest when roomData exists) ─── */}
+        {roomData ? (
+          <div className="crm-create-view">
+            {/* Header Bar */}
+            <div className="crm-header-bar">
+              <div className={`crm-lobby-status ${String(roomData.hostId) === String(activeUserId) ? 'crm-lobby-status--host' : 'crm-lobby-status--guest'}`}>
+                <Swords size={16} />
+                <span className="crm-lobby-status-label">
+                  {String(roomData.hostId) === String(activeUserId) ? 'Lobby Host Status' : 'Lobby Guest Status'}
+                </span>
+              </div>
+              <LeaveButton icon={LogOut} />
+            </div>
+
+            {/* Room Code Monospace Box */}
+            <div className="crm-code-section">
+              <span className="crm-code-label">
+                Lobby Entry Code
+              </span>
+              <div className="crm-code-box">
+                <span className="select-all">{roomCode || 'CREATING LOBBY...'}</span>
+                <button
+                  onClick={handleCopy}
+                  className={`crm-copy-btn ${copied ? 'crm-copy-btn--copied' : ''}`}
+                >
+                  {copied ? 'COPIED' : 'COPY'}
+                </button>
+              </div>
+            </div>
+
+            {/* Two-Slot Battle Grid */}
+            <div className="crm-battle-grid">
+              {/* Slot 1: Host */}
+              <div className="crm-slot">
+                <div className="crm-slot-badge crm-slot-badge--host">
+                  HOST
+                </div>
+                <div className="crm-slot-avatar crm-slot-avatar--host">
+                  {hostPlayer.username?.substring(0, 2).toUpperCase()}
+                </div>
+                <span className="crm-slot-name">
+                  {hostPlayer.username || 'Host'}
+                </span>
+                <span className="crm-slot-status crm-slot-status--host">
+                  Stable
+                </span>
+              </div>
+
+              {/* Slot 2: Challenger */}
+              {challengerPlayer ? (
+                <div className="crm-slot">
+                  <div className="crm-slot-badge crm-slot-badge--guest">
+                    GUEST
+                  </div>
+                  <div className="crm-slot-avatar crm-slot-avatar--guest">
+                    {challengerPlayer.username?.substring(0, 2).toUpperCase()}
+                  </div>
+                  <span className="crm-slot-name">
+                    {challengerPlayer.username}
+                  </span>
+                  <span className="crm-slot-status crm-slot-status--guest">
+                    Connected
+                  </span>
+                </div>
+              ) : (
+                <div className="crm-slot crm-slot--empty">
+                  <span className="crm-slot-empty-text">
+                    Awaiting Challenger...
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Action CTA */}
+            {String(roomData.hostId) === String(activeUserId) ? (
+              <button
+                disabled={!challengerPlayer || isLoading}
+                onClick={handleStartMatch}
+                className="crm-lobby-start-btn"
+              >
+                {isLoading ? 'Starting Match...' : 'Start Match'}
+              </button>
+            ) : (
+              <div className="crm-lobby-waiting-status">
+                🔒 Waiting for Host to Start Match...
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* ─── CHOOSE Screen ─── */}
+            {viewMode === 'CHOOSE' && (
+              <div className="crm-choose-view">
+                <div className="crm-choose-view-container">
+                  <div>
+                    <h2 className="crm-title">
+                      Custom Lobby Setup
+                    </h2>
+                    <p className="crm-subtitle">
+                      Host a session or connect to a friend&apos;s active arena lobby code
+                    </p>
+                  </div>
+
+                  <div className="crm-btn-grid">
+                    <button
+                      onClick={() => setViewMode('CREATE')}
+                      className="crm-choose-btn"
+                    >
+                      <Swords size={20} className="text-indigo-400" />
+                      <span className="crm-choose-btn-label">
+                        Create Lobby
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setViewMode('JOIN')}
+                      className="crm-choose-btn"
+                    >
+                      <Users size={20} className="text-emerald-400" />
+                      <span className="crm-choose-btn-label">
+                        Join Lobby
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ─── CREATE Loading Screen ─── */}
+            {viewMode === 'CREATE' && (
+              <div className="crm-create-view">
+                <div className="crm-code-section">
+                  <span className="crm-code-label">
+                    Creating Custom Lobby...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* ─── JOIN Input Screen ─── */}
+            {viewMode === 'JOIN' && (
+              <div className="crm-join-view">
+                {/* Header Bar */}
+                <div className="crm-header-bar">
+                  <div className="crm-lobby-status crm-lobby-status--guest">
+                    <Users size={16} />
+                    <span className="crm-lobby-status-label">
+                      Challenger Portal
+                    </span>
+                  </div>
+                  <LeaveButton icon={ArrowLeft} />
+                </div>
+
+                  <div className="crm-join-input-section">
+                  <div className="crm-join-field-wrapper">
+                    <label className="crm-join-field-label">
+                      Lobby Code
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={5}
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      placeholder="ABCDE"
+                      className="crm-input-field"
+                    />
+                  </div>
+
+                  {errorMsg && (
+                    <div className="crm-error-box">
+                      <ShieldAlert size={14} className="crm-error-icon" />
+                      <span>{errorMsg}</span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleJoinSubmit}
+                    disabled={isLoading || joinCode.trim().length !== 5}
+                    className="crm-join-submit-btn"
+                  >
+                    {isLoading ? 'Connecting...' : 'Connect Room'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
