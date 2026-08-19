@@ -253,18 +253,19 @@ def seed_all():
     )
     print("Future contest created.")
 
-    # 3. Link existing problems to contests
+    # 3. Link existing problems to contests and make sure they are approved
+    Problem.objects.all().update(status="approved")
     problems = list(Problem.objects.all()[:4])
     if not problems:
         print("WARNING: No problems found in database! Creating fake problems for contests...")
         # Create fallback problems if none exist
         prob1 = Problem.objects.create(
             title="Two Sum Test", slug="two-sum-test", description="Find two numbers that add up to target.",
-            difficulty="easy", constraints="N <= 10^5", time_limit_ms=1000, memory_limit_mb=256
+            difficulty="easy", constraints="N <= 10^5", time_limit_ms=1000, memory_limit_mb=256, status="approved"
         )
         prob2 = Problem.objects.create(
             title="Move Zeroes Test", slug="move-zeroes-test", description="Move all zeroes to the end.",
-            difficulty="easy", constraints="N <= 10^5", time_limit_ms=1000, memory_limit_mb=256
+            difficulty="easy", constraints="N <= 10^5", time_limit_ms=1000, memory_limit_mb=256, status="approved"
         )
         problems = [prob1, prob2]
         

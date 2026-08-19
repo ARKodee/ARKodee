@@ -282,8 +282,13 @@ export async function handleRequestStartMatch(io, socket, payload = {}) {
       clearTimeout(timeoutId);
       let fetchedProblems = DEFAULT_ARENA_PROBLEMS;
       if (res.ok) {
-        fetchedProblems = await res.json();
-        logger.info(`[Matchmaker] Successfully fetched ${fetchedProblems.length} problems for room ${roomId} from Django.`);
+        const json = await res.json();
+        if (json && Array.isArray(json) && json.length > 0) {
+          fetchedProblems = json;
+          logger.info(`[Matchmaker] Successfully fetched ${fetchedProblems.length} problems for room ${roomId} from Django.`);
+        } else {
+          logger.warn(`[Matchmaker] Django returned empty problems list. Using default fallback problems for room ${roomId}.`);
+        }
       } else {
         logger.warn(`[Matchmaker] Django returned non-200 status. Using fallback problems for room ${roomId}.`);
       }

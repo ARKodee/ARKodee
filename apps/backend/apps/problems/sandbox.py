@@ -170,7 +170,23 @@ def format_input_for_sandbox(raw_input):
     # Check if this looks like a variable assignment input block (LeetCode-style)
     has_assignments = any("=" in line for line in lines)
     if not has_assignments:
-        return raw_input # Pass through unchanged if it's already raw stdin
+        # Check if raw_input itself is a bracketed array/list/matrix
+        try:
+            import ast
+            normalized_val = (
+                raw_input.strip()
+                .replace("true", "True")
+                .replace("false", "False")
+                .replace("null", "None")
+                .replace("undefined", "None")
+            )
+            parsed_obj = ast.literal_eval(normalized_val)
+            if isinstance(parsed_obj, list):
+                lines = [raw_input.strip()]
+            else:
+                return raw_input
+        except Exception:
+            return raw_input
         
     for line in lines:
         line = line.strip()

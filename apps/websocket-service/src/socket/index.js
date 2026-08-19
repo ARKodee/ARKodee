@@ -96,6 +96,12 @@ function tryPairPlayers(io) {
 
   // Auto-start the match immediately (no host lobby needed for ranked)
   handleRequestStartMatch(io, { id: playerA.socketId, user: { id: playerA.userId, username: playerA.username }, join: () => {}, emit: () => {} }, { roomId: roomCode, userId: playerA.userId });
+
+  // Update room state in customRooms to ACTIVE to prevent disconnect from dissolving/kicking
+  roomEntry.status = 'ACTIVE';
+  roomEntry.isStarted = true;
+  roomEntry.startedAt = new Date().toISOString();
+  customRooms.set(roomCode, roomEntry);
 }
 
 
@@ -225,10 +231,23 @@ class SocketManager {
 
         logger.info(`Player ${guestUsername} (ID: ${guestUserId}) attempting to join room: ${roomCode}`);
 
-        const room = customRooms.get(roomCode);
+        const room = customRooms.get(roomCode) || getRoomDocument(roomCode);
         if (!room) {
           logger.warn(`Join failed: room code ${roomCode} not found`);
           socket.emit('room_error', "Lobby code not found");
+          return;
+        }
+
+        // Check if player is already in the room (reconnecting/rejoining)
+        const existingPlayerIdx = room.players.findIndex(p => String(p.userId) === String(guestUserId));
+        if (existingPlayerIdx !== -1) {
+          logger.info(`Player ${guestUsername} rejoining room ${roomCode}`);
+          room.players[existingPlayerIdx].socketId = socket.id;
+          setRoomDocument(room);
+          customRooms.set(roomCode, room);
+          socket.join(roomCode);
+          registerSocketToRoom(roomCode, socket.id);
+          this.io.to(roomCode).emit('room_updated', room);
           return;
         }
 
@@ -246,6 +265,7 @@ class SocketManager {
 
         room.players.push(newPlayer);
         setRoomDocument(room);
+        customRooms.set(roomCode, room);
         socket.join(roomCode);
         registerSocketToRoom(roomCode, socket.id);
         this.io.to(roomCode).emit('room_updated', room);
@@ -321,6 +341,7 @@ class SocketManager {
           const cRoom = customRooms.get(roomCode);
           cRoom.status = 'ACTIVE';
           cRoom.isStarted = true;
+          cRoom.startedAt = new Date().toISOString();
         }
         await handleRequestStartMatch(this.io, socket, payload);
       });

@@ -90,6 +90,29 @@ export function CustomRoomModal({ socket, user, onClose }) {
     };
   }, [socket, viewMode, user, onClose, navigate]);
 
+  // Auto-rejoin lobby on socket reconnect / change
+  useEffect(() => {
+    if (!socket || !roomCode) return;
+
+    const doRejoin = () => {
+      console.log('[CustomRoomModal] Rejoining room:', roomCode);
+      socket.emit('join_custom_room', {
+        roomCode,
+        userId: activeUserId,
+        username: activeUsername,
+      });
+    };
+
+    if (socket.connected) {
+      doRejoin();
+    }
+
+    socket.on('connect', doRejoin);
+    return () => {
+      socket.off('connect', doRejoin);
+    };
+  }, [socket, roomCode, activeUserId, activeUsername]);
+
   const activeUserId = user?.id || user?.userId;
   const activeUsername = user?.firstName || user?.username || user?.name || user?.email?.split('@')[0] || 'Player';
   const isHostUser = viewMode === 'CREATE';
